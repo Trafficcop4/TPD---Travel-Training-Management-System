@@ -1,0 +1,95 @@
+"""Tyler Police Academy spelling tests: 12 tests x 25 words, 4 points/word.
+
+Source: "Spelling Test (All)" answer-key PDF. SpellingMaster is seeded from
+this list and remains editable in the workbook.
+"""
+
+WORDS_PER_TEST = 25
+POINTS_PER_WORD = 4
+
+TESTS = {
+    1: [
+        'Abandon', 'Accountability', 'Accounting', 'Aggravated', 'Amendments',
+        'Arrest', 'Automobile', 'Badge', 'Battery', 'Beverage',
+        'Burglary', 'Certificate', 'Citizen', 'Community', 'Confidential',
+        'Abrasion', 'Aerosol', 'Acknowledge', 'Alley', 'Appearance',
+        'Attorney', 'According', 'Bodily', 'Bribery', 'Biased',
+    ],
+    2: [
+        'Children', 'Commercial', 'Coroner', 'Confrontation', 'Abduct',
+        'Accused', 'Alcohol', 'Ammunition', 'Assault', 'Autopsy',
+        'Articles', 'Bail', 'Brakes', 'Backup', 'Booking',
+        'Capital', 'Complainant', 'Confiscate', 'Accident', 'Affidavit',
+        'Altered', 'Apprehension', 'Authority', 'Accuracy', 'Anxiety',
+    ],
+    3: [
+        'Bicycle', 'Bridge', 'Business', 'Bruise', 'Commission',
+        'Concealed', 'Consent', 'Abuse', 'Addiction', 'Alcoholic',
+        'Appeals', 'Attempt', 'Alias', 'Administer', 'Barricade',
+        'Breach', 'Chemical', 'College', 'Complaint', 'Conflict',
+        'Agency', 'Ambulance', 'Argument', 'Authorized', 'Aerobics',
+    ],
+    4: [
+        'Blood', 'Building', 'Cemeteries', 'Citation', 'Contraband',
+        'Confession', 'Conspiracy', 'Constables', 'Credibility', 'Coordination',
+        'Defense', 'Devices', 'Disease', 'Dwelling', 'Education',
+        'Equipment', 'Ethical', 'Fingerprints', 'Fatigue', 'Gambling',
+        'Critical', 'Dangerous', 'Destruction', 'Disables', 'Depression',
+    ],
+    5: [
+        'Expiration', 'Federal', 'Forgery', 'Flexibility', 'Guardian',
+        'Constitution', 'Counterfeit', 'Controlled', 'Delinquent', 'Diesel',
+        'Disorderly', 'Deprivation', 'Enforcement', 'Explosives', 'Felony',
+        'Fraud', 'Falsification', 'Guards', 'Contaminated', 'Curfew',
+        'Deceptive', 'Detained', 'Discharge', 'Documents', 'Effect',
+    ],
+    6: [
+        'Flammable', 'Frisk', 'Government', 'Guilty', 'Construction',
+        'Criminal', 'Compliance', 'Delivery', 'Disability', 'Disturbance',
+        'Denial', 'Enhancement', 'Exposure', 'Fictitious', 'Fugitive',
+        'Fitness', 'Graffiti', 'Contempt', 'Custody', 'Defendant',
+        'Detention', 'Discrimination', 'Domestic', 'Emergency', 'Examination',
+    ],
+    7: [
+        'Foreign', 'Force', 'Habeas Corpus', 'Harboring', 'Identification',
+        'Indecency', 'Instruments', 'Interrogation', 'Investigation', 'Kidnapping',
+        'Lewdness', 'Machinery', 'Marriage', 'Motorcycles', 'Narcotic',
+        'Conviction', 'Handgun', 'Homicide', 'Immediate', 'Inhalant',
+        'Intentional', 'Intoxicated', 'Judge', 'Language', 'Lieutenant',
+    ],
+    8: [
+        'Minimum', 'Habitation', 'Handicapped', 'Hazardous', 'Illegal',
+        'Indictment', 'Insufficient', 'Intoxication', 'Juvenile', 'Knife',
+        'Lawyer', 'Liability', 'Liquor', 'Manslaughter', 'Medication',
+        'Minor', 'Motorist', 'Negligence', 'Nuisance', 'Jurisdiction',
+        'Surveillance', 'Victim', 'Hospital', 'Improper', 'Injury',
+    ],
+    9: [
+        'Habitual', 'Highway', 'Illicit', 'Individual', 'Insurance',
+        'Intimidation', 'Length', 'Location', 'Manufacture', 'Misdemeanor',
+        'Harassment', 'Household', 'Incident', 'Inquest', 'Interpreter',
+        'Inventory', 'License', 'Magistrate', 'Mileage', 'Municipal',
+        'Obscenity', 'Ordinances', 'Passenger', 'Physician', 'Presence',
+    ],
+    10: [
+        'Reasonable', 'Restaurants', 'Search', 'Statement', 'Suspended',
+        'Terroristic', 'Truancy', 'Odometer', 'Paraphernalia', 'Perjury',
+        'Prejudice', 'Probable', 'Prostitution', 'Registration', 'Revocation',
+        'Shotgun', 'Suicide', 'Communication', 'Traffic', 'Unauthorized',
+        'Obstructing', 'Organized', 'Pedestrian', 'Pornography', 'Prevention',
+    ],
+    11: [
+        'Requirements', 'Revolver', 'Signature', 'Summons', 'Testimony',
+        'Uniform', 'Offense', 'Parent', 'Photographs', 'Premises',
+        'Probation', 'Receipt', 'Restrain', 'Security', 'Statutes',
+        'Telephone', 'Transportation', 'Vehicle', 'Occupation', 'Officers',
+        'Parole', 'Penalty', 'Physical', 'Prescription', 'Procedures',
+    ],
+    12: [
+        'Resisting', 'Seizure', 'Spouse', 'Subpoena', 'Suspect',
+        'Temporary', 'Tobacco', 'Trespass', 'Unlawful', 'Possession',
+        'Prisoner', 'Prohibited', 'Retaliation', 'Recidivism', 'Respiratory',
+        'Recommendation', 'Appropriate', 'Articulate', 'Consciousness', 'Dehydration',
+        'Discipline', 'Necessary', 'Occurred', 'Privilege', 'Sergeant',
+    ],
+}

@@ -88,3 +88,25 @@ docs/        Setup-and-VBA-Install.md       getting from repo to running system
 Git note: the VBA lives as readable text in `src/vba/`, so changes to the
 automation are reviewable diffs; the workbooks are rebuilt from
 `build/*.py` (Python + openpyxl) if the layout ever needs to change.
+
+## BPOC Academy Management (V6)
+
+The repo also builds the Tyler Police Academy's **BPOC class-management
+workbook** — one file per academy class covering the full TCOLE #1000736
+lifecycle: schedule and hours reconciliation, roster, weighted grading
+(40/30/10/20, 70-in-each-category), retest deadlines, spelling and writing
+programs (word lists and prompts stored, due dates computed from the
+schedule), attendance/makeup minutes, skills, PT, incidents/counseling,
+flag engine, awards, agency email drafts, and a TCOLE audit-readiness
+sheet with printable sign-ins, evals, tests, transcripts and handouts.
+
+```
+workbooks/BPOC_Academy_Management_V6.xlsx   built workbook (macros added by installer)
+build/bpoc/                                 builder + seed data + verifier
+src/vba/bpoc/                               macro source (emails, print center, reset)
+tools/Install-BPOC-VBA.ps1                  one-time .xlsx + VBA -> .xlsm
+docs/BPOC-Coordinator-Guide.md              day-to-day manual
+docs/BPOC-Audit-Prep.md                     TCOLE audit mapping
+```
+
+Rebuild: `python3 build/bpoc/build_bpoc.py && python3 build/bpoc/verify_build.py`
