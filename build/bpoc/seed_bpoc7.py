@@ -24,11 +24,10 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 V6_PATH = os.path.join(ROOT, "workbooks", "BPOC_Academy_Management_V6.xlsx")
 OUT_PATH = os.path.join(ROOT, "workbooks", "BPOC_Academy_Management_V6_BPOC7.xlsx")
 
-# calendar class names -> V6 ChapterMaster / activity names
+# calendar class names -> V6 names. Traffic Code / Crash / TIM and the
+# Criminal Investigations sub-classes are KEPT under their own names —
+# they're TPD sub-classes on ChapterMaster and roll up to chapters 22/32.
 NAME_MAP = {
-    "Traffic Code": "Traffic Code / Crash Investigation / TIM",
-    "Crash Investigation": "Traffic Code / Crash Investigation / TIM",
-    "TIM": "Traffic Code / Crash Investigation / TIM",
     "ALERRT Levl 1": "ALERRT Level 1",
     "Interacting with Deaf and Hard of Hearing ":
         "Interacting with Deaf and Hard of Hearing",
@@ -46,11 +45,7 @@ def sval(c):
 
 def map_class(name):
     name = str(name).strip()
-    if name in NAME_MAP:
-        return NAME_MAP[name]
-    if name.startswith("Criminal Investigations"):
-        return "Criminal Investigations"
-    return name
+    return NAME_MAP.get(name, name)
 
 
 def seed():

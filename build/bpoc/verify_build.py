@@ -122,6 +122,15 @@ def test_workbook():
     check(wb["Control"]["I6"].value.startswith("=IF")
           and "WORKDAY" in wb["Control"]["I6"].value,
           "class-day calendar generated on Control")
+    cm2 = wb["ChapterMaster"]
+    check("nrSCH_ChNum" in cm2["G6"].value,
+          "chapter delivered-hours roll up by chapter number")
+    check("nrSUBname" in wb["Schedule"]["H6"].value,
+          "schedule resolves sub-classes to parent chapters")
+    check("nrSUBname" in wb.defined_names and
+          any(cm2.cell(row=r, column=2).value == "Crash Investigation"
+              for r in range(50, 75)),
+          "TPD sub-class block on ChapterMaster")
     wmG = wm["G6"].value
     check("nrCHfirst" in wmG and "nrCDdate" in wmG,
           "writing due dates computed from schedule")

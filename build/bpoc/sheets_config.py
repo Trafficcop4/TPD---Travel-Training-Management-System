@@ -325,12 +325,14 @@ def build_chaptermaster(wb):
     fill_rows(ws, first, last, {
         "B": (None, "in"), "C": (None, "in"), "D": (None, "in"),
         "E": (None, "in"), "F": (None, "in"),
-        "G": ('IF($D{r}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$D{r}),2))', "fx"),
+        # rollup by chapter NUMBER: schedule rows resolve sub-classes
+        # (Traffic Code, Crash, TIM, Crim-Inv subs) to their parent chapter
+        "G": ('IF($D{r}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_ChNum,$C{r}),2))', "fx"),
         "H": ('IF($D{r}="","",IF($G{r}=0,"",$G{r}-$E{r}))', "fx"),
-        "I": ('IF($D{r}="","",IFERROR(IF(MINIFS(nrSCH_Date,nrSCH_Act,$D{r})=0,'
-              '"",MINIFS(nrSCH_Date,nrSCH_Act,$D{r})),""))', "fx"),
-        "J": ('IF($D{r}="","",IFERROR(IF(MAXIFS(nrSCH_Date,nrSCH_Act,$D{r})=0,'
-              '"",MAXIFS(nrSCH_Date,nrSCH_Act,$D{r})),""))', "fx"),
+        "I": ('IF($D{r}="","",IFERROR(IF(MINIFS(nrSCH_Date,nrSCH_ChNum,$C{r})=0,'
+              '"",MINIFS(nrSCH_Date,nrSCH_ChNum,$C{r})),""))', "fx"),
+        "J": ('IF($D{r}="","",IFERROR(IF(MAXIFS(nrSCH_Date,nrSCH_ChNum,$C{r})=0,'
+              '"",MAXIFS(nrSCH_Date,nrSCH_ChNum,$C{r})),""))', "fx"),
         "K": (None, "in"),
         "L": (None, "in"), "M": (None, "in"), "N": (None, "in"),
         "O": (None, "in"), "P": (None, "in"), "Q": (None, "in"),
@@ -382,6 +384,62 @@ def build_chaptermaster(wb):
         "Report the BPOC at exactly 736; excess goes to Addendum course #101"
     )).font = F_SMALL
     define(wb, "nrCHtotalDelivered", "ChapterMaster", f"$G${tr}")
+
+    # ---- TPD sub-classes (scheduled separately, roll up to a chapter) ----
+    sr = tr + 3
+    section_bar(ws, sr, 2, 9, "TPD sub-classes — schedule by THESE names; "
+                              "hours roll up to the parent TCOLE chapter")
+    sr += 1
+    header_row(ws, ["Sub-class", None, None, "Parent Ch #", "TPD Target Hrs",
+                    "Delivered Hrs", "vs Target"], row=sr)
+    ws.merge_cells(start_row=sr, start_column=2, end_row=sr, end_column=4)
+    sr += 1
+    sub_first = sr
+    for name, parent, target in DC.SUBTOPICS:
+        ws.merge_cells(start_row=sr, start_column=2, end_row=sr, end_column=4)
+        c = ws.cell(row=sr, column=2, value=name)
+        c.fill = FILL_INPUT
+        c.font = F_INPUT
+        c.border = BOX
+        p = ws.cell(row=sr, column=5, value=parent)
+        p.fill = FILL_INPUT
+        p.font = F_INPUT
+        p.border = BOX
+        t = ws.cell(row=sr, column=6, value=target)
+        t.fill = FILL_INPUT
+        t.font = F_INPUT
+        t.border = BOX
+        d = ws.cell(row=sr, column=7, value=(
+            f'=IF($B{sr}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$B{sr}),2))'))
+        d.font = F_CALC
+        d.fill = FILL_CALC
+        d.border = BOX
+        v = ws.cell(row=sr, column=8, value=(
+            f'=IF(OR($B{sr}="",$G{sr}=0),"",ROUND($G{sr}-$F{sr},2))'))
+        v.font = F_CALC
+        v.border = BOX
+        sr += 1
+    sub_last = sr + 4          # a few blank rows for future sub-classes
+    for rr in range(sr, sub_last + 1):
+        ws.merge_cells(start_row=rr, start_column=2, end_row=rr, end_column=4)
+        for col in (2, 5, 6):
+            cc = ws.cell(row=rr, column=col)
+            cc.fill = FILL_INPUT
+            cc.font = F_INPUT
+            cc.border = BOX
+        ws.cell(row=rr, column=7, value=(
+            f'=IF($B{rr}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$B{rr}),2))'
+        )).font = F_CALC
+        ws.cell(row=rr, column=8, value=(
+            f'=IF(OR($B{rr}="",$G{rr}=0),"",ROUND($G{rr}-$F{rr},2))'
+        )).font = F_CALC
+    dv_list(ws, "=nrCHnum", [f"E{sub_first}:E{sub_last}"])
+    cf_formula(ws, f"H{sub_first}:H{sub_last}",
+               f'AND($H{sub_first}<>"",$H{sub_first}<0)', FILL_WARNBG)
+    define(wb, "nrSUBname", "ChapterMaster", f"$B${sub_first}:$B${sub_last}")
+    define(wb, "nrSUBparent", "ChapterMaster", f"$E${sub_first}:$E${sub_last}")
+    define(wb, "nrSUBtarget", "ChapterMaster", f"$F${sub_first}:$F${sub_last}")
+
     col_widths(ws, {"A": 3, "B": 8, "C": 6, "D": 44, "E": 10, "F": 10,
                     "G": 11, "H": 10, "I": 12, "J": 12, "K": 20, "L": 14,
                     "M": 13, "N": 13, "O": 12, "P": 12, "Q": 13, "R": 15,
@@ -671,7 +729,8 @@ def build_schedule(wb):
         "D": (None, "in"), "E": (None, "in"),
         "F": ('IF(OR($B{r}="",$D{r}="",$E{r}=""),"",ROUND(($E{r}-$D{r})*24,2))', "fx"),
         "G": (None, "in"),
-        "H": ('IF($G{r}="","",IFERROR(XLOOKUP($G{r},nrCHname,nrCHnum),""))', "fx"),
+        "H": ('IF($G{r}="","",IFERROR(XLOOKUP($G{r},nrCHname,nrCHnum),'
+              'IFERROR(XLOOKUP($G{r},nrSUBname,nrSUBparent),"")))', "fx"),
         "I": (None, "in"), "J": (None, "in"),
         "K": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDweek),""))', "fx"),
         "L": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDnum),""))', "fx"),
@@ -714,9 +773,12 @@ def build_schedule_items_helper(wb):
         ws.cell(row=r + i, column=2,
                 value=f"=IF(ChapterMaster!D{DATA_ROW+i}=\"\",\"\","
                       f"ChapterMaster!D{DATA_ROW+i})")
+    n_sub = len(DC.SUBTOPICS)
+    for j, (name, _p, _t) in enumerate(DC.SUBTOPICS):
+        ws.cell(row=r + n_ch + j, column=2, value=name)
     for j, act in enumerate(DC.ACTIVITIES):
-        ws.cell(row=r + n_ch + j, column=2, value=act)
-    last = r + n_ch + len(DC.ACTIVITIES) - 1
+        ws.cell(row=r + n_ch + n_sub + j, column=2, value=act)
+    last = r + n_ch + n_sub + len(DC.ACTIVITIES) - 1
     define(wb, "nrScheduleItems", "sysListsHelper", f"$B${r}:$B${last}")
     ws.sheet_state = "hidden"
     return ws

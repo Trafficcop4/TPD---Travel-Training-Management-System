@@ -72,6 +72,22 @@ SPECIAL_REQS = {
     "43": "ALERRT Level 1 (16 hrs, SB 1852) by certified ALERRT instructors (TtT 3315 + current cert)",
 }
 
+# TPD teaches some TCOLE chapters as separate sub-classes with their own
+# hour targets. Scheduling uses THESE names; hours roll up to the parent
+# chapter for TCOLE reconciliation. (name, parent chapter, TPD target hrs)
+SUBTOPICS = [
+    ("Traffic Code", "22", 50),
+    ("Crash Investigation", "22", 12),
+    ("TIM", "22", 12),
+    ("Criminal Investigations - General Investigations", "32", 16),
+    ("Criminal Investigations - Auto Theft", "32", 4),
+    ("Criminal Investigations - Crime Scene", "32", 8),
+    ("Criminal Investigations - Booking Operations", "32", 8),
+    ("Criminal Investigations - Interview Techniques", "32", 4),
+    ("Criminal Investigations - Case Management", "32", 4),
+    ("Criminal Investigations - Media Relations", "32", 4),
+]
+
 # Chapters whose excess hours are reported under their OWN course number
 # instead of the general Addendum to BPOC (#101), per the IRG.
 SEPARATE_REPORT = {
