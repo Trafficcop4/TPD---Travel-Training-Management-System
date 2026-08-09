@@ -53,8 +53,8 @@ headers on every sheet. Tables start at row 5, data at row 6.
   (TCOLE requires original sign-ins **with PID**).
 - **Skills / PT / Medical / Incidents / Counseling / DismissalLog** — log
   as events happen; the engine rolls everything up.
-- **Writing** — mark Yes when received; red means past the computed due
-  date.
+- **Writing** — type **X** when received (lowercase x auto-capitalizes;
+  blank = not done); red means past the computed due date.
 
 ## Watching the class
 

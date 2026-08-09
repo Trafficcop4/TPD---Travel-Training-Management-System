@@ -77,6 +77,25 @@ try {
     $wb = $excel.Workbooks.Open((Join-Path $workbooks 'BPOC_Academy_Management_V6.xlsx'))
     Import-Modules $wb $vbaBpoc
 
+    # workbook event: auto-capitalize x -> X on the Writing grid
+    $eventCode = @'
+Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
+    If Sh.Name <> "Writing" Then Exit Sub
+    Dim rng As Range
+    Set rng = Application.Intersect(Target, Sh.Range("D6:AQ55"))
+    If rng Is Nothing Then Exit Sub
+    Dim c As Range
+    Application.EnableEvents = False
+    For Each c In rng
+        If LCase$(Trim$(CStr(c.Value))) = "x" Then c.Value = "X"
+    Next c
+    Application.EnableEvents = True
+End Sub
+'@
+    $twb = $wb.VBProject.VBComponents.Item('ThisWorkbook')
+    $twb.CodeModule.AddFromString($eventCode)
+    Write-Host '    event   Workbook_SheetChange (Writing x -> X)'
+
     # buttons: Print Center strip + email + reset
     $pc = $wb.Worksheets.Item('PrintCenter')
     $pc.Unprotect($pw) 2>$null

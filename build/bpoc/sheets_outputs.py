@@ -46,9 +46,28 @@ def build_dashboard(wb):
     ws.cell(row=r, column=2, value='=cfgAcademyClass&" — Dashboard"').font = F_KPI
     ws.cell(row=r, column=8, value='="As of "&TEXT(TODAY(),"mm/dd/yyyy")'
             ).font = F_SMALL
+    g = ws.cell(row=r, column=10, value=(
+        '=HYPERLINK("#InputGuide!B5","Data Entry Guide →")'))
+    g.font = F_LABEL
     r += 2
-    _kpi(ws, r, 2, "Active cadets",
+    # key dates (final/state/graduation pull from the Schedule when entered)
+    _kpi(ws, r, 2, "Academy start",
+         'TEXT(cfgStartDate,"mm/dd/yyyy")')
+    _kpi(ws, r, 4, "Final Exam date",
+         'LET(d,MAXIFS(nrSCH_Date,nrSCH_Act,"Final Test"),'
+         'IF(d=0,"(not on schedule)",TEXT(d,"mm/dd/yyyy")))')
+    _kpi(ws, r, 6, "State Exam date",
+         'LET(d,MAXIFS(nrSCH_Date,nrSCH_Act,"State Test"),'
+         'IF(d=0,"(not on schedule)",TEXT(d,"mm/dd/yyyy")))')
+    _kpi(ws, r, 8, "Graduation / end",
+         'LET(d,MAXIFS(nrSCH_Date,nrSCH_Act,"Graduation"),'
+         'IF(d=0,TEXT(cfgEndDate,"mm/dd/yyyy"),TEXT(d,"mm/dd/yyyy")))')
+    _kpi(ws, r, 10, "Active cadets",
          'SUMPRODUCT((nrCadetStatus="Active")*1)')
+    r += 3
+    _kpi(ws, r, 2, "Separated / total enrolled",
+         'SUMPRODUCT((nrCadetStatus="Separated")*1)&" / "&'
+         'SUMPRODUCT((nrCadetStatus<>"")*1)')
     _kpi(ws, r, 4, "Class current avg",
          'IFERROR(ROUND(AVERAGE(IF(nrCadetStatus="Active",nrGRcurrent)),1),"—")')
     _kpi(ws, r, 6, "Graduation eligible",
@@ -1005,15 +1024,8 @@ def build_emailpreview(wb):
             f'=IF($B{rr}="","",Writing!$AT{src}&" ("&Writing!$AS{src}&'
             f'" overdue)")')).font = F_CALC
         ws.cell(row=rr, column=10, value=(
-            f'=IF($B{rr}="","",IF(nrFLcount=0,"",'
-            f'sysFlags!$P{src}))')).font = F_CALC
+            f'=IF($B{rr}="","",sysFlags!$Q{src})')).font = F_CALC
     grid_last = grid_first + CADETS - 1
-    # fix flag column formula (row-wise)
-    for i in range(CADETS):
-        rr = grid_first + i
-        src = FIRST + i
-        ws.cell(row=rr, column=10, value=(
-            f'=IF($B{rr}="","",sysFlags!$P{src})'))
     define(wb, "nrEPVgrid", "EmailPreview",
            f"$B${grid_first}:$J${grid_last}")
     r = grid_last + 2
@@ -1123,6 +1135,119 @@ def build_printcenter(wb):
 
 
 # --------------------------------------------------------------------------
+INPUT_GUIDE = [
+    ("Getting set up", None),
+    ("Settings", "Academy label, start/end dates, grading weights, caps, "
+     "retest window, flag thresholds, PT points rubric (yellow block)."),
+    ("Lists", "Dropdown choices used across the workbook — add items here."),
+    ("Agencies", "Sending agencies: codes, contacts, email addresses."),
+    ("Instructors", "Roster with TCOLE PID, certs, SME letters, bios."),
+    ("ChapterMaster", "Chapter hours + the per-chapter TCOLE training-file "
+     "record (lesson plan, bio, sign-ins, assessment, grade sheet, eval, "
+     "special requirements)."),
+    ("Control", "Extra closure dates (holidays compute automatically)."),
+    ("Schedule", "The class schedule: one row per time block — date, times, "
+     "chapter/activity, instructor. Drives hours, due dates, sign-ins."),
+    ("ExamPlan", "Which exams this academy uses, their sequence and linked "
+     "chapters."),
+    ("ExamMaster", "The exam library (edit names/types/defaults)."),
+    ("SkillsMaster", "Attempt limits and scoring mode per skill category."),
+    ("SpellingMaster", "The 12 spelling word lists (printable via Print "
+     "Center)."),
+    ("WritingMaster", "The 40 assignments: prompts, linked chapters, "
+     "date overrides."),
+    ("Daily operation", None),
+    ("Cadets", "The roster: PID, names, agency, status, enroll/separation."),
+    ("ExamScores", "One row per exam attempt: cadet, exam, attempt #, raw "
+     "score, date. Retest deadlines compute."),
+    ("Spelling", "Spelling test scores per cadet per test."),
+    ("Attendance", "Exception log: missed/modified time in minutes (or PT "
+     "sessions), reason, documentation, excused."),
+    ("Makeup", "Makeup credit: minutes/sessions, documentation, holds."),
+    ("Skills", "Skills attempts: category, result, score, firearms course "
+     "of fire."),
+    ("Writing", "Type X when an assignment is received (auto-capitalizes)."),
+    ("Incidents", "Positive/negative incidents with severity and resolution."),
+    ("Counseling", "Every intervention: tutoring, counseling, agency "
+     "notification, performance plans."),
+    ("PT", "Baseline and final raw values per event; final points once the "
+     "rubric arrives."),
+    ("Medical", "Injuries, restrictions, clearances and expirations."),
+    ("Certifications", "Per-cadet TIM/SFST/TCIC/CPR/ALERRT/ICS completion "
+     "dates and certificate copies collected."),
+    ("StateExam", "TCOLE licensing exam attempts and results (3 max)."),
+    ("DismissalLog", "Formal reviews: trigger, decision, approvals."),
+    ("End of academy / as needed", None),
+    ("Audit", "Program-requirement checklist answers + per-cadet enrollment "
+     "documents grid."),
+    ("EmailPreview", "Pick an agency to preview its email; the button "
+     "builds Outlook drafts."),
+    ("sysAwards", "Award override cells — your pick always wins."),
+    ("PrintCenter", "Every printable in one place (buttons after VBA "
+     "install)."),
+]
+
+
+def build_inputguide(wb):
+    ws = wb.create_sheet("InputGuide")
+    ws.sheet_view.showGridLines = False
+    header_row(ws, ["Go to…", "What you enter there"])
+    r = DATA_ROW
+    for name, desc in INPUT_GUIDE:
+        if desc is None:
+            section_bar(ws, r, 2, 8, name)
+            r += 1
+            continue
+        c = ws.cell(row=r, column=2,
+                    value=f'=HYPERLINK("#{name}!B6","{name}")')
+        c.font = F_LABEL
+        d = ws.cell(row=r, column=3, value=desc)
+        d.font = F_BODY
+        d.alignment = A_LEFT_WRAP
+        ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=8)
+        ws.row_dimensions[r].height = 26
+        r += 1
+    col_widths(ws, {"A": 3, "B": 18, "C": 90})
+    sheet_note(ws, "Only pages that take input are listed — gray sys* tabs "
+                   "are the locked calculation engine; green tabs are "
+                   "outputs. Blue cells = type here, gray = calculated.")
+    return ws
+
+
+def add_home_links(wb):
+    """'◄ Dashboard' hyperlink in B1 of every visible sheet."""
+    from openpyxl.styles import Font as _Font
+    link_font = _Font(name="Arial", size=9, bold=True, color="1F3B5C",
+                      underline="single")
+    for ws in wb.worksheets:
+        if ws.title in ("Dashboard", "sysListsHelper"):
+            continue
+        c = ws["B1"]
+        c.value = '=HYPERLINK("#Dashboard!B5","◄ Dashboard")'
+        c.font = link_font
+        from openpyxl.styles import Protection as _Prot
+        c.protection = _Prot(locked=False)
+
+
+def gray_separated_rows(wb):
+    """Gray out (and strike) rows of non-active cadets on cadet grids."""
+    from openpyxl.styles import Font as _Font, PatternFill as _Fill
+    from openpyxl.formatting.rule import FormulaRule as _FR
+    gray_font = _Font(color="9AA5B1", strike=True)
+    gray_fill = _Fill("solid", fgColor="EDEFF2")
+    targets = {
+        "Writing": "B6:AT55", "Spelling": "B6:R55", "PT": "B6:AC55",
+        "Certifications": "B6:U55", "ScoresGrid": "B6:AC55",
+        "GradChecklist": "B6:P55", "StateExam": "B6:L55",
+        "Cadets": "B6:M55",
+    }
+    for name, rng in targets.items():
+        ws = wb[name]
+        ws.conditional_formatting.add(rng, _FR(
+            formula=['AND(Cadets!$B6<>"",Cadets!$I6<>"Active")'],
+            font=gray_font, fill=gray_fill))
+
+
 def build_namedranges(wb):
     ws = wb.create_sheet("NamedRanges")
     ws.sheet_view.showGridLines = False
@@ -1156,5 +1281,8 @@ def build_all_outputs(wb):
     build_emailpreview(wb)
     build_emaillog(wb)
     build_printcenter(wb)
+    build_inputguide(wb)
     build_dashboard(wb)     # after ScoresGrid/Spelling exist (charts)
+    gray_separated_rows(wb)
+    add_home_links(wb)
     build_namedranges(wb)   # last — captures all names

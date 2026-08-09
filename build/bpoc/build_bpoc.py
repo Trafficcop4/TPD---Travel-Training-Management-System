@@ -24,7 +24,8 @@ TAB_OUTPUT = "1E7145"    # green = outputs/printables
 TAB_SYS = "808080"       # gray = locked engine
 
 TAB_COLORS = {
-    TAB_CONFIG: ["StartHere", "Settings", "Lists", "Agencies", "Instructors",
+    TAB_CONFIG: ["StartHere", "InputGuide", "Settings", "Lists", "Agencies",
+                 "Instructors",
                  "ChapterMaster", "ExamMaster", "ExamPlan", "SkillsMaster",
                  "SpellingMaster", "WritingMaster", "Control", "Schedule"],
     TAB_INPUT: ["Cadets", "ExamScores", "Spelling", "Attendance", "Makeup",
@@ -42,7 +43,7 @@ TAB_COLORS = {
 }
 
 SHEET_ORDER = [
-    "Dashboard", "StartHere", "PrintCenter",
+    "Dashboard", "StartHere", "InputGuide", "PrintCenter",
     "Cadets", "ExamScores", "Spelling", "Attendance", "Makeup", "Skills",
     "Writing", "Incidents", "Counseling", "PT", "Medical", "Certifications",
     "StateExam", "DismissalLog",

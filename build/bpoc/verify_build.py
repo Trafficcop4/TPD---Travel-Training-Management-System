@@ -51,7 +51,7 @@ def test_postprocess_units():
 
 def test_workbook():
     wb = load_workbook(WB_PATH)
-    check(len(wb.sheetnames) == 53, f"53 sheets ({len(wb.sheetnames)} found)")
+    check(len(wb.sheetnames) == 54, f"54 sheets ({len(wb.sheetnames)} found)")
 
     # every referenced name is defined
     defined = set(wb.defined_names.keys())
@@ -131,8 +131,30 @@ def test_workbook():
           cert["D5"].value == "TIM Date",
           "Certifications grid with to-collect rollup")
     check("Certifications!$T" in wb["sysChecks"]["Q6"].value and
-          '$Q6="Yes"' in wb["sysChecks"]["N6"].value,
-          "cert gate wired into graduation eligibility")
+          '$Q6="Yes"' not in wb["sysChecks"]["N6"].value,
+          "certs are informational on sysChecks, not a grad gate")
+    check("Certifications!$U" in wb["sysFlags"]["O6"].value and
+          "cert copies outstanding" in wb["sysFlags"]["Q6"].value,
+          "cert warning flag in sysFlags with reason text")
+    wr = wb["Writing"]
+    check('COUNTIF(D6:AQ6,"X")' in wr["AR6"].value and
+          '(D6:AQ6="")' in wr["AS6"].value,
+          "Writing grid counts X marks, blank = not done")
+    check(wr["D6"].alignment.horizontal == "center",
+          "Writing X cells centered")
+    check("InputGuide" in wb.sheetnames and
+          "HYPERLINK" in str(wb["InputGuide"]["B7"].value),
+          "InputGuide page with hyperlinks")
+    check("HYPERLINK" in str(wb["Cadets"]["B1"].value) and
+          "HYPERLINK" in str(wb["sysGrades"]["B1"].value),
+          "home links back to Dashboard on sheets")
+    dash_text = [str(c.value) for row in
+                 wb["Dashboard"].iter_rows(min_row=5, max_row=12)
+                 for c in row if isinstance(c.value, str)]
+    check(any("Final Test" in t for t in dash_text) and
+          any("State Test" in t for t in dash_text) and
+          any("Graduation" in t for t in dash_text),
+          "Dashboard date tiles (start/final/state/graduation)")
     check("nrSK_CoF" in wb["sysSkills"]["N6"].value,
           "firearms course-of-fire bests in sysSkills")
     se = wb["StateExam"]

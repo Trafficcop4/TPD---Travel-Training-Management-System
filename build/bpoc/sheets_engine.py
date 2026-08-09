@@ -256,7 +256,7 @@ def build_sysflags(wb):
     header_row(ws, ["PID", "Cadet Name", "Status", "F:ConsecFails",
                     "F:GradeDrop", "F:CategoryRisk", "F:Spelling",
                     "F:Attendance", "F:Incidents", "F:Writing", "F:Retest",
-                    "F:PT", "F:Medical", "Flag Count", "Reasons"])
+                    "F:PT", "F:Medical", "F:Certs", "Flag Count", "Reasons"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",IF(N(nrGRconsec %s)>=cfgFlagConsecFails,1,0))'
@@ -276,8 +276,9 @@ def build_sysflags(wb):
         "M": ('IF($B{r}="","",IF(OR(PT!$K{r}="No",PT!$AB{r}="No"),1,0))', "fx"),
         "N": ('IF($B{r}="","",IF(COUNTIFS(nrMD_PID,$B{r},nrMD_Status,'
               '"RESTRICTION EXPIRED")>0,1,0))', "fx"),
-        "O": ('IF($B{r}="","",SUM($E{r}:$N{r}))', "fx"),
-        "P": ('IF($B{r}="","",IF($O{r}=0,"",TEXTJOIN("; ",TRUE,'
+        "O": ('IF($B{r}="","",IF(Certifications!$U{r}<>"",1,0))', "fx"),
+        "P": ('IF($B{r}="","",SUM($E{r}:$O{r}))', "fx"),
+        "Q": ('IF($B{r}="","",IF($P{r}=0,"",TEXTJOIN("; ",TRUE,'
               'IF($E{r}=1,"consecutive exam fails",""),'
               'IF($F{r}=1,"grade dropped "&sysGrades!$AB{r}&" pts",""),'
               'IF($G{r}=1,"category avg near 70",""),'
@@ -288,14 +289,15 @@ def build_sysflags(wb):
               'IF($K{r}=1,N(Writing!$AS{r})&" overdue writing",""),'
               'IF($L{r}=1,"RETEST OVERDUE",""),'
               'IF($M{r}=1,"PT failure",""),'
-              'IF($N{r}=1,"medical restriction expired",""))))', "fx"),
+              'IF($N{r}=1,"medical restriction expired",""),'
+              'IF($O{r}=1,"cert copies outstanding: "&Certifications!$U{r},""))))', "fx"),
     })
     # E needs the row-scoped reference, not the whole named range
     cols["E"] = ('IF($B{r}="","",IF(N(sysGrades!$AC{r})>=cfgFlagConsecFails,1,0))', "fx")
     fill_rows(ws, FIRST, LAST, cols)
-    define(wb, "nrFLcount", "sysFlags", f"$O${FIRST}:$O${LAST}")
-    define(wb, "nrFLreasons", "sysFlags", f"$P${FIRST}:$P${LAST}")
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "P": 70})
+    define(wb, "nrFLcount", "sysFlags", f"$P${FIRST}:$P${LAST}")
+    define(wb, "nrFLreasons", "sysFlags", f"$Q${FIRST}:$Q${LAST}")
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "Q": 70})
     sheet_note(ws, "Each flag threshold lives on Settings. WatchList sorts "
                    "by Flag Count and shows Reasons verbatim. Locked.")
     protect(ws)
@@ -325,7 +327,7 @@ def build_syschecks(wb):
               'sysIncidents!$J{r}>0),"Yes","No"))', "fx"),
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
-              '$M{r}="No",$Q{r}="Yes"),"Yes","No"))', "fx"),
+              '$M{r}="No"),"Yes","No"))', "fx"),
         "O": ('IF($B{r}="","",IF($N{r}="Yes","Eligible",TRIM('
               'IF($E{r}<>"Yes","Academic; ","")&'
               'IF($F{r}<>"Yes","Classroom; ","")&'
@@ -335,7 +337,6 @@ def build_syschecks(wb):
               'IF($J{r}<>"Yes","Writing; ","")&'
               'IF($K{r}<>"Yes","Makeup owed; ","")&'
               'IF($L{r}<>"Yes","Final PT; ","")&'
-              'IF($Q{r}<>"Yes","Certifications; ","")&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="No","No","Yes"))', "fx"),
         "Q": ('IF($B{r}="","",IF(Certifications!$T{r}="Yes","Yes","No"))', "fx"),

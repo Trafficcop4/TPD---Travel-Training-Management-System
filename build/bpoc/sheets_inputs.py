@@ -336,20 +336,24 @@ def build_writing(wb):
         cols[get_column_letter(first_ac + i)] = (None, "in")
     cA, cB, cC = (get_column_letter(last_ac + 1), get_column_letter(last_ac + 2),
                   get_column_letter(last_ac + 3))
-    cols[cA] = ('IF($B{r}="","",COUNTIF(D{r}:%s{r},"Yes"))' % last_acL, "fx")
-    cols[cB] = ('IF($B{r}="","",SUMPRODUCT((D{r}:%s{r}<>"Yes")*'
+    cols[cA] = ('IF($B{r}="","",COUNTIF(D{r}:%s{r},"X"))' % last_acL, "fx")
+    cols[cB] = ('IF($B{r}="","",SUMPRODUCT((D{r}:%s{r}="")*'
                 '(TRANSPOSE(rngWMdue)<>"")*(TRANSPOSE(rngWMdue)<TODAY())))'
                 % last_acL, "fx")
     cols[cC] = ('IF($B{r}="","",IF(%s{r}=0,"Yes","No"))' % cB, "fx")
     fill_rows(ws, first, last, cols)
-    dv_list(ws, "=lstYesNo",
-            [f"D{first}:{last_acL}{last}"])
+    # X marks: centered; a workbook event (installed with the VBA) uppercases
+    # any lowercase x typed here
+    for r in range(first, last + 1):
+        for i in range(n):
+            ws[f"{get_column_letter(first_ac+i)}{r}"].alignment = A_CENTER
+    dv_list(ws, '"X,x"', [f"D{first}:{last_acL}{last}"])
     cf_yes_no(ws, f"{cC}{first}:{cC}{last}")
-    # overdue columns highlighted red when due date passed (per column)
+    # blank cells highlighted red once the assignment's due date has passed
     for i in range(n):
         cl = get_column_letter(first_ac + i)
         cf_formula(ws, f"{cl}{first}:{cl}{last}",
-                   f'AND($B{first}<>"",{cl}{first}<>"Yes",'
+                   f'AND($B{first}<>"",{cl}{first}="",'
                    f'INDEX(rngWMdue,{i+1})<>"",INDEX(rngWMdue,{i+1})<TODAY())',
                    FILL_WARNBG)
     define(wb, "nrWRcurrent", "Writing", f"${cC}${first}:${cC}${last}")
@@ -360,9 +364,9 @@ def build_writing(wb):
         ws.column_dimensions[get_column_letter(first_ac + i)].width = 5
     for cl in (cA, cB, cC):
         ws.column_dimensions[cl].width = 13
-    sheet_note(ws, 'Mark "Yes" when an assignment is received. Red cells are '
-                   "past their computed due date (see WritingMaster). Works "
-                   "exactly like the previous workbook.")
+    sheet_note(ws, "Type X when an assignment is received (lowercase x "
+                   "auto-capitalizes; blank = not done). Red cells are past "
+                   "their computed due date (see WritingMaster).")
     return ws
 
 
