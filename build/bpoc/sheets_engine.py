@@ -172,7 +172,8 @@ def build_sysskills(wb):
     header_row(ws, ["PID", "Cadet Name", "Status", "Categories Attempted",
                     "Qualified", "Needs Remediation", "Pending",
                     "Failed Out Cats", "FailedOut?", "Skills Elig",
-                    "Firearms Avg", "Firearms Best"])
+                    "Firearms Avg", "Firearms Best", "CoF1 Best",
+                    "CoF2 Best", "Both CoF ≥70?"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",SUMPRODUCT((rngSM_cat<>"")*'
@@ -190,11 +191,20 @@ def build_sysskills(wb):
               'nrSK_Cat,"Firearms"),2),""))', "fx"),
         "M": ('IF($B{r}="","",IFERROR(MAXIFS(nrSK_Score,nrSK_PID,$B{r},'
               'nrSK_Cat,"Firearms"),""))', "fx"),
+        "N": ('IF($B{r}="","",LET(v,MAXIFS(nrSK_Score,nrSK_PID,$B{r},'
+              'nrSK_Cat,"Firearms",nrSK_CoF,1),IF(v=0,"",v)))', "fx"),
+        "O": ('IF($B{r}="","",LET(v,MAXIFS(nrSK_Score,nrSK_PID,$B{r},'
+              'nrSK_Cat,"Firearms",nrSK_CoF,2),IF(v=0,"",v)))', "fx"),
+        "P": ('IF($B{r}="","",IF(AND($N{r}="",$O{r}=""),"",'
+              'IF(AND($N{r}<>"",$O{r}<>"",N($N{r})>=70,N($O{r})>=70),"Yes",'
+              'IF(OR(AND($N{r}<>"",N($N{r})<70),AND($O{r}<>"",N($O{r})<70)),'
+              '"No","(one pending)"))))', "fx"),
     })
     fill_rows(ws, FIRST, LAST, cols)
     define(wb, "nrSKfailedout", "sysSkills", f"$J${FIRST}:$J${LAST}")
     define(wb, "nrSKelig", "sysSkills", f"$K${FIRST}:$K${LAST}")
     define(wb, "nrSKfirearmsAvg", "sysSkills", f"$L${FIRST}:$L${LAST}")
+    define(wb, "nrSKbothCoF", "sysSkills", f"$P${FIRST}:$P${LAST}")
     col_widths(ws, {"A": 3, "B": 10, "C": 24})
     sheet_note(ws, "Column letters I/J intentionally match V5.4 cross-refs "
                    "(sysGrades reads sysSkills!$I / $J-style flags). Locked.")
@@ -299,7 +309,8 @@ def build_syschecks(wb):
     header_row(ws, ["PID", "Cadet Name", "Status", "Academic", "Classroom",
                     "PT Sessions", "Skills", "Incidents", "Writing",
                     "Makeup Complete", "Final PT Pass", "DismissReview",
-                    "GraduationElig", "Blocking Issues", "Final Exam Elig"])
+                    "GraduationElig", "Blocking Issues", "Final Exam Elig",
+                    "Certs"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",sysGrades!$V{r})', "fx"),
@@ -314,7 +325,7 @@ def build_syschecks(wb):
               'sysIncidents!$J{r}>0),"Yes","No"))', "fx"),
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
-              '$M{r}="No"),"Yes","No"))', "fx"),
+              '$M{r}="No",$Q{r}="Yes"),"Yes","No"))', "fx"),
         "O": ('IF($B{r}="","",IF($N{r}="Yes","Eligible",TRIM('
               'IF($E{r}<>"Yes","Academic; ","")&'
               'IF($F{r}<>"Yes","Classroom; ","")&'
@@ -324,8 +335,10 @@ def build_syschecks(wb):
               'IF($J{r}<>"Yes","Writing; ","")&'
               'IF($K{r}<>"Yes","Makeup owed; ","")&'
               'IF($L{r}<>"Yes","Final PT; ","")&'
+              'IF($Q{r}<>"Yes","Certifications; ","")&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="No","No","Yes"))', "fx"),
+        "Q": ('IF($B{r}="","",IF(Certifications!$T{r}="Yes","Yes","No"))', "fx"),
     })
     fill_rows(ws, FIRST, LAST, cols)
     cf_yes_no(ws, f"N{FIRST}:N{LAST}")
@@ -453,6 +466,14 @@ def build_sysaudit(wb):
          'COUNTIF(nrSpellFlag,"INTERVENTION")', "0",
          'IF(COUNTIF(nrSpellFlag,"INTERVENTION")=0,"OK","CHECK")',
          '"Document intervention on Counseling log (300.4.B)"'),
+        ("Cadets missing certification copies",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))', "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))=0,"OK","CHECK")',
+         '"TIM, SFST, TCIC, CPR/AED, ALERRT, ICS copies - see Certifications sheet"'),
+        ("Firearms: both courses of fire not passed",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF="No"))', "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF="No"))=0,"OK","CHECK")',
+         '"IRG requires 70%+ on BOTH firearms courses of fire (ch 41)"'),
     ]
     for name, val_fx, target, stat_fx, detail_fx in checks:
         ws.cell(row=r, column=2, value=name).font = F_LABEL

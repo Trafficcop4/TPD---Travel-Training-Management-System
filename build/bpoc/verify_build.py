@@ -51,7 +51,7 @@ def test_postprocess_units():
 
 def test_workbook():
     wb = load_workbook(WB_PATH)
-    check(len(wb.sheetnames) == 51, f"51 sheets ({len(wb.sheetnames)} found)")
+    check(len(wb.sheetnames) == 53, f"53 sheets ({len(wb.sheetnames)} found)")
 
     # every referenced name is defined
     defined = set(wb.defined_names.keys())
@@ -125,6 +125,24 @@ def test_workbook():
     wmG = wm["G6"].value
     check("nrCHfirst" in wmG and "nrCDdate" in wmG,
           "writing due dates computed from schedule")
+
+    cert = wb["Certifications"]
+    check("TEXTJOIN" in str(cert["U6"].value) and
+          cert["D5"].value == "TIM Date",
+          "Certifications grid with to-collect rollup")
+    check("Certifications!$T" in wb["sysChecks"]["Q6"].value and
+          '$Q6="Yes"' in wb["sysChecks"]["N6"].value,
+          "cert gate wired into graduation eligibility")
+    check("nrSK_CoF" in wb["sysSkills"]["N6"].value,
+          "firearms course-of-fire bests in sysSkills")
+    se = wb["StateExam"]
+    check("new BPOC required" in se["K6"].value,
+          "state exam 3-attempt rule")
+    check("nrCERTmissing" in str(wb["Dashboard"]["B18"].value or "") or
+          any("nrCERTmissing" in str(c.value)
+              for row in wb["Dashboard"].iter_rows(min_row=5, max_row=40)
+              for c in row if isinstance(c.value, str)),
+          "cert reminders on Dashboard")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 

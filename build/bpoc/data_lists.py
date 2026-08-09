@@ -161,6 +161,19 @@ SKILLS = [
     ("Medical", 3, "Pass/Fail", None),
 ]
 
+# -------------------------------------------------------- per-cadet certs
+# IRG-mandatory per-student completions: (short name, linked chapter/source)
+CERTS = [
+    ("TIM", "Ch 22 - National TIM Responder (4 hr)"),
+    ("SFST", "Ch 23 - NHTSA SFST course"),
+    ("TCIC", "Ch 36 - DPS TCIC/TLETS #4800"),
+    ("CPR/AED", "Ch 40 - accredited CPR/AED (AHA/ARC)"),
+    ("ALERRT", "Ch 43 - ALERRT Level 1 (SB 1852)"),
+    ("ICS 100", "Writing #29 - FEMA IS-100"),
+    ("ICS 200", "Writing #29 - FEMA IS-200"),
+    ("ICS 700", "Writing #29 - FEMA IS-700"),
+]
+
 # ------------------------------------------------------------------ PT events
 # (event, baseline standard text, unit, higher_is_better)
 PT_EVENTS = [

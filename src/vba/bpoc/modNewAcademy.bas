@@ -34,7 +34,7 @@ Public Sub NewAcademyReset()
     ClearRange "Makeup", "C6:D505": ClearRange "Makeup", "F6:K505"
     ClearRange "Makeup", "M6:M505"
     ClearRange "Skills", "C6:C605": ClearRange "Skills", "E6:E605"
-    ClearRange "Skills", "I6:M605": ClearRange "Skills", "Q6:Q605"
+    ClearRange "Skills", "I6:M605": ClearRange "Skills", "Q6:R605"
     ClearRange "Writing", "D6:AQ55"
     ClearRange "Incidents", "C6:D405": ClearRange "Incidents", "F6:K405"
     ClearRange "Incidents", "M6:N405"
@@ -43,6 +43,8 @@ Public Sub NewAcademyReset()
     ClearRange "PT", "D6:Z55"
     ClearRange "Medical", "C6:D205": ClearRange "Medical", "F6:L205"
     ClearRange "Medical", "N6:N205"
+    ClearRange "Certifications", "D6:S55"
+    ClearRange "StateExam", "D6:I55": ClearRange "StateExam", "L6:L55"
     ClearRange "DismissalLog", "C6:C105": ClearRange "DismissalLog", "E6:O105"
     ClearRange "EmailLog", "B6:I505"
     ClearAuditDocs

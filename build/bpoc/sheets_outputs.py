@@ -68,6 +68,8 @@ def build_dashboard(wb):
          'SUMPRODUCT((nrAUDstatus<>"OK")*(nrAUDstatus<>""))')
     _kpi(ws, r, 10, "Days to graduation",
          'MAX(0,cfgEndDate-TODAY())')
+    _kpi(ws, r, 12, "Cert copies to collect",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))')
     r += 3
     section_bar(ws, r, 2, 11, "Watch list — highest flag counts first "
                               "(full list on WatchList)")
@@ -79,6 +81,14 @@ def build_dashboard(wb):
         '"No flags — clear")'))
     watch_top = r
     r += 11
+    section_bar(ws, r, 2, 11, "Certification reminders — copies to collect "
+                              "from cadets (Certifications sheet)")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(rngCadetNames,nrCadetAgency,nrCERTmissing),'
+        '(nrCERTmissing<>"")*(nrCadetStatus="Active")),'
+        '"All certification copies collected")'))
+    r += 9
     section_bar(ws, r, 2, 11, "Class average by exam")
     chart_anchor_row = r + 1
     r += 16
@@ -402,6 +412,14 @@ def build_transcript(wb):
     _profile_label(ws, r, 2, "Awards",
                    'IFERROR(TEXTJOIN(", ",TRUE,IF(nrAWfinal=cfgTranscriptCadet,'
                    'nrAWnames,"")),"")', wide=4)
+    r += 1
+    _profile_label(ws, r, 2, "Required certifications",
+                   'LET(m,' + P + 'nrCERTmissing,""),'
+                   'IF(m="","All on file (TIM, SFST, TCIC, CPR/AED, ALERRT, '
+                   'ICS)","Outstanding: "&m))', wide=4)
+    r += 1
+    _profile_label(ws, r, 2, "State licensing exam",
+                   P + 'nrSEstatus,"Not yet attempted")', wide=4)
     r += 2
     ws.cell(row=r, column=2, value="Training Coordinator:").font = F_LABEL
     ws.cell(row=r, column=5, value="_______________________").font = F_BODY
@@ -425,8 +443,8 @@ def build_gradchecklist(wb):
     ws.sheet_view.showGridLines = False
     header_row(ws, ["PID", "Cadet", "Agency", "Academic", "Classroom",
                     "PT Sessions", "Skills", "Incidents", "Writing",
-                    "Makeup", "Final PT", "No Dismiss Rev", "ELIGIBLE",
-                    "Blocking Issues"])
+                    "Makeup", "Final PT", "No Dismiss Rev", "Certs",
+                    "ELIGIBLE", "Blocking Issues"])
     cols = {
         "B": ('IF(Cadets!$B{r}="","",Cadets!$B{r})', "fx"),
         "C": ('IF($B{r}="","",Cadets!$F{r})', "fx"),
@@ -440,15 +458,16 @@ def build_gradchecklist(wb):
         "K": ('IF($B{r}="","",sysChecks!$K{r})', "fx"),
         "L": ('IF($B{r}="","",sysChecks!$L{r})', "fx"),
         "M": ('IF($B{r}="","",IF(sysChecks!$M{r}="Yes","No","Yes"))', "fx"),
-        "N": ('IF($B{r}="","",sysChecks!$N{r})', "fx"),
-        "O": ('IF($B{r}="","",sysChecks!$O{r})', "fx"),
+        "N": ('IF($B{r}="","",sysChecks!$Q{r})', "fx"),
+        "O": ('IF($B{r}="","",sysChecks!$N{r})', "fx"),
+        "P": ('IF($B{r}="","",sysChecks!$O{r})', "fx"),
     }
     fill_rows(ws, FIRST, LAST, cols)
-    cf_yes_no(ws, f"E{FIRST}:N{LAST}")
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 18, "O": 44})
-    for cl in "EFGHIJKLMN":
+    cf_yes_no(ws, f"E{FIRST}:O{LAST}")
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 18, "P": 44})
+    for cl in "EFGHIJKLMNO":
         ws.column_dimensions[cl].width = 10
-    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:O{LAST}",
+    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:P{LAST}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "The final gate before the ceremony — every column must "
                    "be Yes.")
@@ -505,7 +524,7 @@ def build_audit(wb):
     hdr2 = r
     header_row(ws, ["Check", "Value", "Target", "Status", "Detail"], row=r)
     r += 1
-    n_checks = 11
+    n_checks = 13
     for i in range(n_checks):
         sr = FIRST + i
         ws.cell(row=r, column=2, value=f"=sysAudit!$B${sr}").font = F_BODY

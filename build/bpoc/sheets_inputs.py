@@ -268,7 +268,7 @@ def build_skills(wb):
     header_row(ws, ["RecordID", "Cadet Name", "PID", "Category", "Max",
                     "Mode", "Passing", "Attempt #", "Result", "Score",
                     "Date", "Assessed By", "Attempts Used", "Status",
-                    "DismissReview", "Notes"])
+                    "DismissReview", "Notes", "Course of Fire"])
     first, last = DATA_ROW, DATA_ROW + ROWS_SKILLS - 1
     fill_rows(ws, first, last, {
         "B": ('IF($C{r}="","",$D{r}&"-"&$E{r}&"-"&$I{r})', "fx"),
@@ -288,6 +288,7 @@ def build_skills(wb):
               'IF(AND(res="Fail",$N{r}>=$F{r}),"FAILED OUT","Needs Remediation"))))))', "fx"),
         "P": ('IF($C{r}="","",IF($O{r}="FAILED OUT","Yes","No"))', "fx"),
         "Q": (None, "in"),
+        "R": (None, "in"),
     })
     for r in range(first, last + 1):
         ws[f"L{r}"].number_format = DATE
@@ -295,6 +296,7 @@ def build_skills(wb):
     dv_list(ws, "=rngSM_cat", [f"E{first}:E{last}"])
     dv_list(ws, "=lstAttemptNum", [f"I{first}:I{last}"])
     dv_list(ws, "=lstSkillResult", [f"J{first}:J{last}"])
+    dv_list(ws, '"1,2"', [f"R{first}:R{last}"])
     cf_formula(ws, f"O{first}:O{last}", f'$O{first}="FAILED OUT"', FILL_WARNBG)
     define(wb, "nrSK_PID", "Skills", f"$D${first}:$D${last}")
     define(wb, "nrSK_Cat", "Skills", f"$E${first}:$E${last}")
@@ -303,12 +305,14 @@ def build_skills(wb):
     define(wb, "nrSK_Score", "Skills", f"$K${first}:$K${last}")
     define(wb, "nrSK_Status", "Skills", f"$O${first}:$O${last}")
     define(wb, "nrSK_Dis", "Skills", f"$P${first}:$P${last}")
+    define(wb, "nrSK_CoF", "Skills", f"$R${first}:$R${last}")
     col_widths(ws, {"A": 3, "B": 14, "C": 22, "D": 9, "E": 12, "F": 6,
                     "G": 10, "H": 9, "I": 9, "J": 9, "K": 8, "L": 11,
-                    "M": 16, "N": 12, "O": 16, "P": 12, "Q": 26})
+                    "M": 16, "N": 12, "O": 16, "P": 12, "Q": 26, "R": 12})
     sheet_note(ws, "One row per attempt (firearms scores recorded; Top Gun "
-                   "uses the firearms Score column). Exhausting max attempts "
-                   "= separation review (policy 300.7).")
+                   "uses the firearms Score column). Firearms rows: set "
+                   "Course of Fire 1 or 2 — TCOLE requires 70%+ on BOTH. "
+                   "Exhausting max attempts = separation review (300.7).")
     return ws
 
 
@@ -551,6 +555,106 @@ def build_medical(wb):
     return ws
 
 
+def build_certifications(wb):
+    """Per-cadet grid of IRG-mandatory certifications: completion date +
+    copy-on-file status per cert, with a 'to collect' rollup that feeds the
+    Dashboard reminders."""
+    ws = wb.create_sheet("Certifications")
+    ws.sheet_view.showGridLines = False
+    hdrs = ["PID", "Cadet Name"]
+    for nm, _src in DL.CERTS:
+        hdrs += [f"{nm} Date", f"{nm} Copy?"]
+    hdrs += ["All Certs?", "To Collect"]
+    header_row(ws, hdrs)
+    first, last = DATA_ROW, CADET_LAST
+    cols = {
+        "B": ('IF(Cadets!$B{r}="","",Cadets!$B{r})', "fx"),
+        "C": ('IF(Cadets!$B{r}="","",Cadets!$F{r})', "fx"),
+    }
+    n = len(DL.CERTS)
+    for i in range(n):
+        cols[get_column_letter(4 + 2 * i)] = (None, "in")      # date
+        cols[get_column_letter(5 + 2 * i)] = (None, "in")      # copy?
+    col_all = get_column_letter(4 + 2 * n)       # T
+    col_miss = get_column_letter(5 + 2 * n)      # U
+    # missing = cert has no date OR copy not Yes/N/A
+    parts = []
+    for i, (nm, _src) in enumerate(DL.CERTS):
+        dcol = get_column_letter(4 + 2 * i)
+        ccol = get_column_letter(5 + 2 * i)
+        parts.append(
+            f'IF(OR(${dcol}{{r}}="",AND(${ccol}{{r}}<>"Yes",'
+            f'${ccol}{{r}}<>"N/A")),"{nm}","")')
+    cols[col_miss] = ('IF($B{r}="","",TEXTJOIN("; ",TRUE,' +
+                      ",".join(parts) + "))", "fx")
+    cols[col_all] = ('IF($B{r}="","",IF($%s{r}="","Yes","No"))' % col_miss, "fx")
+    fill_rows(ws, first, last, cols)
+    for r in range(first, last + 1):
+        for i in range(n):
+            ws[f"{get_column_letter(4+2*i)}{r}"].number_format = DATE
+    copy_ranges = [f"{get_column_letter(5+2*i)}{first}:"
+                   f"{get_column_letter(5+2*i)}{last}" for i in range(n)]
+    dv_list(ws, '"Yes,Requested,N/A"', copy_ranges)
+    cf_yes_no(ws, f"{col_all}{first}:{col_all}{last}")
+    define(wb, "nrCERTall", "Certifications", f"${col_all}${first}:${col_all}${last}")
+    define(wb, "nrCERTmissing", "Certifications", f"${col_miss}${first}:${col_miss}${last}")
+    # legend row under the grid
+    lr = last + 2
+    ws.cell(row=lr, column=2, value="Cert sources:").font = F_LABEL
+    ws.cell(row=lr, column=3, value="; ".join(
+        f"{nm} = {src}" for nm, src in DL.CERTS)).font = F_SMALL
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, col_all: 10, col_miss: 40})
+    for i in range(n):
+        ws.column_dimensions[get_column_letter(4 + 2 * i)].width = 11
+        ws.column_dimensions[get_column_letter(5 + 2 * i)].width = 9
+    sheet_note(ws, "TCOLE-mandatory per-student completions. Enter the "
+                   "completion date and mark Copy? = Yes once the cadet's "
+                   "certificate copy is in the file. 'To Collect' feeds the "
+                   "Dashboard reminder list; All Certs gates graduation.")
+    return ws
+
+
+def build_stateexam(wb):
+    """State licensing exam: 250 questions, 70% pass, 3 attempts max —
+    a third failure requires enrolling in a new BPOC."""
+    ws = wb.create_sheet("StateExam")
+    ws.sheet_view.showGridLines = False
+    header_row(ws, ["PID", "Cadet Name", "Attempt 1 Date", "Result 1",
+                    "Attempt 2 Date", "Result 2", "Attempt 3 Date",
+                    "Result 3", "Attempts", "Status", "Notes"])
+    first, last = DATA_ROW, CADET_LAST
+    fill_rows(ws, first, last, {
+        "B": ('IF(Cadets!$B{r}="","",Cadets!$B{r})', "fx"),
+        "C": ('IF(Cadets!$B{r}="","",Cadets!$F{r})', "fx"),
+        "D": (None, "in"), "E": (None, "in"), "F": (None, "in"),
+        "G": (None, "in"), "H": (None, "in"), "I": (None, "in"),
+        "J": ('IF($B{r}="","",COUNTIF($E{r}:$I{r},"Pass")'
+              '+COUNTIF($E{r}:$I{r},"Fail"))', "fx"),
+        "K": ('IF($B{r}="","",IF(COUNTIF($E{r}:$I{r},"Pass")>0,'
+              '"PASSED "&TEXT(MAX($D{r},$F{r},$H{r}),"mm/dd/yyyy"),'
+              'IF($J{r}>=3,"FAILED 3 ATTEMPTS - new BPOC required",'
+              'IF($J{r}=0,"Not yet attempted",'
+              '"In progress ("&$J{r}&" attempt(s))"))))', "fx"),
+        "L": (None, "in"),
+    })
+    for r in range(first, last + 1):
+        for cl in ("D", "F", "H"):
+            ws[f"{cl}{r}"].number_format = DATE
+    dv_list(ws, '"Pass,Fail"',
+            [f"E{first}:E{last}", f"G{first}:G{last}", f"I{first}:I{last}"])
+    cf_formula(ws, f"K{first}:K{last}",
+               f'LEFT($K{first},6)="FAILED"', FILL_WARNBG)
+    cf_formula(ws, f"K{first}:K{last}",
+               f'LEFT($K{first},6)="PASSED"', FILL_OKBG)
+    define(wb, "nrSEstatus", "StateExam", f"$K${first}:$K${last}")
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 13, "E": 9, "F": 13,
+                    "G": 9, "H": 13, "I": 9, "J": 9, "K": 32, "L": 28})
+    sheet_note(ws, "TCOLE licensing exam: 250 multiple-choice, 70% to pass, "
+                   "maximum 3 attempts; a third failure means the learner "
+                   "must enroll in and complete a new BPOC.")
+    return ws
+
+
 def build_all_inputs(wb):
     build_cadets(wb)
     build_examscores(wb)
@@ -563,3 +667,5 @@ def build_all_inputs(wb):
     build_counseling(wb)
     build_pt(wb)
     build_medical(wb)
+    build_certifications(wb)
+    build_stateexam(wb)
