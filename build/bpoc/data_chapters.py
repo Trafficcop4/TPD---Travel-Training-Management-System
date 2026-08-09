@@ -103,7 +103,7 @@ PROGRAM_REQS = [
 
 # Non-chapter schedule activities that appear on the hourly calendar and the
 # daily sign-in sheets (kept as a dropdown list alongside chapters).
-ACTIVITIES = [
+ACTIVITIES = [f"Test {i}" for i in range(1, 18)] + [
     "Review",
     "Digital Forensics",
     "Lunch",
