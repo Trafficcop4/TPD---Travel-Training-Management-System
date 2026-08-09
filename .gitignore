@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 ~$*.xls*
+# Seeded/live academy workbooks contain real cadet names and PIDs -
+# regenerate with build/bpoc/seed_bpoc7.py; never commit them.
+workbooks/BPOC_Academy_Management_V6_BPOC7.xlsx
+workbooks/*_seeded.xlsx
