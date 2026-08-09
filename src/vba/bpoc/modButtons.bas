@@ -18,6 +18,7 @@ Public Sub AddAllButtons()
         Array("Ranking", "modPrint.btnPrintRanking"), _
         Array("Grad Checklist", "modPrint.btnPrintGradCheck"), _
         Array("Audit Packet", "modPrint.btnPrintAudit"), _
+        Array("Addendum Report", "modPrint.btnPrintAddendum"), _
         Array("Schedule", "modPrint.btnPrintSchedule"))
     AddButtons "Dashboard", Array( _
         Array("Agency Email Drafts", "modAgencyEmail.GenerateAgencyEmails"))

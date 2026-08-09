@@ -51,7 +51,7 @@ def test_postprocess_units():
 
 def test_workbook():
     wb = load_workbook(WB_PATH)
-    check(len(wb.sheetnames) == 50, f"50 sheets ({len(wb.sheetnames)} found)")
+    check(len(wb.sheetnames) == 51, f"51 sheets ({len(wb.sheetnames)} found)")
 
     # every referenced name is defined
     defined = set(wb.defined_names.keys())
@@ -101,8 +101,13 @@ def test_workbook():
     # printables have print areas
     for n in ("SignIn", "EvalSheet", "SpellingPrint", "WritingHandout",
               "Transcript", "CadetProfile", "Ranking", "GradChecklist",
-              "Audit", "Schedule"):
+              "Audit", "Addendum", "Schedule"):
         check(bool(wb[n].print_area), f"{n} has a print area")
+    ad = wb["Addendum"]
+    check("#2055" in str(ad["G50"].value or "") or
+          any("#2055" in str(ad.cell(row=rr, column=7).value or "")
+              for rr in range(10, 60)),
+          "Addendum maps Firearms excess to course #2055")
 
     # key policy formulas present
     es = wb["ExamScores"]

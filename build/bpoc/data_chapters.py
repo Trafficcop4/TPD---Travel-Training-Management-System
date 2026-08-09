@@ -72,6 +72,15 @@ SPECIAL_REQS = {
     "43": "ALERRT Level 1 (16 hrs, SB 1852) by certified ALERRT instructors (TtT 3315 + current cert)",
 }
 
+# Chapters whose excess hours are reported under their OWN course number
+# instead of the general Addendum to BPOC (#101), per the IRG.
+SEPARATE_REPORT = {
+    "31": "#2040 (Arrest and Control)",
+    "34": "#2046 (Professional Police Driving)",
+    "41": "#2055 (Firearms)",
+}
+ADDENDUM_COURSE = "#101 (Addendum to BPOC)"
+
 # Program-level mandatory items (Audit sheet manual checklist).
 PROGRAM_REQS = [
     ("Commission Rules distributed to all students (Rule 215.9)",

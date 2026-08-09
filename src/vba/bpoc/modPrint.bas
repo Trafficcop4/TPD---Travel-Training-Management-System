@@ -39,6 +39,10 @@ Public Sub btnPrintAudit()
     PrintSheet "Audit"
 End Sub
 
+Public Sub btnPrintAddendum()
+    PrintSheet "Addendum"
+End Sub
+
 Public Sub btnPrintSchedule()
     PrintSheet "Schedule"
 End Sub

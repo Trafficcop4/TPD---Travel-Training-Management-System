@@ -608,6 +608,94 @@ def build_audit(wb):
 
 
 # --------------------------------------------------------------------------
+def build_addendum(wb):
+    """Printable excess-hours report: per-chapter delivered vs TCOLE minimum,
+    with the correct separate-reporting course number for each excess."""
+    import data_chapters as DC
+    ws = wb.create_sheet("Addendum")
+    ws.sheet_view.showGridLines = False
+    r = HDR_ROW
+    ws.cell(row=r, column=2, value=(
+        '="TYLER POLICE ACADEMY — "&cfgAcademyClass&'
+        '" — EXCESS HOURS REPORTING (ADDENDUM) — "&TEXT(TODAY(),"mm/dd/yyyy")'
+    )).font = F_KPI
+    r += 1
+    c = ws.cell(row=r, column=2, value=(
+        "The BPOC is reported to TCOLE at exactly 736 hours. Hours delivered "
+        "beyond a chapter's TCOLE minimum are reported separately: Arrest & "
+        "Control, Driving and Firearms under their own course numbers; all "
+        "other excess under the Addendum to BPOC (#101). Verify course "
+        "numbers against current TCOLE reporting guidance before submission."))
+    c.font = F_SMALL
+    c.alignment = A_LEFT_WRAP
+    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=8)
+    ws.row_dimensions[r].height = 40
+    r += 2
+    hdr = r
+    header_row(ws, ["Ch #", "Chapter / Class", "TCOLE Min Hrs",
+                    "Delivered Hrs", "Excess Hrs", "Report Under"], row=r)
+    r += 1
+    first = r
+    n = len(DC.CHAPTERS)
+    for i in range(n):
+        rr = first + i
+        src = DATA_ROW + i          # ChapterMaster data row
+        ch = DC.CHAPTERS[i][1]
+        ws.cell(row=rr, column=2, value=f"=ChapterMaster!$C${src}").font = F_BODY
+        ws.cell(row=rr, column=3, value=f"=ChapterMaster!$D${src}").font = F_BODY
+        ws.cell(row=rr, column=4, value=f"=ChapterMaster!$E${src}").font = F_CALC
+        ws.cell(row=rr, column=5, value=(
+            f'=IF(ChapterMaster!$G{src}=0,"",ChapterMaster!$G{src})'
+        )).font = F_CALC
+        ws.cell(row=rr, column=6, value=(
+            f'=IF(OR(ChapterMaster!$G{src}="",ChapterMaster!$G{src}=0),"",'
+            f'IF(ChapterMaster!$G{src}>ChapterMaster!$E{src},'
+            f'ROUND(ChapterMaster!$G{src}-ChapterMaster!$E{src},2),""))'
+        )).font = F_LABEL
+        report_as = DC.SEPARATE_REPORT.get(ch, DC.ADDENDUM_COURSE)
+        ws.cell(row=rr, column=7, value=(
+            f'=IF($F{rr}="","","{report_as}")')).font = F_BODY
+        for ccol in range(2, 8):
+            ws.cell(row=rr, column=ccol).border = BOX
+    last = first + n - 1
+    cf_formula(ws, f"F{first}:F{last}",
+               f'AND($F{first}<>"",$F{first}>0)', FILL_AMBER)
+    r = last + 2
+    ws.cell(row=r, column=3, value="Total excess to report:").font = F_LABEL
+    tot = ws.cell(row=r, column=6, value=f"=SUM(F{first}:F{last})")
+    tot.font = F_KPI
+    ws.cell(row=r + 1, column=3,
+            value="— of which under #101 (Addendum):").font = F_LABEL
+    ws.cell(row=r + 1, column=6, value=(
+        f'=SUMPRODUCT(($F{first}:$F{last}<>"")*'
+        f'($G{first}:$G{last}="{DC.ADDENDUM_COURSE}")*'
+        f'IFERROR($F{first}:$F{last}+0,0))')).font = F_CALC
+    ws.cell(row=r + 2, column=3,
+            value="— of which under separate course #s:").font = F_LABEL
+    ws.cell(row=r + 2, column=6, value=(
+        f'=SUMPRODUCT(($F{first}:$F{last}<>"")*'
+        f'($G{first}:$G{last}<>"{DC.ADDENDUM_COURSE}")*'
+        f'($G{first}:$G{last}<>"")*IFERROR($F{first}:$F{last}+0,0))'
+    )).font = F_CALC
+    r += 4
+    ws.cell(row=r, column=2, value="Training Coordinator:").font = F_LABEL
+    ws.cell(row=r, column=4, value="_______________________").font = F_BODY
+    ws.cell(row=r, column=6, value="Date:").font = F_LABEL
+    ws.cell(row=r, column=7, value="____________").font = F_BODY
+    r += 2
+    ws.cell(row=r, column=2, value=DL.ACADEMY_ADDRESS).font = F_SMALL
+    col_widths(ws, {"A": 3, "B": 7, "C": 46, "D": 12, "E": 12, "F": 11,
+                    "G": 30, "H": 4})
+    page_setup_portrait(ws, print_area=f"B{HDR_ROW}:G{r}",
+                        repeat_rows=f"{hdr}:{hdr}")
+    protect(ws)
+    sheet_note(ws, "Fills from ChapterMaster/Schedule automatically — only "
+                   "chapters with logged hours show; excess rows highlight. "
+                   "Print for the TCOLE reporting packet.")
+    return ws
+
+
+# --------------------------------------------------------------------------
 def build_signin(wb):
     ws = wb.create_sheet("SignIn")
     ws.sheet_view.showGridLines = False
@@ -988,6 +1076,9 @@ def build_printcenter(wb):
          "btnPrintGradCheck"),
         ("Audit packet", "Program checks + enrollment docs", "Audit",
          "btnPrintAudit"),
+        ("Addendum (excess hours)", "Per-class excess vs TCOLE minimum with "
+         "reporting course #s (#101 / #2040 / #2046 / #2055)", "Addendum",
+         "btnPrintAddendum"),
         ("Schedule", "Full schedule listing", "Schedule", "btnPrintSchedule"),
     ]
     header_row(ws, ["What", "How", "Sheet", "Macro (button)"], row=r)
@@ -1038,6 +1129,7 @@ def build_all_outputs(wb):
     build_gradchecklist(wb)
     build_dismissallog(wb)
     build_audit(wb)
+    build_addendum(wb)
     build_signin(wb)
     build_evalsheet(wb)
     build_spellingprint(wb)
