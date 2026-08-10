@@ -543,7 +543,7 @@ def build_audit(wb):
     hdr2 = r
     header_row(ws, ["Check", "Value", "Target", "Status", "Detail"], row=r)
     r += 1
-    n_checks = 13
+    n_checks = 14
     for i in range(n_checks):
         sr = FIRST + i
         ws.cell(row=r, column=2, value=f"=sysAudit!$B${sr}").font = F_BODY
@@ -1141,7 +1141,9 @@ INPUT_GUIDE = [
      "retest window, flag thresholds, PT points rubric (yellow block)."),
     ("Lists", "Dropdown choices used across the workbook — add items here."),
     ("Agencies", "Sending agencies: codes, contacts, email addresses."),
-    ("Instructors", "Roster with TCOLE PID, certs, SME letters, bios."),
+    ("Instructors", "Roster with TCOLE PID, certs, SME letters, bio-on-file "
+     "status. 'On Schedule?' shows who actually teaches — every co-teacher "
+     "needs documentation."),
     ("ChapterMaster", "Chapter hours + the per-chapter TCOLE training-file "
      "record (lesson plan, bio, sign-ins, assessment, grade sheet, eval, "
      "special requirements)."),

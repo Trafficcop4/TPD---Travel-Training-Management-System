@@ -270,30 +270,54 @@ def build_instructors(wb):
     ws.sheet_view.showGridLines = False
     header_row(ws, ["Instructor Name", "Agency / Unit", "TCOLE PID",
                     "Instructor Type", "Certificates (list)",
-                    "Cert Expiration", "SME Letter", "Bio / Notes",
-                    "Audit Ready?"])
-    last = DATA_ROW + 79
+                    "Cert Expiration", "SME Letter", "Bio On File?",
+                    "Notes", "Audit Ready?", "On Schedule?",
+                    "Chapters Taught"])
+    last = DATA_ROW + 89
     for i, nm in enumerate(DL.INSTRUCTORS):
-        c = ws.cell(row=DATA_ROW + i, column=2, value=nm)
+        ws.cell(row=DATA_ROW + i, column=2, value=nm)
+    for j, nm in enumerate(DL.GUEST_ENTITIES):
+        r = DATA_ROW + len(DL.INSTRUCTORS) + j
+        ws.cell(row=r, column=2, value=nm)
+        ws.cell(row=r, column=5, value="Guest/Outside")
     fill_rows(ws, DATA_ROW, last, {
         "B": (None, "in"), "C": (None, "in"), "D": (None, "in"),
         "E": (None, "in"), "F": (None, "in"), "G": (None, "in"),
-        "H": (None, "in"), "I": (None, "in"),
-        "J": ('IF($B{r}="","",IF(OR($E{r}="TCOLE Instructor",'
-              'AND(LEFT($E{r},3)="SME",$H{r}="On File")),"Yes","No"))', "fx"),
+        "H": (None, "in"), "I": (None, "in"), "J": (None, "in"),
+        # IRG: every instructor/co-teacher teaching LOs needs a documented
+        # qualification (TCOLE cert or written SME approval) AND a bio.
+        "K": ('IF($B{r}="","",IF($E{r}="Guest/Outside","N/A",'
+              'IF(AND(OR($E{r}="TCOLE Instructor",'
+              'AND(LEFT($E{r},3)="SME",$H{r}="On File")),'
+              'OR($I{r}="On File",$I{r}="N/A")),"Yes","No")))', "fx"),
+        "L": ('IF($B{r}="","",IF(SUMPRODUCT(--ISNUMBER(SEARCH($B{r},'
+              'nrSCH_Instr)))>0,"Yes",""))', "fx"),
+        "M": ('IF($B{r}="","",IFERROR(TEXTJOIN(", ",TRUE,SORT(UNIQUE('
+              'FILTER(nrSCH_ChNum,ISNUMBER(SEARCH($B{r},nrSCH_Instr))*'
+              '(nrSCH_ChNum<>""))))),""))', "fx"),
     })
     for r in range(DATA_ROW, last + 1):
         ws[f"G{r}"].number_format = DATE
     dv_list(ws, "=lstInstructorType", [f"E{DATA_ROW}:E{last}"])
-    dv_list(ws, "=lstMaterialsStatus", [f"H{DATA_ROW}:H{last}"])
-    cf_yes_no(ws, f"J{DATA_ROW}:J{last}")
+    dv_list(ws, "=lstMaterialsStatus",
+            [f"H{DATA_ROW}:H{last}", f"I{DATA_ROW}:I{last}"])
+    cf_yes_no(ws, f"K{DATA_ROW}:K{last}")
+    cf_formula(ws, f"L{DATA_ROW}:L{last}",
+               f'AND($L{DATA_ROW}="Yes",$K{DATA_ROW}="No")', FILL_WARNBG)
     define(wb, "nrInstrNames", "Instructors", f"$B${DATA_ROW}:$B${last}")
-    define(wb, "nrInstrReady", "Instructors", f"$J${DATA_ROW}:$J${last}")
-    col_widths(ws, {"A": 3, "B": 24, "C": 18, "D": 12, "E": 20, "F": 34,
-                    "G": 13, "H": 13, "I": 40, "J": 11})
-    sheet_note(ws, "TCOLE audits verify instructors were qualified for what "
-                   "they taught. Non-TCOLE instructors need an SME letter "
-                   "from the Training Sgt ('SME Letter' = On File).")
+    define(wb, "nrInstrReady", "Instructors", f"$K${DATA_ROW}:$K${last}")
+    define(wb, "nrInstrOnSched", "Instructors", f"$L${DATA_ROW}:$L${last}")
+    col_widths(ws, {"A": 3, "B": 24, "C": 18, "D": 12, "E": 20, "F": 30,
+                    "G": 13, "H": 12, "I": 12, "J": 26, "K": 11, "L": 12,
+                    "M": 30})
+    sheet_note(ws, "IRG: EVERY instructor or co-teacher who teaches a "
+                   "learning objective needs a bio + documented "
+                   "qualification (TCOLE instructor cert, or SME letter "
+                   "approved in writing). 'On Schedule?' scans every "
+                   "schedule block's instructor text — co-teachers in "
+                   "multi-name entries are matched individually. Red = "
+                   "teaching without documentation. Guest/Outside entries "
+                   "(proctors, venues) are exempt.")
     return ws
 
 
@@ -721,7 +745,7 @@ def build_schedule(wb):
     ws.sheet_view.showGridLines = False
     header_row(ws, ["Date", "Day", "Start", "End", "Hours",
                     "Chapter / Activity", "Ch #", "Instructor", "Location",
-                    "Week #", "Day #", "Notes"])
+                    "Week #", "Day #", "Notes", "Instructor OK?"])
     first, last = DATA_ROW, DATA_ROW + ROWS_SCHEDULE - 1
     fill_rows(ws, first, last, {
         "B": (None, "in"),
@@ -735,6 +759,9 @@ def build_schedule(wb):
         "K": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDweek),""))', "fx"),
         "L": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDnum),""))', "fx"),
         "M": (None, "in"),
+        "N": ('IF(OR($B{r}="",$I{r}=""),"",'
+              'IF(SUMPRODUCT(--ISNUMBER(SEARCH(nrInstrNames,$I{r})))>0,"OK",'
+              '"UNRECOGNIZED"))', "fx"),
     })
     for r2 in range(first, last + 1):
         ws[f"B{r2}"].number_format = DATE
@@ -750,9 +777,12 @@ def build_schedule(wb):
     define(wb, "nrSCH_ChNum", "Schedule", f"$H${first}:$H${last}")
     define(wb, "nrSCH_Instr", "Schedule", f"$I${first}:$I${last}")
     define(wb, "nrSCH_Loc", "Schedule", f"$J${first}:$J${last}")
+    define(wb, "nrSCH_InstrOK", "Schedule", f"$N${first}:$N${last}")
+    cf_formula(ws, f"N{first}:N{last}", f'$N{first}="UNRECOGNIZED"',
+               FILL_WARNBG)
     col_widths(ws, {"A": 3, "B": 12, "C": 6, "D": 9, "E": 9, "F": 8,
                     "G": 46, "H": 6, "I": 24, "J": 16, "K": 8, "L": 7,
-                    "M": 30})
+                    "M": 30, "N": 13})
     page_setup_landscape(ws, print_area=f"B{HDR_ROW}:M{first+400}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "One row per time block (a day usually has several). "

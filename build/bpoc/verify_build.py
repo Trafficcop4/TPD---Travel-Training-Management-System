@@ -131,6 +131,15 @@ def test_workbook():
           any(cm2.cell(row=r, column=2).value == "Crash Investigation"
               for r in range(50, 75)),
           "TPD sub-class block on ChapterMaster")
+    ins = wb["Instructors"]
+    check("SEARCH($B6,nrSCH_Instr)" in ins["L6"].value and
+          "nrSCH_ChNum" in ins["M6"].value,
+          "per-instructor on-schedule scan + chapters taught")
+    check('$I6="On File"' in ins["K6"].value and
+          '"Guest/Outside","N/A"' in ins["K6"].value.replace("'", '"'),
+          "audit-ready requires bio; guests exempt")
+    check("UNRECOGNIZED" in wb["Schedule"]["N6"].value,
+          "schedule flags unrecognized instructor entries")
     wmG = wm["G6"].value
     check("nrCHfirst" in wmG and "nrCDdate" in wmG,
           "writing due dates computed from schedule")

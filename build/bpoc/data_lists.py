@@ -86,6 +86,14 @@ HOLIDAYS = [
 ]
 
 # ---------------------------------------------------------------- instructors
+# Non-individual schedule entries (proctors, venues, outside orgs) — seeded
+# as Guest/Outside so schedule references resolve without instructor-file
+# requirements (guest speakers not teaching LOs need no bio per the IRG).
+GUEST_ENTITIES = [
+    "Training Staff", "Cadre", "TJC", "TFD", "Kilgore College",
+    "The Mayfair Building",
+]
+
 # Roster seed (names only; PID/bio/certs entered by coordinator).
 INSTRUCTORS = [
     "Tyler Pride", "Trey Edwards", "Judson Moore", "Keven Fite",
@@ -102,7 +110,7 @@ INSTRUCTORS = [
     "Eddie Zapata", "Jordan Hill", "Chris Mackey", "Braden Barns",
     "John Hebert", "DJ Schick", "Brandon Lott", "Ryan Tack",
     "Amanda Cook", "Teressa Dell", "Steve Black", "Chad Homer",
-    "Mike Saxion", "Justin Utley", "Jason Burton",
+    "Mike Saxion", "Justin Utley", "Jason Burton", "Nathan Elliott",
 ]
 
 # ------------------------------------------------------------------ agencies
