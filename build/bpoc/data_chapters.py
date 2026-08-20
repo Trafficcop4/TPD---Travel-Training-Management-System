@@ -136,9 +136,9 @@ PROGRAM_REQS = [
      "reported on time; non-BPOC classes within 30 days"),
     ("Coordinator designation & academy license current",
      "Appointment letter on file; training-provider license active"),
-    ("Advisory board roster on file; meetings held",
-     "Board composition documented; meetings logged on the "
-     "AdvisoryBoard sheet with minutes scanned"),
+    ("Advisory board roster on file",
+     "Board composition documented; meeting dates + minutes folder "
+     "referenced on the AdvisoryBoard sheet (minutes stay on the server)"),
     ("Grade-tamper resistance in place",
      "Workbook on OneDrive/SharePoint with version history; engine "
      "sheets password-locked"),

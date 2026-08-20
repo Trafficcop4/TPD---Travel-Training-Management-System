@@ -156,6 +156,7 @@ End Sub
     $sh = $wb.Worksheets.Item('StartHere')
     Remove-OldButtons $sh
     Add-Button $sh 'D16' 1 'New Academy Reset' 'modNewAcademy.NewAcademyReset'
+    Add-Button $sh 'F16' 1 'Startup Review'    'modNewAcademy.AcademyStartupReview'
 
     $out = Join-Path $workbooks 'BPOC_Academy_Management_V6.xlsm'
     $wb.SaveAs($out, $xlsmFmt)

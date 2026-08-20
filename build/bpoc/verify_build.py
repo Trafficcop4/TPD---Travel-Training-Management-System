@@ -238,8 +238,10 @@ def test_workbook():
           "DailyLog computes day #, class type and counters")
 
     check("nrAB_Date" in wb.defined_names and
-          "AdvisoryBoard" in wb.sheetnames,
-          "AdvisoryBoard meeting log")
+          "cfgPolicyVersion" in wb.defined_names and
+          "cfgBoardReviewed" in wb.defined_names and
+          wb["AdvisoryBoard"]["D6"].value == "May 2026",
+          "AdvisoryBoard governance alignment + meeting reference list")
     aud = wb["Audit"]
     found_ack = any("Rules Ack" == str(c.value) for row in
                     aud.iter_rows(min_row=5, max_row=60) for c in row)

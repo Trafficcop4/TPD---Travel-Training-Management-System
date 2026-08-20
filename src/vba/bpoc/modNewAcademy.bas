@@ -43,7 +43,9 @@ Public Sub NewAcademyReset()
     ClearRange "Memos", "M6:N305"
     ClearRange "DailyLog", "B6:B175": ClearRange "DailyLog", "E6:H175"
     ClearRange "DailyLog", "L6:N175"
-    ClearRange "AdvisoryBoard", "B6:H55"
+    ' board meeting list persists across academies; only this academy's
+    ' alignment answers reset (re-asked by the startup review below)
+    ClearRange "AdvisoryBoard", "D7:D9"
     ClearRange "Counseling", "C6:D405": ClearRange "Counseling", "F6:L405"
     ClearRange "Counseling", "M6:N405"
     ClearRange "PT", "D6:Z55"
@@ -66,6 +68,82 @@ Public Sub NewAcademyReset()
     Application.ScreenUpdating = True
     MsgBox "Reset complete. Update Settings (class label, dates) and enter " & _
            "the new roster.", vbInformation, "New Academy"
+    AcademyStartupReview
+End Sub
+
+' ==========================================================================
+' Academy Startup Review - governance alignment prompts. Runs automatically
+' after New Academy Reset; also available from its own button any time.
+' Records the latest advisory-board meeting (running list), whether rules
+' changed, and confirms this workbook was aligned to the current policies.
+' ==========================================================================
+Public Sub AcademyStartupReview()
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Worksheets("AdvisoryBoard")
+    On Error Resume Next
+    ws.Unprotect PW
+    On Error GoTo 0
+
+    ' 1) latest advisory board meeting -> running list (if new)
+    Dim dTxt As String, d As Date, haveDate As Boolean
+    dTxt = InputBox("Date of the MOST RECENT Advisory Board meeting " & _
+                    "(mm/dd/yyyy)?" & vbCrLf & "(Leave blank to skip)", _
+                    "Academy Startup Review")
+    If IsDate(dTxt) Then
+        d = CDate(dTxt): haveDate = True
+        Dim r As Long, exists As Boolean, firstEmpty As Long
+        For r = 12 To 41
+            If IsDate(ws.Cells(r, "B").Value) Then
+                If CDate(ws.Cells(r, "B").Value) = d Then exists = True
+            ElseIf firstEmpty = 0 Then
+                firstEmpty = r
+            End If
+        Next r
+        If Not exists And firstEmpty > 0 Then
+            ws.Cells(firstEmpty, "B").Value = d
+            ws.Cells(firstEmpty, "C").Value = _
+                InputBox("Server folder where those minutes live?", _
+                         "Academy Startup Review")
+            If MsgBox("Did that meeting change any rules or procedures " & _
+                      "affecting this academy?", vbYesNo + vbQuestion, _
+                      "Academy Startup Review") = vbYes Then
+                ws.Cells(firstEmpty, "E").Value = "Yes"
+                ws.Cells(firstEmpty, "F").Value = _
+                    InputBox("Briefly: what changed, and what was updated " & _
+                             "in this workbook to match?", _
+                             "Academy Startup Review")
+            Else
+                ws.Cells(firstEmpty, "E").Value = "No"
+            End If
+            ws.Cells(firstEmpty, "H").Value = Environ$("USERNAME")
+            ws.Cells(firstEmpty, "I").Value = Date
+        End If
+    End If
+
+    ' 2) policy manual version for THIS academy
+    Dim pv As String
+    pv = InputBox("Policy manual version/date in effect for THIS academy?" & _
+                  vbCrLf & "(e.g. 'May 2026' - rules updated between " & _
+                  "academies must be reflected in Settings, ChapterMaster, " & _
+                  "WritingMaster and SpellingMaster)", _
+                  "Academy Startup Review", ws.Range("D6").Value)
+    If pv <> "" Then ws.Range("D6").Value = pv
+
+    ' 3) alignment confirmations (drive the audit checks)
+    ws.Range("D7").Value = IIf(haveDate, "Yes", "No")
+    If MsgBox("Confirm: rule/procedure changes (board + academy policy) " & _
+              "have been reviewed and this workbook's settings, hours, " & _
+              "prompts and lists match the current rules?", _
+              vbYesNo + vbQuestion, "Academy Startup Review") = vbYes Then
+        ws.Range("D8").Value = "Yes"
+    Else
+        ws.Range("D8").Value = "No"
+        MsgBox "The Audit sheet will show 'Governance alignment' as CHECK " & _
+               "until the workbook is aligned and this review is re-run.", _
+               vbExclamation, "Academy Startup Review"
+    End If
+    ws.Range("D9").Value = Environ$("USERNAME") & " " & Format$(Date, "mm/dd/yyyy")
+    MsgBox "Startup review recorded on the AdvisoryBoard sheet.", _
+           vbInformation, "Academy Startup Review"
 End Sub
 
 Private Sub ClearAuditDocs()

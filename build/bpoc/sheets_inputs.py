@@ -796,35 +796,68 @@ def build_dailylog(wb):
 
 
 def build_advisoryboard(wb):
-    """TCOLE advisory-board record: roster reference + meeting log with
-    minutes-scanned tracking. Auditors ask for this."""
+    """Governance alignment: the board meets 1-2x/year and its minutes live
+    in a server folder — this sheet holds the POINTER (running meeting list
+    + minutes location) and this academy's ALIGNMENT record (policy version
+    in effect, minutes reviewed, workbook updated to match)."""
+    from xlb import F_LABEL as _FL
     ws = wb.create_sheet("AdvisoryBoard")
     ws.sheet_view.showGridLines = False
-    header_row(ws, ["Meeting Date", "Type", "Attendees (names/roles)",
-                    "Quorum?", "Topics / Decisions (curriculum approvals, "
-                    "night-fire, policy changes)", "Minutes Scanned?",
-                    "Notes"])
-    first, last = DATA_ROW, DATA_ROW + 49
-    fill_rows(ws, first, last, {
-        "B": (None, "in"), "C": (None, "in"), "D": (None, "in"),
-        "E": (None, "in"), "F": (None, "in"), "G": (None, "in"),
-        "H": (None, "in"),
-    })
-    for r in range(first, last + 1):
-        ws[f"B{r}"].number_format = DATE
-        ws[f"D{r}"].alignment = A_LEFT_WRAP
-        ws[f"F{r}"].alignment = A_LEFT_WRAP
-    dv_list(ws, '"Regular,Curriculum Review,Special"', [f"C{first}:C{last}"])
-    dv_list(ws, "=lstYesNo", [f"E{first}:E{last}", f"G{first}:G{last}"])
+    # ---- this academy's alignment record (prompted at academy startup) ----
+    ws.cell(row=HDR_ROW, column=2,
+            value="THIS ACADEMY — governance alignment").font = _FL
+    rows = [
+        ("Policy manual version in effect", "May 2026", "cfgPolicyVersion"),
+        ("Board minutes reviewed for this academy?", None, "cfgBoardReviewed"),
+        ("Rules/procedures aligned in this workbook?", None, "cfgRulesAligned"),
+        ("Reviewed by / date", None, "cfgAlignReviewer"),
+    ]
+    r = DATA_ROW
+    for lab, seedv, nm in rows:
+        ws.cell(row=r, column=2, value=lab).font = _FL
+        c = ws.cell(row=r, column=4)
+        c.fill = FILL_INPUT
+        c.font = F_INPUT
+        c.border = BOX
+        if seedv:
+            c.value = seedv
+        ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=5)
+        define(wb, nm, "AdvisoryBoard", f"$D${r}")
+        r += 1
+    dv_list(ws, "=lstYesNo", [f"D{DATA_ROW+1}:D{DATA_ROW+2}"])
+    r += 1
+    # ---- running board-meeting reference list (kept across academies) ----
+    hdr = r
+    header_row(ws, ["Meeting Date", "Minutes Location (server folder)",
+                    None, "Changes Affecting Academy?",
+                    "What Changed / Workbook Updates Made", None,
+                    "Reviewed By", "Date Reviewed"], row=r)
+    ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=4)
+    ws.merge_cells(start_row=r, start_column=6, end_row=r, end_column=7)
+    r += 1
+    first, last = r, r + 29
+    for rr in range(first, last + 1):
+        ws.merge_cells(start_row=rr, start_column=3, end_row=rr, end_column=4)
+        ws.merge_cells(start_row=rr, start_column=6, end_row=rr, end_column=7)
+        for col in (2, 3, 5, 6, 8, 9):
+            cc = ws.cell(row=rr, column=col)
+            cc.fill = FILL_INPUT
+            cc.font = F_INPUT
+            cc.border = BOX
+        ws[f"B{rr}"].number_format = DATE
+        ws[f"I{rr}"].number_format = DATE
+        ws.cell(row=rr, column=6).alignment = A_LEFT_WRAP
+    dv_list(ws, "=lstYesNo", [f"E{first}:E{last}"])
     define(wb, "nrAB_Date", "AdvisoryBoard", f"$B${first}:$B${last}")
-    define(wb, "nrAB_Minutes", "AdvisoryBoard", f"$G${first}:$G${last}")
-    col_widths(ws, {"A": 3, "B": 13, "C": 16, "D": 44, "E": 9, "F": 54,
-                    "G": 15, "H": 26})
-    sheet_note(ws, "TCOLE audits ask for advisory-board composition and "
-                   "meeting minutes. Log every meeting; scan the minutes "
-                   "into the evidence library and mark Scanned = Yes. "
-                   "Decisions the IRG defers to the board (e.g. mandatory "
-                   "night-fire) belong in Topics/Decisions.")
+    define(wb, "nrAB_Changes", "AdvisoryBoard", f"$E${first}:$E${last}")
+    col_widths(ws, {"A": 3, "B": 13, "C": 24, "D": 20, "E": 13, "F": 30,
+                    "G": 20, "H": 16, "I": 13})
+    sheet_note(ws, "The board meets 1-2x/year; minutes stay in their server "
+                   "folder — record the pointer here. The New Academy reset "
+                   "(and the Startup Review button) prompts for the latest "
+                   "meeting, whether rules changed, and confirms this "
+                   "workbook was aligned before cadets were entered. This "
+                   "list persists across academies.")
     return ws
 
 

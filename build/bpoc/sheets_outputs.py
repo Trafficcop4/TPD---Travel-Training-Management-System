@@ -625,7 +625,7 @@ def build_audit(wb):
     hdr2 = r
     header_row(ws, ["Check", "Value", "Target", "Status", "Detail"], row=r)
     r += 1
-    n_checks = 16
+    n_checks = 17
     for i in range(n_checks):
         sr = FIRST + i
         ws.cell(row=r, column=2, value=f"=sysAudit!$B${sr}").font = F_BODY
@@ -1526,8 +1526,10 @@ INPUT_GUIDE = [
      "dates and certificate copies collected."),
     ("StateExam", "TCOLE licensing exam attempts and results (3 max)."),
     ("DismissalLog", "Formal reviews: trigger, decision, approvals."),
-    ("AdvisoryBoard", "Board meeting log: date, attendees, decisions, "
-     "minutes-scanned flag. Auditors ask for this."),
+    ("AdvisoryBoard", "Governance: this academy's alignment record "
+     "(policy version, minutes reviewed, workbook aligned) + the running "
+     "board-meeting list with minutes folder locations. The Startup Review "
+     "button fills it."),
     ("End of academy / as needed", None),
     ("Audit", "Program-requirement checklist answers + per-cadet enrollment "
      "documents grid."),

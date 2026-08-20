@@ -29,7 +29,8 @@ Public Sub AddAllButtons()
     AddButtons "EmailPreview", Array( _
         Array("Build Outlook Drafts", "modAgencyEmail.GenerateAgencyEmails"))
     AddButtons "StartHere", Array( _
-        Array("New Academy Reset", "modNewAcademy.NewAcademyReset"))
+        Array("New Academy Reset", "modNewAcademy.NewAcademyReset"), _
+        Array("Startup Review", "modNewAcademy.AcademyStartupReview"))
     MsgBox "Buttons installed.", vbInformation
 End Sub
 
