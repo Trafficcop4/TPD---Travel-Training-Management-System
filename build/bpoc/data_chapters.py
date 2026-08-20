@@ -115,6 +115,10 @@ PROGRAM_REQS = [
      "Learners are never passed on attendance alone"),
     ("State exam plan communicated (250 Q, 70%, 3 attempts max)",
      "Third failure requires enrolling in a new BPOC"),
+    ("Five-year retention of training records",
+     "Auditors sample past courses; files must be producible on request"),
+    ("Prior academies' FINAL workbooks archived and locatable",
+     "One file per academy; know where every finished class's file lives"),
 ]
 
 # Non-chapter schedule activities that appear on the hourly calendar and the

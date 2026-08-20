@@ -18,6 +18,8 @@ Public Sub AddAllButtons()
         Array("Ranking", "modPrint.btnPrintRanking"), _
         Array("Grad Checklist", "modPrint.btnPrintGradCheck"), _
         Array("Audit Packet", "modPrint.btnPrintAudit"), _
+        Array("Chapter Packet", "modPrint.btnPrintChapterPacket"), _
+        Array("Exam Grade Sheet", "modPrint.btnPrintGradeSheet"), _
         Array("Addendum Report", "modPrint.btnPrintAddendum"), _
         Array("Schedule", "modPrint.btnPrintSchedule"))
     AddButtons "Dashboard", Array( _

@@ -307,6 +307,7 @@ def build_instructors(wb):
     define(wb, "nrInstrNames", "Instructors", f"$B${DATA_ROW}:$B${last}")
     define(wb, "nrInstrReady", "Instructors", f"$K${DATA_ROW}:$K${last}")
     define(wb, "nrInstrOnSched", "Instructors", f"$L${DATA_ROW}:$L${last}")
+    define(wb, "nrInstrChTaught", "Instructors", f"$M${DATA_ROW}:$M${last}")
     col_widths(ws, {"A": 3, "B": 24, "C": 18, "D": 12, "E": 20, "F": 30,
                     "G": 13, "H": 12, "I": 12, "J": 26, "K": 11, "L": 12,
                     "M": 30})
@@ -455,6 +456,7 @@ def build_chaptermaster(wb):
     define(wb, "nrCHassess", "ChapterMaster", f"$O${first}:$O${last}")
     define(wb, "nrCHgrade", "ChapterMaster", f"$P${first}:$P${last}")
     define(wb, "nrCHevals", "ChapterMaster", f"$Q${first}:$Q${last}")
+    define(wb, "nrCHhandoutOpt", "ChapterMaster", f"$R${first}:$R${last}")
     define(wb, "nrCHspecial", "ChapterMaster", f"$S${first}:$S${last}")
     define(wb, "nrCHspecialMet", "ChapterMaster", f"$T${first}:$T${last}")
     define(wb, "nrCHfileOK", "ChapterMaster", f"$U${first}:$U${last}")

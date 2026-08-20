@@ -65,6 +65,20 @@ def build_dashboard(wb):
     _kpi(ws, r, 10, "Active cadets",
          'SUMPRODUCT((nrCadetStatus="Active")*1)')
     r += 3
+    c = ws.cell(row=r, column=2, value=(
+        '="TODAY — "&UPPER(TEXT(TODAY(),"dddd, mmmm d"))&'
+        'IFERROR(" — TRAINING DAY #"&XLOOKUP(TODAY(),nrCDdate,nrCDnum)&'
+        '", WEEK "&XLOOKUP(TODAY(),nrCDdate,nrCDweek),"")'))
+    c.font = F_SECTION
+    for col in range(2, 12):
+        ws.cell(row=r, column=col).fill = FILL_STEEL
+    ws.row_dimensions[r].height = 16
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
+        'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
+        'nrSCH_Date=TODAY()),"No class scheduled today")'))
+    r += 8
     _kpi(ws, r, 2, "Separated / total enrolled",
          'SUMPRODUCT((nrCadetStatus="Separated")*1)&" / "&'
          'SUMPRODUCT((nrCadetStatus<>"")*1)')
@@ -343,6 +357,22 @@ def build_cadetprofile(wb):
         'nrCO_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
         'FILTER(nrCO_Date,nrCO_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
         'rngCadetPIDs,"")),-1),10),"none")'))
+    r += 11
+    section_bar(ws, r, 2, 10, "Attendance exceptions & makeup (10 latest)")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(nrAT_Date,nrAT_Type,'
+        'Attendance!$H$6:$H$805,nrAT_Min,nrAT_Sess,nrAT_Excused),'
+        'nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
+        'FILTER(nrAT_Date,nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
+        'rngCadetPIDs,"")),-1),10),"none")'))
+    r += 11
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(Makeup!$C$6:$C$505,nrMK_Type,'
+        'nrMK_Min,nrMK_Sess,nrMK_Credit),'
+        'nrMK_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
+        'FILTER(Makeup!$C$6:$C$505,nrMK_PID=XLOOKUP(cfgProfileCadet,'
+        'rngCadetNames,rngCadetPIDs,"")),-1),10),"no makeup entries")'))
     r += 11
     col_widths(ws, {"A": 3, "B": 24, "C": 14, "D": 14, "E": 16, "F": 14,
                     "G": 14, "H": 18, "I": 14, "J": 14})
@@ -734,6 +764,198 @@ def build_addendum(wb):
 
 
 # --------------------------------------------------------------------------
+def build_chapterpacket(wb):
+    """The auditor's 'show me your file for chapter X' page: pick a chapter,
+    everything about it appears — hours, blocks, instructors, file status,
+    special requirements, linked exam stats."""
+    ws = wb.create_sheet("ChapterPacket")
+    ws.sheet_view.showGridLines = False
+    r = HDR_ROW
+    ws.cell(row=r, column=2, value="Chapter:").font = F_LABEL
+    sel = ws.cell(row=r, column=3, value="1")
+    sel.fill = FILL_INPUT
+    sel.font = F_INPUT
+    sel.border = BOX
+    dv_list(ws, "=nrCHnum", [f"C{r}"])
+    define(wb, "cfgPacketChapter", "ChapterPacket", f"$C${r}")
+    C = "cfgPacketChapter"
+    ws.cell(row=r, column=5, value=(
+        f'="TCOLE TRAINING FILE — "&cfgAcademyClass&" — Ch. "&{C}&" "'
+        f'&IFERROR(XLOOKUP({C},nrCHnum,nrCHname),"")')).font = F_KPI
+    r += 2
+    X = f'IFERROR(XLOOKUP({C},nrCHnum,'
+    _profile_label(ws, r, 2, "Module", X + 'nrCHmod),"")')
+    _profile_label(ws, r, 5, "TCOLE min hrs", X + 'nrCHmin),"")')
+    _profile_label(ws, r, 8, "Delivered hrs", X + 'nrCHdeliv),"")')
+    r += 1
+    _profile_label(ws, r, 2, "First taught",
+                   'IFERROR(TEXT(XLOOKUP(' + C + ',nrCHnum,nrCHfirst),'
+                   '"mm/dd/yyyy"),"")')
+    _profile_label(ws, r, 5, "Last taught",
+                   'IFERROR(TEXT(MAXIFS(nrSCH_Date,nrSCH_ChNum,' + C + '),'
+                   '"mm/dd/yyyy"),"")')
+    _profile_label(ws, r, 8, "vs TCOLE min",
+                   'LET(d,IFERROR(XLOOKUP(' + C + ',nrCHnum,nrCHdeliv),0),'
+                   'm,IFERROR(XLOOKUP(' + C + ',nrCHnum,nrCHmin),0),'
+                   'IF(d=0,"no hours logged",TEXT(d-m,"+0.##;-0.##;0")))')
+    r += 2
+    section_bar(ws, r, 2, 9, "Training-file contents (required by the IRG)")
+    r += 1
+    for lab2, rng in (("Lesson plan (SME)", "nrCHlesson"),
+                      ("Instructor bio(s)", "nrCHbio"),
+                      ("Sign-in sheets (w/ PID)", "nrCHsignin"),
+                      ("Assessment", "nrCHassess"),
+                      ("Grade sheet", "nrCHgrade"),
+                      ("Course evaluations", "nrCHevals"),
+                      ("Handouts/PPT (optional)", "nrCHhandoutOpt")):
+        _profile_label(ws, r, 2, lab2, X + rng + '),"")')
+        r += 1
+    r -= 7
+    _profile_label(ws, r, 6, "Special TCOLE requirement",
+                   X + 'nrCHspecial),"")&""', wide=4)
+    _profile_label(ws, r + 1, 6, "Special requirement met",
+                   X + 'nrCHspecialMet),"—")')
+    _profile_label(ws, r + 2, 6, "File complete?", X + 'nrCHfileOK),"No")')
+    lex = ('IFERROR(INDEX(rngEPcode,MATCH(' + C + ',rngEPch,0)),"")')
+    _profile_label(ws, r + 3, 6, "Linked exam",
+                   'IF(' + lex + '="","(none)",' + lex +
+                   '&" — "&IFERROR(INDEX(rngEPname,MATCH(' + C +
+                   ',rngEPch,0)),""))', wide=4)
+    _profile_label(ws, r + 4, 6, "Exam class avg / low / fails",
+                   'LET(c,' + lex + ',IF(c="","—",'
+                   'IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_Code,c,'
+                   'nrES_Final,"Yes"),1),"—")&" / "&'
+                   'IFERROR(MINIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),"—")'
+                   '&" / "&COUNTIFS(nrES_Code,c,nrES_Final,"Yes",'
+                   'nrES_Rec,"<"&cfgPassingScore)))', wide=4)
+    r += 8
+    section_bar(ws, r, 2, 9, "Instructors who taught this chapter "
+                             "(from the schedule)")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(nrInstrNames,nrInstrReady,nrInstrChTaught),'
+        'ISNUMBER(SEARCH(", "&' + C + '&",",", "&nrInstrChTaught&","))),'
+        '"— none on the schedule yet —")'))
+    r += 12
+    section_bar(ws, r, 2, 9, "Schedule blocks delivered")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(TEXT(nrSCH_Date,"mm/dd/yyyy"),'
+        'TEXT(nrSCH_Start,"h:mm AM/PM"),TEXT(nrSCH_End,"h:mm AM/PM"),'
+        'nrSCH_Act,nrSCH_Instr),nrSCH_ChNum=' + C + '),'
+        '"— no blocks scheduled —")'))
+    r += 32
+    ws.cell(row=r, column=2, value="Training Coordinator:").font = F_LABEL
+    ws.cell(row=r, column=4, value="_______________________").font = F_BODY
+    ws.cell(row=r, column=6, value="Date:").font = F_LABEL
+    ws.cell(row=r, column=7, value="____________").font = F_BODY
+    col_widths(ws, {"A": 3, "B": 24, "C": 16, "D": 16, "E": 14, "F": 22,
+                    "G": 16, "H": 16, "I": 22})
+    page_setup_portrait(ws, print_area=f"B{HDR_ROW}:I{r}")
+    protect(ws)
+    unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
+    sheet_note(ws, "Pick a chapter — the whole training file's status on one "
+                   "printable page. Pair with the ExamSheet grade sheet and "
+                   "the EvalSheet critique for the paper folder.")
+    return ws
+
+
+# --------------------------------------------------------------------------
+def build_examsheet(wb):
+    """IRG-required grade sheet per assessment: pick an exam, print the
+    class's scores with pass/fail, retests, stats and a proctor signature."""
+    ws = wb.create_sheet("ExamSheet")
+    ws.sheet_view.showGridLines = False
+    r = HDR_ROW
+    ws.cell(row=r, column=2, value="Exam seq #:").font = F_LABEL
+    sel = ws.cell(row=r, column=3, value=1)
+    sel.fill = FILL_INPUT
+    sel.font = F_INPUT
+    sel.border = BOX
+    define(wb, "cfgGradeSheetExam", "ExamSheet", f"$C${r}")
+    E = "cfgGradeSheetExam"
+    r += 2
+    ws.cell(row=r, column=2, value=(
+        '="TYLER POLICE ACADEMY — "&cfgAcademyClass&" — GRADE SHEET — "'
+        '&IFERROR(INDEX(rngEPname,MATCH(' + E + ',IFERROR(rngEPseq+0,-1),0)),'
+        '"(set exam #)")')).font = F_KPI
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '="Exam code: "&IFERROR(INDEX(rngEPcode,MATCH(' + E +
+        ',IFERROR(rngEPseq+0,-1),0)),"?")&"   Administered: "&'
+        'IFERROR(TEXT(MAXIFS(nrSCH_Date,nrSCH_Act,"Test "&' + E + '),'
+        '"mm/dd/yyyy"),"")&"   Passing score: "&cfgPassingScore&'
+        '"   (passed retests record at "&cfgRetakeRecordedCap&")"'
+    )).font = F_SMALL
+    r += 2
+    hdr = r
+    header_row(ws, ["#", "Cadet", "PID", "Agency", "Raw Score",
+                    "Recorded", "Pass?", "Retest"], row=r)
+    r += 1
+    first = r
+    code = ('IFERROR(INDEX(rngEPcode,MATCH(' + E +
+            ',IFERROR(rngEPseq+0,-1),0)),"")')
+    for i in range(CADETS):
+        rr = first + i
+        src = FIRST + i
+        ws.cell(row=rr, column=2, value=(
+            f'=IF(Cadets!$B{src}="","",ROW()-{first-1})')).font = F_CALC
+        ws.cell(row=rr, column=3, value=(
+            f'=IF(Cadets!$B{src}="","",Cadets!$F{src})')).font = F_BODY
+        ws.cell(row=rr, column=4, value=(
+            f'=IF($C{rr}="","",Cadets!$B{src})')).font = F_CALC
+        ws.cell(row=rr, column=5, value=(
+            f'=IF($C{rr}="","",Cadets!$H{src})')).font = F_CALC
+        ws.cell(row=rr, column=6, value=(
+            f'=IF($C{rr}="","",LET(c,{code},IF(COUNTIFS(nrES_PID,'
+            f'Cadets!$B{src},nrES_Code,c,nrES_Att,1)=0,"",'
+            f'SUMIFS(nrES_Raw,nrES_PID,Cadets!$B{src},nrES_Code,c,'
+            f'nrES_Att,1))))')).font = F_CALC
+        ws.cell(row=rr, column=7, value=(
+            f'=IF($C{rr}="","",LET(c,{code},IF(COUNTIFS(nrES_PID,'
+            f'Cadets!$B{src},nrES_Code,c,nrES_Final,"Yes",nrES_Rec,"<>")=0,'
+            f'"",SUMIFS(nrES_Rec,nrES_PID,Cadets!$B{src},nrES_Code,c,'
+            f'nrES_Final,"Yes"))))')).font = F_CALC
+        ws.cell(row=rr, column=8, value=(
+            f'=IF(OR($C{rr}="",$G{rr}=""),"",'
+            f'IF($G{rr}>=cfgPassingScore,"Pass","FAIL"))')).font = F_CALC
+        ws.cell(row=rr, column=9, value=(
+            f'=IF($C{rr}="","",LET(c,{code},IF(COUNTIFS(nrES_PID,'
+            f'Cadets!$B{src},nrES_Code,c,nrES_Att,2)>0,"Retested","")))'
+        )).font = F_CALC
+        for ccol in range(2, 10):
+            ws.cell(row=rr, column=ccol).border = BOX
+    last = first + CADETS - 1
+    cf_formula(ws, f"H{first}:H{last}", f'$H{first}="FAIL"', FILL_WARNBG)
+    r = last + 1
+    ws.cell(row=r, column=3, value="Class average / low / high / fails:"
+            ).font = F_LABEL
+    ws.cell(row=r, column=6, value=(
+        '=LET(c,' + code + ',IF(c="","",'
+        'IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),1),"—")'
+        '&" / "&IFERROR(MINIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),"—")'
+        '&" / "&IFERROR(MAXIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),"—")'
+        '&" / "&COUNTIFS(nrES_Code,c,nrES_Final,"Yes",'
+        'nrES_Rec,"<"&cfgPassingScore)))')).font = F_CALC
+    r += 2
+    ws.cell(row=r, column=2, value="Proctor / Instructor: ____________________"
+            "____     Training Coordinator: ________________________"
+            ).font = F_BODY
+    r += 1
+    ws.cell(row=r, column=2, value=DL.ACADEMY_ADDRESS).font = F_SMALL
+    col_widths(ws, {"A": 3, "B": 5, "C": 28, "D": 10, "E": 18, "F": 11,
+                    "G": 11, "H": 9, "I": 10})
+    page_setup_portrait(ws, print_area=f"B{HDR_ROW+2}:I{r}",
+                        repeat_rows=f"{hdr}:{hdr}")
+    protect(ws)
+    unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
+    sheet_note(ws, "The IRG requires a grade sheet for each assessment in "
+                   "the training file — print one per exam and file it with "
+                   "the chapter packet.")
+    return ws
+
+
+# --------------------------------------------------------------------------
 def build_signin(wb):
     ws = wb.create_sheet("SignIn")
     ws.sheet_view.showGridLines = False
@@ -1107,6 +1329,11 @@ def build_printcenter(wb):
          "btnPrintGradCheck"),
         ("Audit packet", "Program checks + enrollment docs", "Audit",
          "btnPrintAudit"),
+        ("Chapter packet", "Set chapter on ChapterPacket — the full "
+         "training-file page for the auditor", "ChapterPacket",
+         "btnPrintChapterPacket"),
+        ("Exam grade sheet", "Set exam # on ExamSheet — the IRG-required "
+         "grade sheet per assessment", "ExamSheet", "btnPrintGradeSheet"),
         ("Addendum (excess hours)", "Per-class excess vs TCOLE minimum with "
          "reporting course #s (#101 / #2040 / #2046 / #2055)", "Addendum",
          "btnPrintAddendum"),
@@ -1279,6 +1506,8 @@ def build_all_outputs(wb):
     build_dismissallog(wb)
     build_audit(wb)
     build_addendum(wb)
+    build_chapterpacket(wb)
+    build_examsheet(wb)
     build_signin(wb)
     build_evalsheet(wb)
     build_spellingprint(wb)

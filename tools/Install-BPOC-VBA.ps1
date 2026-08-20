@@ -136,8 +136,10 @@ End Sub
     Add-Button $pc 'G18' 1 'Ranking'           'modPrint.btnPrintRanking'
     Add-Button $pc 'G20' 1 'Grad Checklist'    'modPrint.btnPrintGradCheck'
     Add-Button $pc 'G22' 1 'Audit Packet'      'modPrint.btnPrintAudit'
-    Add-Button $pc 'G24' 1 'Addendum Report'   'modPrint.btnPrintAddendum'
-    Add-Button $pc 'G26' 1 'Schedule'          'modPrint.btnPrintSchedule'
+    Add-Button $pc 'G24' 1 'Chapter Packet'    'modPrint.btnPrintChapterPacket'
+    Add-Button $pc 'G26' 1 'Exam Grade Sheet'  'modPrint.btnPrintGradeSheet'
+    Add-Button $pc 'G28' 1 'Addendum Report'   'modPrint.btnPrintAddendum'
+    Add-Button $pc 'G30' 1 'Schedule'          'modPrint.btnPrintSchedule'
 
     $dash = $wb.Worksheets.Item('Dashboard')
     Remove-OldButtons $dash

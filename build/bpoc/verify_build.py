@@ -51,7 +51,7 @@ def test_postprocess_units():
 
 def test_workbook():
     wb = load_workbook(WB_PATH)
-    check(len(wb.sheetnames) == 55, f"55 sheets ({len(wb.sheetnames)} found)")
+    check(len(wb.sheetnames) == 57, f"57 sheets ({len(wb.sheetnames)} found)")
 
     # every referenced name is defined
     defined = set(wb.defined_names.keys())
@@ -148,6 +148,26 @@ def test_workbook():
     sch_dvs = [dv.formula1 for dv in wb["Schedule"].data_validations.dataValidation]
     check(any("nrBankSel" in (f or "") for f in sch_dvs),
           "schedule instructor dropdown is bank-dependent")
+    cp = wb["ChapterPacket"]
+    check("cfgPacketChapter" in wb.defined_names and
+          any("nrInstrChTaught" in str(c.value) for row in
+              cp.iter_rows(min_row=5, max_row=40) for c in row
+              if isinstance(c.value, str)) and bool(cp.print_area),
+          "ChapterPacket one-page training-file view")
+    ex = wb["ExamSheet"]
+    check("cfgGradeSheetExam" in wb.defined_names and bool(ex.print_area) and
+          any("nrES_Raw" in str(c.value) for row in
+              ex.iter_rows(min_row=10, max_row=12) for c in row
+              if isinstance(c.value, str)),
+          "ExamSheet per-assessment grade sheet")
+    check(wb["ExamScores"].freeze_panes == "D6" and
+          wb["Schedule"].freeze_panes == "B6" and
+          wb["ExamScores"].auto_filter.ref == "B5:W5",
+          "freeze panes + log filters")
+    check(any("nrSCH_Date=TODAY()" in str(c.value) for row in
+              wb["Dashboard"].iter_rows(min_row=5, max_row=25) for c in row
+              if isinstance(c.value, str)),
+          "Dashboard Today panel")
     wmG = wm["G6"].value
     check("nrCHfirst" in wmG and "nrCDdate" in wmG,
           "writing due dates computed from schedule")

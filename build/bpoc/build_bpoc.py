@@ -34,9 +34,9 @@ TAB_COLORS = {
                 "EmailLog"],
     TAB_OUTPUT: ["Dashboard", "ScoresGrid", "Ranking", "WatchList",
                  "CadetProfile", "Transcript", "GradChecklist", "Audit",
-                 "Addendum", "SignIn", "EvalSheet", "SpellingPrint",
-                 "WritingHandout", "EmailPreview", "PrintCenter",
-                 "NamedRanges"],
+                 "Addendum", "ChapterPacket", "ExamSheet", "SignIn",
+                 "EvalSheet", "SpellingPrint", "WritingHandout",
+                 "EmailPreview", "PrintCenter", "NamedRanges"],
     TAB_SYS: ["sysGrades", "sysAttendance", "sysSkills", "sysIncidents",
               "sysFlags", "sysChecks", "sysAwards", "sysAudit",
               "sysListsHelper"],
@@ -48,7 +48,7 @@ SHEET_ORDER = [
     "Writing", "Incidents", "Counseling", "PT", "Medical", "Certifications",
     "StateExam", "DismissalLog",
     "ScoresGrid", "Ranking", "WatchList", "CadetProfile", "Transcript",
-    "GradChecklist", "Audit", "Addendum",
+    "GradChecklist", "Audit", "Addendum", "ChapterPacket", "ExamSheet",
     "SignIn", "EvalSheet", "SpellingPrint", "WritingHandout",
     "EmailPreview", "EmailLog",
     "Settings", "Lists", "Agencies", "Instructors", "InstructorBanks",
@@ -78,6 +78,33 @@ def build():
     order += [n for n in wb.sheetnames if n not in order]
     wb._sheets = [wb[n] for n in order]
     wb.active = 0
+
+    # daily-use ergonomics: frozen headers + filterable logs
+    FREEZE = {
+        "Cadets": "D6", "ExamScores": "D6", "Spelling": "D6", "Writing": "D6",
+        "PT": "D6", "Certifications": "D6", "ScoresGrid": "D6",
+        "StateExam": "D6", "GradChecklist": "D6", "sysGrades": "D6",
+        "sysAttendance": "D6", "sysSkills": "D6", "sysIncidents": "D6",
+        "sysFlags": "D6", "sysChecks": "D6",
+        "Attendance": "B6", "Makeup": "B6", "Skills": "B6", "Incidents": "B6",
+        "Counseling": "B6", "Medical": "B6", "DismissalLog": "B6",
+        "EmailLog": "B6", "Schedule": "B6", "Agencies": "B6",
+        "Instructors": "C6", "InstructorBanks": "C6", "ChapterMaster": "E6",
+        "WritingMaster": "D6", "SpellingMaster": "C6", "ExamMaster": "B6",
+        "ExamPlan": "B6",
+    }
+    for name, cell in FREEZE.items():
+        if name in wb.sheetnames:
+            wb[name].freeze_panes = cell
+    FILTERS = {
+        "ExamScores": "B5:W5", "Attendance": "B5:O5", "Makeup": "B5:M5",
+        "Skills": "B5:R5", "Incidents": "B5:N5", "Counseling": "B5:N5",
+        "Medical": "B5:N5", "Schedule": "B5:N5", "DismissalLog": "B5:O5",
+        "EmailLog": "B5:I5",
+    }
+    for name, ref in FILTERS.items():
+        if name in wb.sheetnames:
+            wb[name].auto_filter.ref = ref
 
     # store modern functions with _xlfn/_xlws/_xlpm prefixes so Excel
     # resolves them instead of showing #NAME?

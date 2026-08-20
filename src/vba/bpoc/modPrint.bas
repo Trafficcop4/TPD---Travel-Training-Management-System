@@ -43,6 +43,14 @@ Public Sub btnPrintAddendum()
     PrintSheet "Addendum"
 End Sub
 
+Public Sub btnPrintChapterPacket()
+    PrintSheet "ChapterPacket"
+End Sub
+
+Public Sub btnPrintGradeSheet()
+    PrintSheet "ExamSheet"
+End Sub
+
 Public Sub btnPrintSchedule()
     PrintSheet "Schedule"
 End Sub
