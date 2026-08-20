@@ -1423,6 +1423,9 @@ def build_printcenter(wb):
         ("Daily report & roster (week)", "Prints the next 5 class days, "
          "each pre-filled with its own date, day # and schedule", "SignIn",
          "btnPrintSignInWeek"),
+        ("Academy book (all days)", "Every class day's form in one run — "
+         "the class leader's bound book for the whole academy (print to "
+         "PDF for the print shop)", "SignIn", "btnPrintSignInAcademy"),
         ("Course critique stack", "Set chapter on EvalSheet; prints one per "
          "active cadet", "EvalSheet", "btnPrintEvals"),
         ("Spelling test / key", "Set test # and mode on SpellingPrint",
