@@ -30,8 +30,8 @@ TAB_COLORS = {
                  "SpellingMaster", "WritingMaster", "Control", "Schedule"],
     TAB_INPUT: ["Cadets", "ExamScores", "Spelling", "Attendance", "Makeup",
                 "Skills", "Writing", "Incidents", "Counseling", "PT",
-                "Medical", "Certifications", "StateExam", "DismissalLog",
-                "EmailLog"],
+                "Medical", "Certifications", "StateExam", "Memos", "DailyLog",
+                "DismissalLog", "EmailLog"],
     TAB_OUTPUT: ["Dashboard", "ScoresGrid", "Ranking", "WatchList",
                  "CadetProfile", "Transcript", "GradChecklist", "Audit",
                  "Addendum", "ChapterPacket", "ExamSheet", "SignIn",
@@ -45,8 +45,8 @@ TAB_COLORS = {
 SHEET_ORDER = [
     "Dashboard", "StartHere", "InputGuide", "PrintCenter",
     "Cadets", "ExamScores", "Spelling", "Attendance", "Makeup", "Skills",
-    "Writing", "Incidents", "Counseling", "PT", "Medical", "Certifications",
-    "StateExam", "DismissalLog",
+    "Writing", "Incidents", "Counseling", "Memos", "DailyLog", "PT",
+    "Medical", "Certifications", "StateExam", "DismissalLog",
     "ScoresGrid", "Ranking", "WatchList", "CadetProfile", "Transcript",
     "GradChecklist", "Audit", "Addendum", "ChapterPacket", "ExamSheet",
     "SignIn", "EvalSheet", "SpellingPrint", "WritingHandout",
@@ -89,6 +89,7 @@ def build():
         "Attendance": "B6", "Makeup": "B6", "Skills": "B6", "Incidents": "B6",
         "Counseling": "B6", "Medical": "B6", "DismissalLog": "B6",
         "EmailLog": "B6", "Schedule": "B6", "Agencies": "B6",
+        "Memos": "B6", "DailyLog": "B6",
         "Instructors": "C6", "InstructorBanks": "C6", "ChapterMaster": "E6",
         "WritingMaster": "D6", "SpellingMaster": "C6", "ExamMaster": "B6",
         "ExamPlan": "B6",
@@ -100,7 +101,7 @@ def build():
         "ExamScores": "B5:W5", "Attendance": "B5:O5", "Makeup": "B5:M5",
         "Skills": "B5:R5", "Incidents": "B5:N5", "Counseling": "B5:N5",
         "Medical": "B5:N5", "Schedule": "B5:N5", "DismissalLog": "B5:O5",
-        "EmailLog": "B5:I5",
+        "EmailLog": "B5:I5", "Memos": "B5:N5", "DailyLog": "B5:N5",
     }
     for name, ref in FILTERS.items():
         if name in wb.sheetnames:

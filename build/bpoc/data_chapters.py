@@ -122,9 +122,9 @@ PROGRAM_REQS = [
     ("Digital evidence library organized per chapter",
      "LMS test PDFs, ExamSheet grade sheets, scanned spelling tests, "
      "sign-in scans, evals - one folder per chapter, ChapterPacket as cover"),
-    ("Original sign-in sheets retained (not just scans)",
-     "IRG asks for the ORIGINAL legibly written sign-in w/ PID; verify "
-     "with TCOLE whether scans alone suffice"),
+    ("Scanned documents established as legal originals",
+     "Records management has confirmed scans serve as originals for "
+     "training documents (incl. sign-ins w/ PID)"),
 ]
 
 # Non-chapter schedule activities that appear on the hourly calendar and the

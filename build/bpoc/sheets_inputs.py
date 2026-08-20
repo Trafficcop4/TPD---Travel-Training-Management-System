@@ -184,7 +184,8 @@ def build_attendance(wb):
     ws.sheet_view.showGridLines = False
     header_row(ws, ["EventID", "Date", "Cadet Name", "PID", "Agency",
                     "Event Type", "Reason", "Minutes", "Sessions", "Is PT?",
-                    "Doc Status", "Excused?", "Counts?", "Notes"])
+                    "Doc Status", "Excused?", "Counts?", "Notes",
+                    "Made-Up Min", "Made-Up Sess", "Balance", "Cleared?"])
     first, last = DATA_ROW, DATA_ROW + ROWS_ATTEND - 1
     fill_rows(ws, first, last, {
         "B": ('IF($D{r}="","","A"&TEXT(ROW()-%d,"000"))' % HDR_ROW, "fx"),
@@ -199,14 +200,32 @@ def build_attendance(wb):
         "N": ('IF($D{r}="","",IF($M{r}="Excused","No",'
               'IF(AND($G{r}="PT Modified",$L{r}="Received"),"No","Yes")))', "fx"),
         "O": (None, "in"),
+        # per-event makeup reconciliation: credited makeup rows linked to
+        # this EventID clear the event when the balance reaches zero
+        "P": ('IF(OR($B{r}="",N($I{r})=0),"",SUMIFS(nrMK_Min,nrMK_Link,$B{r},'
+              'nrMK_Credit,"Yes"))', "fx"),
+        "Q": ('IF(OR($B{r}="",N($J{r})=0),"",SUMIFS(nrMK_Sess,nrMK_Link,$B{r},'
+              'nrMK_Credit,"Yes"))', "fx"),
+        "R": ('IF(OR($B{r}="",$N{r}<>"Yes"),"",'
+              'IF(N($I{r})>0,N($I{r})-N($P{r}),'
+              'IF(N($J{r})>0,N($J{r})-N($Q{r}),"")))', "fx"),
+        "S": ('IF(OR($B{r}="",$R{r}=""),"",'
+              'IF($R{r}<=0,"CLEARED "&IFERROR(TEXT(MAXIFS(nrMK_Date,'
+              'nrMK_Link,$B{r},nrMK_Credit,"Yes"),"mm/dd"),""),"OPEN"))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"C{r}"].number_format = DATE
+    cf_formula(ws, f"S{first}:S{last}", f'$S{first}="OPEN"', FILL_WARNBG)
+    cf_formula(ws, f"S{first}:S{last}",
+               f'LEFT($S{first},7)="CLEARED"', FILL_OKBG)
     dv_list(ws, "=rngCadetNames", [f"D{first}:D{last}"])
     dv_list(ws, "=lstAttendanceEvent", [f"G{first}:G{last}"])
     dv_list(ws, "=lstReason", [f"H{first}:H{last}"])
     dv_list(ws, "=lstDocumentation", [f"L{first}:L{last}"])
     dv_list(ws, "=lstExcused", [f"M{first}:M{last}"])
+    define(wb, "nrAT_ID", "Attendance", f"$B${first}:$B${last}")
+    define(wb, "nrAT_Balance", "Attendance", f"$R${first}:$R${last}")
+    define(wb, "nrAT_Cleared", "Attendance", f"$S${first}:$S${last}")
     define(wb, "nrAT_Date", "Attendance", f"$C${first}:$C${last}")
     define(wb, "nrAT_PID", "Attendance", f"$E${first}:$E${last}")
     define(wb, "nrAT_Type", "Attendance", f"$G${first}:$G${last}")
@@ -221,7 +240,9 @@ def build_attendance(wb):
     sheet_note(ws, "Exception log: only missed/modified time gets a row. "
                    "Minutes count toward the classroom cap; Sessions toward "
                    "the PT cap. Excused or documented-modified-PT rows don't "
-                   "count (policy 400).")
+                   "count (policy 400). Each counting event stays OPEN until "
+                   "Makeup rows linked to its EventID cover the balance — "
+                   "then it shows CLEARED with the makeup date.")
     return ws
 
 
@@ -245,8 +266,11 @@ def build_makeup(wb):
         ws[f"C{r}"].number_format = DATE
     dv_list(ws, "=rngCadetNames", [f"D{first}:D{last}"])
     dv_list(ws, "=lstMakeupType", [f"F{first}:F{last}"])
+    dv_list(ws, "=nrAT_ID", [f"I{first}:I{last}"], enforce=False)
     dv_list(ws, "=lstDocumentation", [f"J{first}:J{last}"])
     dv_list(ws, "=lstYesNo", [f"K{first}:K{last}"])
+    define(wb, "nrMK_Date", "Makeup", f"$C${first}:$C${last}")
+    define(wb, "nrMK_Link", "Makeup", f"$I${first}:$I${last}")
     define(wb, "nrMK_PID", "Makeup", f"$E${first}:$E${last}")
     define(wb, "nrMK_Type", "Makeup", f"$F${first}:$F${last}")
     define(wb, "nrMK_Min", "Makeup", f"$G${first}:$G${last}")
@@ -257,7 +281,9 @@ def build_makeup(wb):
                     "M": 30})
     sheet_note(ws, "Makeup is minute-for-minute (policy 400.5). Classroom "
                    "skills time cannot be made up. Credit applies only when "
-                   "documentation is Received and no Hold.")
+                   "documentation is Received and no Hold. Pick the missed "
+                   "event's ID in Linked Event — the Attendance sheet clears "
+                   "that event automatically when its balance hits zero.")
     return ws
 
 
@@ -376,7 +402,8 @@ def build_incidents(wb):
     ws.sheet_view.showGridLines = False
     header_row(ws, ["IncidentID", "Date", "Cadet Name", "PID", "Direction",
                     "Severity", "Category", "Description", "Reported By",
-                    "Doc Ref", "ChainReview", "Resolution", "Notes"])
+                    "Doc Ref", "ChainReview", "Resolution", "Notes",
+                    "Report to Agency?"])
     first, last = DATA_ROW, DATA_ROW + ROWS_INCIDENTS - 1
     fill_rows(ws, first, last, {
         "B": ('IF($D{r}="","","I"&TEXT(ROW()-%d,"000"))' % HDR_ROW, "fx"),
@@ -386,7 +413,7 @@ def build_incidents(wb):
         "I": (None, "in"), "J": (None, "in"), "K": (None, "in"),
         "L": ('IF($D{r}="","",IF(AND($F{r}="Negative",OR($G{r}="Critical",'
               '$G{r}="Major")),"Yes","No"))', "fx"),
-        "M": (None, "in"), "N": (None, "in"),
+        "M": (None, "in"), "N": (None, "in"), "O": (None, "in"),
     })
     for r in range(first, last + 1):
         ws[f"C{r}"].number_format = DATE
@@ -395,6 +422,8 @@ def build_incidents(wb):
     dv_list(ws, "=lstSeverity", [f"G{first}:G{last}"])
     dv_list(ws, "=lstIssuetype", [f"H{first}:H{last}"])
     dv_list(ws, "=lstResolution", [f"M{first}:M{last}"])
+    dv_list(ws, "=lstYesNo", [f"O{first}:O{last}"])
+    define(wb, "nrIN_Report", "Incidents", f"$O${first}:$O${last}")
     define(wb, "nrIN_Date", "Incidents", f"$C${first}:$C${last}")
     define(wb, "nrIN_PID", "Incidents", f"$E${first}:$E${last}")
     define(wb, "nrIN_Dir", "Incidents", f"$F${first}:$F${last}")
@@ -404,9 +433,11 @@ def build_incidents(wb):
     define(wb, "nrIN_Res", "Incidents", f"$M${first}:$M${last}")
     col_widths(ws, {"A": 3, "B": 10, "C": 11, "D": 22, "E": 9, "F": 13,
                     "G": 13, "H": 14, "I": 44, "J": 14, "K": 12, "L": 11,
-                    "M": 11, "N": 26})
+                    "M": 11, "N": 26, "O": 15})
     sheet_note(ws, "Positive and negative incidents. Negative Major/Critical "
-                   "trigger chain-of-command review (policy 600).")
+                   "trigger chain-of-command review (policy 600). 'Report to "
+                   "Agency?' = Yes includes it in that agency's next email "
+                   "digest; blank keeps it an academy teaching moment.")
     return ws
 
 
@@ -442,10 +473,12 @@ def build_counseling(wb):
     col_widths(ws, {"A": 3, "B": 9, "C": 11, "D": 22, "E": 9, "F": 18,
                     "G": 24, "H": 40, "I": 16, "J": 13, "K": 12, "L": 12,
                     "M": 11, "N": 26})
+    define(wb, "nrCO_Report", "Counseling", f"$J${first}:$J${last}")
     sheet_note(ws, "Documents every intervention (tutoring, counseling, "
-                   "agency notification, performance plan). This is the "
-                   "early-intervention paper trail policy 300.4.B expects — "
-                   "and it feeds the since-last-email agency digest.")
+                   "agency notification, performance plan) — the early-"
+                   "intervention paper trail policy 300.4.B expects. "
+                   "'Agency Notified?' = Yes includes the entry in that "
+                   "agency's next email digest; blank keeps it academy-only.")
     return ws
 
 
@@ -659,6 +692,109 @@ def build_stateexam(wb):
     return ws
 
 
+ROWS_MEMOS = 300
+ROWS_DAILYLOG = 170
+
+
+def build_memos(wb):
+    """Deficiency memos: assigned when a cadet has a deficiency; the cadet
+    writes lessons-learned + plan of action. Linked to the triggering
+    Incident (I###), Attendance event (A###) or Counseling entry (C###)."""
+    ws = wb.create_sheet("Memos")
+    ws.sheet_view.showGridLines = False
+    header_row(ws, ["MemoID", "Assigned", "Cadet Name", "PID", "Linked Ref",
+                    "Deficiency / Subject", "Due (computed)", "Due Override",
+                    "Due", "Received", "Status", "Report to Agency?",
+                    "Notes"])
+    first, last = DATA_ROW, DATA_ROW + ROWS_MEMOS - 1
+    fill_rows(ws, first, last, {
+        "B": ('IF($D{r}="","","ME"&TEXT(ROW()-%d,"000"))' % HDR_ROW, "fx"),
+        "C": (None, "in"), "D": (None, "in"),
+        "E": ('IF($D{r}="","",IFERROR(INDEX(rngCadetPIDs,MATCH($D{r},rngCadetNames,0)),"?"))', "fx"),
+        "F": (None, "in"), "G": (None, "in"),
+        "H": ('IF(OR($D{r}="",$C{r}=""),"",'
+              'LET(dn,IFERROR(XLOOKUP($C{r},nrCDdate,nrCDnum),""),'
+              'IF(dn="","(not a class day)",'
+              'IFERROR(XLOOKUP(dn+cfgMemoDueClassDays,nrCDnum,nrCDdate),""))))', "fx"),
+        "I": (None, "in"),
+        "J": ('IF($D{r}="","",IF($I{r}<>"",$I{r},IF(ISNUMBER($H{r}),$H{r},"")))', "fx"),
+        "K": (None, "in"),
+        "L": ('IF($D{r}="","",IF($K{r}<>"","Received "&TEXT($K{r},"mm/dd"),'
+              'IF(AND(ISNUMBER($J{r}),TODAY()>$J{r}),"OVERDUE","Pending")))', "fx"),
+        "M": (None, "in"), "N": (None, "in"),
+    })
+    for r in range(first, last + 1):
+        for cl in ("C", "H", "I", "J", "K"):
+            ws[f"{cl}{r}"].number_format = DATE
+    dv_list(ws, "=rngCadetNames", [f"D{first}:D{last}"])
+    dv_list(ws, "=nrAllRefIDs", [f"F{first}:F{last}"], enforce=False)
+    dv_list(ws, "=lstYesNo", [f"M{first}:M{last}"])
+    cf_formula(ws, f"L{first}:L{last}", f'$L{first}="OVERDUE"', FILL_WARNBG)
+    cf_formula(ws, f"L{first}:L{last}",
+               f'LEFT($L{first},8)="Received"', FILL_OKBG)
+    define(wb, "nrME_Assigned", "Memos", f"$C${first}:$C${last}")
+    define(wb, "nrME_Cadet", "Memos", f"$D${first}:$D${last}")
+    define(wb, "nrME_PID", "Memos", f"$E${first}:$E${last}")
+    define(wb, "nrME_Ref", "Memos", f"$F${first}:$F${last}")
+    define(wb, "nrME_Subject", "Memos", f"$G${first}:$G${last}")
+    define(wb, "nrME_Due", "Memos", f"$J${first}:$J${last}")
+    define(wb, "nrME_Received", "Memos", f"$K${first}:$K${last}")
+    define(wb, "nrME_Status", "Memos", f"$L${first}:$L${last}")
+    define(wb, "nrME_Report", "Memos", f"$M${first}:$M${last}")
+    col_widths(ws, {"A": 3, "B": 9, "C": 11, "D": 22, "E": 9, "F": 12,
+                    "G": 40, "H": 13, "I": 13, "J": 11, "K": 11, "L": 14,
+                    "M": 15, "N": 26})
+    sheet_note(ws, "Assigned for deficiencies: lessons learned + plan of "
+                   "action. Linked Ref dropdown offers Incident (I), "
+                   "Attendance (A) and Counseling (C) IDs — or leave blank "
+                   "for stand-alone. Due auto-computes from the class-day "
+                   "calendar (Settings: Memo Due). 'Report to Agency?' = Yes "
+                   "puts it in that agency's next email digest; blank keeps "
+                   "it an academy teaching moment.")
+    return ws
+
+
+def build_dailylog(wb):
+    """One coordinator row per training day — the digital daily report.
+    Roll-call and changes noted in seconds; counters compute."""
+    ws = wb.create_sheet("DailyLog")
+    ws.sheet_view.showGridLines = False
+    header_row(ws, ["Date", "Day #", "Class Type", "Present", "Absent/Late "
+                    "(names & reason)", "AM Notes (roll call / PT)",
+                    "PM Notes (changes / departures)", "Incidents",
+                    "Early Departs", "Memos In", "Issues?",
+                    "Leader Report Scanned?", "Notes"])
+    first, last = DATA_ROW, DATA_ROW + ROWS_DAILYLOG - 1
+    fill_rows(ws, first, last, {
+        "B": (None, "in"),
+        "C": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDnum),""))', "fx"),
+        "D": ('IF($B{r}="","",TRIM(IF(COUNTIFS(nrSCH_Date,$B{r},nrSCH_Act,'
+              '"PT*")>0,"PT + ","")&IF(COUNTIFS(nrSCH_Date,$B{r},nrSCH_Act,'
+              '"Test*")>0,"Test + ","")&"Classroom"))', "fx"),
+        "E": (None, "in"), "F": (None, "in"), "G": (None, "in"),
+        "H": (None, "in"),
+        "I": ('IF($B{r}="","",COUNTIFS(nrIN_Date,$B{r}))', "fx"),
+        "J": ('IF($B{r}="","",COUNTIFS(nrAT_Date,$B{r},nrAT_Type,'
+              '"Early Departure"))', "fx"),
+        "K": ('IF($B{r}="","",COUNTIFS(nrME_Received,$B{r}))', "fx"),
+        "L": (None, "in"), "M": (None, "in"), "N": (None, "in"),
+    })
+    for r in range(first, last + 1):
+        ws[f"B{r}"].number_format = DATE
+    dv_list(ws, "=lstYesNo", [f"L{first}:L{last}", f"M{first}:M{last}"])
+    cf_formula(ws, f"L{first}:L{last}", f'$L{first}="Yes"', FILL_AMBER)
+    define(wb, "nrDL_Date", "DailyLog", f"$B${first}:$B${last}")
+    col_widths(ws, {"A": 3, "B": 11, "C": 7, "D": 16, "E": 9, "F": 34,
+                    "G": 34, "H": 34, "I": 10, "J": 12, "K": 10, "L": 8,
+                    "M": 18, "N": 26})
+    sheet_note(ws, "The digital daily report — one row per training day, "
+                   "30 seconds after the class leader briefs you. Counters "
+                   "(incidents, early departures, memos received) compute "
+                   "from the logs; Issues=Yes highlights for follow-up. Mark "
+                   "when the signed leader report is scanned into the file.")
+    return ws
+
+
 def build_all_inputs(wb):
     build_cadets(wb)
     build_examscores(wb)
@@ -673,3 +809,5 @@ def build_all_inputs(wb):
     build_medical(wb)
     build_certifications(wb)
     build_stateexam(wb)
+    build_memos(wb)
+    build_dailylog(wb)

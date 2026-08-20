@@ -256,7 +256,8 @@ def build_sysflags(wb):
     header_row(ws, ["PID", "Cadet Name", "Status", "F:ConsecFails",
                     "F:GradeDrop", "F:CategoryRisk", "F:Spelling",
                     "F:Attendance", "F:Incidents", "F:Writing", "F:Retest",
-                    "F:PT", "F:Medical", "F:Certs", "Flag Count", "Reasons"])
+                    "F:PT", "F:Medical", "F:Certs", "F:Memos", "F:OpenTime",
+                    "Flag Count", "Reasons"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",IF(N(nrGRconsec %s)>=cfgFlagConsecFails,1,0))'
@@ -277,8 +278,12 @@ def build_sysflags(wb):
         "N": ('IF($B{r}="","",IF(COUNTIFS(nrMD_PID,$B{r},nrMD_Status,'
               '"RESTRICTION EXPIRED")>0,1,0))', "fx"),
         "O": ('IF($B{r}="","",IF(Certifications!$U{r}<>"",1,0))', "fx"),
-        "P": ('IF($B{r}="","",SUM($E{r}:$O{r}))', "fx"),
-        "Q": ('IF($B{r}="","",IF($P{r}=0,"",TEXTJOIN("; ",TRUE,'
+        "P": ('IF($B{r}="","",IF(COUNTIFS(nrME_PID,$B{r},nrME_Status,'
+              '"OVERDUE")>0,1,0))', "fx"),
+        "Q": ('IF($B{r}="","",IF(SUMPRODUCT((nrAT_PID=$B{r})*'
+              '(nrAT_Cleared="OPEN"))>0,1,0))', "fx"),
+        "R": ('IF($B{r}="","",SUM($E{r}:$Q{r}))', "fx"),
+        "S": ('IF($B{r}="","",IF($R{r}=0,"",TEXTJOIN("; ",TRUE,'
               'IF($E{r}=1,"consecutive exam fails",""),'
               'IF($F{r}=1,"grade dropped "&sysGrades!$AB{r}&" pts",""),'
               'IF($G{r}=1,"category avg near 70",""),'
@@ -290,14 +295,17 @@ def build_sysflags(wb):
               'IF($L{r}=1,"RETEST OVERDUE",""),'
               'IF($M{r}=1,"PT failure",""),'
               'IF($N{r}=1,"medical restriction expired",""),'
-              'IF($O{r}=1,"cert copies outstanding: "&Certifications!$U{r},""))))', "fx"),
+              'IF($O{r}=1,"cert copies outstanding: "&Certifications!$U{r},""),'
+              'IF($P{r}=1,"OVERDUE MEMO",""),'
+              'IF($Q{r}=1,SUMPRODUCT((nrAT_PID=$B{r})*(nrAT_Cleared="OPEN"))'
+              '&" uncleared missed-time event(s)",""))))', "fx"),
     })
     # E needs the row-scoped reference, not the whole named range
     cols["E"] = ('IF($B{r}="","",IF(N(sysGrades!$AC{r})>=cfgFlagConsecFails,1,0))', "fx")
     fill_rows(ws, FIRST, LAST, cols)
-    define(wb, "nrFLcount", "sysFlags", f"$P${FIRST}:$P${LAST}")
-    define(wb, "nrFLreasons", "sysFlags", f"$Q${FIRST}:$Q${LAST}")
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "Q": 70})
+    define(wb, "nrFLcount", "sysFlags", f"$R${FIRST}:$R${LAST}")
+    define(wb, "nrFLreasons", "sysFlags", f"$S${FIRST}:$S${LAST}")
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "S": 70})
     sheet_note(ws, "Each flag threshold lives on Settings. WatchList sorts "
                    "by Flag Count and shows Reasons verbatim. Locked.")
     protect(ws)

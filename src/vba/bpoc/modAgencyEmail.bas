@@ -224,7 +224,12 @@ Private Function SinceLastSection(wb As Workbook, agID As String, _
     Set wsCad = wb.Worksheets("Cadets")
     Dim s As String, r As Long, cnt As Long
     Dim d As Variant, pid As String
-    s = "<h3 style='margin:16px 0 4px 0'>Discipline &amp; counseling since your last report" & _
+    Dim wsMe As Worksheet: Set wsMe = wb.Worksheets("Memos")
+    ' selective reporting: only rows the coordinator marked for the agency
+    ' (Incidents "Report to Agency?" col O, Counseling "Agency Notified?"
+    ' col J, Memos "Report to Agency?" col M). Everything else stays an
+    ' academy teaching moment.
+    s = "<h3 style='margin:16px 0 4px 0'>Reported items since your last report" & _
         IIf(cutoff > 0, " (" & Format$(cutoff, "mm/dd/yyyy") & ")", "") & "</h3>" & _
         "<table border='1' cellspacing='0' cellpadding='4' " & _
         "style='border-collapse:collapse;font-size:10pt'>" & _
@@ -235,7 +240,7 @@ Private Function SinceLastSection(wb As Workbook, agID As String, _
         pid = SafeStr(wsIn.Cells(r, "E").Value)
         If IsDate(d) And pid <> "" Then
             If CDate(d) > cutoff And _
-               StrComp(SafeStr(wsIn.Cells(r, "F").Value), "Negative", vbTextCompare) = 0 And _
+               StrComp(SafeStr(wsIn.Cells(r, "O").Value), "Yes", vbTextCompare) = 0 And _
                (isHome Or AgencyOfPID(wsCad, pid) = agID) Then
                 s = s & "<tr><td>" & Format$(CDate(d), "mm/dd") & "</td><td>" & _
                     EscapeHtml(NameOfPID(wsCad, pid)) & "</td><td>Incident (" & _
@@ -249,7 +254,9 @@ Private Function SinceLastSection(wb As Workbook, agID As String, _
         d = wsCo.Cells(r, "C").Value
         pid = SafeStr(wsCo.Cells(r, "E").Value)
         If IsDate(d) And pid <> "" Then
-            If CDate(d) > cutoff And (isHome Or AgencyOfPID(wsCad, pid) = agID) Then
+            If CDate(d) > cutoff And _
+               StrComp(SafeStr(wsCo.Cells(r, "J").Value), "Yes", vbTextCompare) = 0 And _
+               (isHome Or AgencyOfPID(wsCad, pid) = agID) Then
                 s = s & "<tr><td>" & Format$(CDate(d), "mm/dd") & "</td><td>" & _
                     EscapeHtml(NameOfPID(wsCad, pid)) & "</td><td>" & _
                     EscapeHtml(SafeStr(wsCo.Cells(r, "F").Value)) & "</td><td>" & _
@@ -258,10 +265,25 @@ Private Function SinceLastSection(wb As Workbook, agID As String, _
             End If
         End If
     Next r
+    For r = ROW1 To 305
+        d = wsMe.Cells(r, "C").Value
+        pid = SafeStr(wsMe.Cells(r, "E").Value)
+        If IsDate(d) And pid <> "" Then
+            If CDate(d) > cutoff And _
+               StrComp(SafeStr(wsMe.Cells(r, "M").Value), "Yes", vbTextCompare) = 0 And _
+               (isHome Or AgencyOfPID(wsCad, pid) = agID) Then
+                s = s & "<tr><td>" & Format$(CDate(d), "mm/dd") & "</td><td>" & _
+                    EscapeHtml(NameOfPID(wsCad, pid)) & "</td><td>Memo (" & _
+                    EscapeHtml(SafeStr(wsMe.Cells(r, "L").Value)) & ")</td><td>" & _
+                    EscapeHtml(SafeStr(wsMe.Cells(r, "G").Value)) & "</td></tr>"
+                cnt = cnt + 1
+            End If
+        End If
+    Next r
     s = s & "</table>"
     If cnt = 0 Then
-        SinceLastSection = "<p style='font-size:10pt'><i>No discipline or " & _
-            "counseling entries since your last report.</i></p>"
+        SinceLastSection = "<p style='font-size:10pt'><i>No items were marked " & _
+            "for reporting since your last report.</i></p>"
     Else
         SinceLastSection = s
     End If

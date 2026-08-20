@@ -104,3 +104,24 @@ python3 build/bpoc/build_bpoc.py        # writes workbooks/BPOC_Academy_Manageme
 python3 build/bpoc/verify_build.py      # structural checks
 powershell -File tools/Install-BPOC-VBA.ps1   # on Windows+Excel: builds the .xlsm
 ```
+
+## Daily operations (v6.1)
+
+- **DailyLog** is the digital daily report: one row per training day —
+  present count, AM/PM notes, Issues flag, and whether the class leader's
+  signed report was scanned (scans are the legal originals per records
+  policy). The counters (incidents, early departures, memos received)
+  compute themselves.
+- **SignIn** is now the one-page Daily Report & Roster: AM roll call +
+  sign-in grid + PM changes + signatures. Print on demand.
+- **Missed time clears by event**: every counting Attendance event stays
+  OPEN until Makeup rows linked to its EventID cover the balance — then it
+  shows CLEARED with the date. Agency recalls get the "Agency Recall"
+  reason, count against the cap, and must be made up like everything else.
+  The Dashboard lists every OPEN event.
+- **Memos**: assigned for deficiencies, linked to the triggering Incident/
+  Attendance/Counseling ID (or stand-alone), due N class days later
+  (Settings), overdue memos flag the cadet on the WatchList.
+- **Selective agency reporting**: nothing reaches an agency email digest
+  unless YOU mark it — Incidents "Report to Agency?", Counseling "Agency
+  Notified?", Memos "Report to Agency?". Blank = academy teaching moment.

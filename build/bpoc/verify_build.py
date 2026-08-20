@@ -51,7 +51,7 @@ def test_postprocess_units():
 
 def test_workbook():
     wb = load_workbook(WB_PATH)
-    check(len(wb.sheetnames) == 57, f"57 sheets ({len(wb.sheetnames)} found)")
+    check(len(wb.sheetnames) == 59, f"59 sheets ({len(wb.sheetnames)} found)")
 
     # every referenced name is defined
     defined = set(wb.defined_names.keys())
@@ -180,7 +180,7 @@ def test_workbook():
           '$Q6="Yes"' not in wb["sysChecks"]["N6"].value,
           "certs are informational on sysChecks, not a grad gate")
     check("Certifications!$U" in wb["sysFlags"]["O6"].value and
-          "cert copies outstanding" in wb["sysFlags"]["Q6"].value,
+          "cert copies outstanding" in wb["sysFlags"]["S6"].value,
           "cert warning flag in sysFlags with reason text")
     wr = wb["Writing"]
     check('COUNTIF(D6:AQ6,"X")' in wr["AR6"].value and
@@ -211,6 +211,31 @@ def test_workbook():
               for row in wb["Dashboard"].iter_rows(min_row=5, max_row=40)
               for c in row if isinstance(c.value, str)),
           "cert reminders on Dashboard")
+
+    at = wb["Attendance"]
+    check("nrMK_Link" in at["P6"].value and "CLEARED" in at["S6"].value,
+          "per-event makeup reconciliation with CLEARED status")
+    mk_dvs = [dv.formula1 for dv in wb["Makeup"].data_validations.dataValidation]
+    check(any("nrAT_ID" in (f or "") for f in mk_dvs),
+          "Makeup Linked Event dropdown = attendance EventIDs")
+    me = wb["Memos"]
+    check("cfgMemoDueClassDays" in me["H6"].value and
+          "OVERDUE" in me["L6"].value,
+          "Memos: computed due dates + overdue status")
+    me_dvs = [dv.formula1 for dv in wb["Memos"].data_validations.dataValidation]
+    check(any("nrAllRefIDs" in (f or "") for f in me_dvs),
+          "Memo Linked Ref dropdown of I/A/C IDs")
+    check("nrME_Status" in wb["sysFlags"]["P6"].value and
+          'nrAT_Cleared="OPEN"' in wb["sysFlags"]["Q6"].value,
+          "overdue-memo and open-time warning flags")
+    check('nrIN_Report="Yes"' in str(wb["EmailPreview"]["B65"].value or "") or
+          any('nrIN_Report="Yes"' in str(c.value) for row in
+              wb["EmailPreview"].iter_rows(min_row=55, max_row=75)
+              for c in row if isinstance(c.value, str)),
+          "email digest filters on Report-to-Agency marks")
+    dl = wb["DailyLog"]
+    check("nrCDdate" in dl["C6"].value and "nrME_Received" in dl["K6"].value,
+          "DailyLog computes day #, class type and counters")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 

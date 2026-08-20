@@ -65,6 +65,22 @@ def build_dashboard(wb):
     _kpi(ws, r, 10, "Active cadets",
          'SUMPRODUCT((nrCadetStatus="Active")*1)')
     r += 3
+    section_bar(ws, r, 2, 11, "Today")
+    r += 1
+    ws.cell(row=r, column=8, value=(
+        '=IFERROR("Training Day #"&XLOOKUP(TODAY(),nrCDdate,nrCDnum)&'
+        '"  (Week "&XLOOKUP(TODAY(),nrCDdate,nrCDweek)&")",'
+        '"(not a class day)")')).font = F_LABEL
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
+        'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
+        'nrSCH_Date=TODAY()),"— no schedule entered for today —")'))
+    r += 7
+    ws.cell(row=r, column=2, value=(
+        '=IF(COUNTIF(nrDL_Date,TODAY())=0,'
+        '"DailyLog: no entry for today yet","DailyLog: entered ✓")'
+    )).font = F_SMALL
+    r += 2
     c = ws.cell(row=r, column=2, value=(
         '="TODAY — "&UPPER(TEXT(TODAY(),"dddd, mmmm d"))&'
         'IFERROR(" — TRAINING DAY #"&XLOOKUP(TODAY(),nrCDdate,nrCDnum)&'
@@ -122,6 +138,23 @@ def build_dashboard(wb):
         '(nrCERTmissing<>"")*(nrCadetStatus="Active")),'
         '"All certification copies collected")'))
     r += 9
+    section_bar(ws, r, 2, 11, "Open missed-time events — not yet made up "
+                              "(Attendance ↔ Makeup by EventID)")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(nrAT_ID,Attendance!$D$6:$D$805,'
+        'TEXT(nrAT_Date,"mm/dd"),Attendance!$G$6:$G$805,'
+        'Attendance!$H$6:$H$805,nrAT_Balance),'
+        '(nrAT_Cleared="OPEN")),"All missed time cleared")'))
+    r += 9
+    section_bar(ws, r, 2, 11, "Outstanding memos (pending / overdue)")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(Memos!$B$6:$B$305,nrME_Cadet,'
+        'TEXT(nrME_Assigned,"mm/dd"),nrME_Ref,nrME_Subject,'
+        'TEXT(nrME_Due,"mm/dd"),nrME_Status),'
+        '(nrME_Cadet<>"")*(nrME_Received="")),"No memos outstanding")'))
+    r += 8
     section_bar(ws, r, 2, 11, "Class average by exam")
     chart_anchor_row = r + 1
     r += 16
@@ -374,6 +407,25 @@ def build_cadetprofile(wb):
         'FILTER(Makeup!$C$6:$C$505,nrMK_PID=XLOOKUP(cfgProfileCadet,'
         'rngCadetNames,rngCadetPIDs,"")),-1),10),"no makeup entries")'))
     r += 11
+    section_bar(ws, r, 2, 10, "OPEN missed time (event / date / type / "
+                              "reason / balance owed)")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(nrAT_ID,TEXT(nrAT_Date,"mm/dd"),'
+        'Attendance!$G$6:$G$805,Attendance!$H$6:$H$805,nrAT_Balance),'
+        '(nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,""))*'
+        '(nrAT_Cleared="OPEN")),"all missed time cleared")'))
+    r += 6
+    section_bar(ws, r, 2, 10, "OPEN memos (id / assigned / subject / due / "
+                              "status)")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(FILTER(HSTACK(Memos!$B$6:$B$305,'
+        'TEXT(nrME_Assigned,"mm/dd"),nrME_Subject,TEXT(nrME_Due,"mm/dd"),'
+        'nrME_Status),(nrME_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
+        'rngCadetPIDs,""))*(nrME_Cadet<>"")*(nrME_Received="")),'
+        '"none outstanding")'))
+    r += 6
     col_widths(ws, {"A": 3, "B": 24, "C": 14, "D": 14, "E": 16, "F": 14,
                     "G": 14, "H": 18, "I": 14, "J": 14})
     page_setup_portrait(ws, print_area=f"B{HDR_ROW}:J{r}")
@@ -973,8 +1025,9 @@ def build_signin(wb):
     )).font = F_LABEL
     r += 2
     ws.cell(row=r, column=2, value=(
-        '="TYLER POLICE ACADEMY — "&cfgAcademyClass&" — DAILY ATTENDANCE ROSTER — "'
-        '&TEXT(cfgSignInDate,"dddd, mmmm d, yyyy")')).font = F_KPI
+        '="TYLER POLICE ACADEMY — "&cfgAcademyClass&" — DAILY REPORT & '
+        'ATTENDANCE ROSTER — "&TEXT(cfgSignInDate,"dddd, mmmm d, yyyy")'
+    )).font = F_KPI
     r += 2
     section_bar(ws, r, 2, 9, "Instruction scheduled this date")
     r += 1
@@ -983,6 +1036,18 @@ def build_signin(wb):
         'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
         'nrSCH_Date=cfgSignInDate),"— no schedule entered for this date —")'))
     r += 9
+    section_bar(ws, r, 2, 9, "AM roll call")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        "Present: ______ of ______     Absent/Late (name & reason): "
+        "____________________________________________")).font = F_BODY
+    ws.row_dimensions[r].height = 20
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        "PT: [ ] Full participation   [ ] Modified: ______________   "
+        "[ ] Missed: ______________")).font = F_BODY
+    ws.row_dimensions[r].height = 20
+    r += 1
     section_bar(ws, r, 2, 9, "Cadet sign-in")
     r += 1
     header_row(ws, ["#", "Cadet", "PID", "Agency", "AM Signature",
@@ -1005,7 +1070,34 @@ def build_signin(wb):
             ws.cell(row=rr, column=c).border = BOX
         ws.row_dimensions[rr].height = 20
     last = first + CADETS - 1
-    r = last + 2
+    r = last + 1
+    section_bar(ws, r, 2, 9, "PM report — changes through the day")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        "Early departures (name / time out / reason — e.g. agency recall): "
+        "______________________________________________")).font = F_BODY
+    ws.row_dimensions[r].height = 20
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        "____________________________________________________________"
+        "____________________________________________")).font = F_BODY
+    ws.row_dimensions[r].height = 20
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        "Incidents / injuries: _______________________________________"
+        "____________________________________________")).font = F_BODY
+    ws.row_dimensions[r].height = 20
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        "Memos turned in: ____________________________   Remarks: "
+        "_____________________________________________")).font = F_BODY
+    ws.row_dimensions[r].height = 20
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        "Class Leader signature: ______________________________     "
+        "Coordinator: ______________________________")).font = F_BODY
+    ws.row_dimensions[r].height = 22
+    r += 1
     ws.cell(row=r, column=2, value="Instructor verification: ____________________"
             "____________     Time: ____________").font = F_BODY
     r += 1
@@ -1015,9 +1107,11 @@ def build_signin(wb):
     page_setup_portrait(ws, print_area=f"B{HDR_ROW}:H{r}")
     protect(ws)
     unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
-    sheet_note(ws, "Enter the date, print, collect signatures — this is the "
-                   "daily paper attendance record for the TCOLE file. "
-                   "Exceptions still go on the Attendance log.")
+    sheet_note(ws, "The one-page daily report & roster: AM roll call, "
+                   "sign-in, PM changes, signatures. Print on demand; the "
+                   "signed original is scanned into the file (scans = "
+                   "originals per records policy) and the day is logged as "
+                   "one DailyLog row. Exceptions still go on Attendance.")
     return ws
 
 
@@ -1246,13 +1340,14 @@ def build_emailpreview(wb):
             f'=IF($B{rr}="","",Writing!$AT{src}&" ("&Writing!$AS{src}&'
             f'" overdue)")')).font = F_CALC
         ws.cell(row=rr, column=10, value=(
-            f'=IF($B{rr}="","",sysFlags!$Q{src})')).font = F_CALC
+            f'=IF($B{rr}="","",sysFlags!$S{src})')).font = F_CALC
     grid_last = grid_first + CADETS - 1
     define(wb, "nrEPVgrid", "EmailPreview",
            f"$B${grid_first}:$J${grid_last}")
     r = grid_last + 2
     section_bar(ws, r, 2, 12,
-                "Discipline & counseling since last email to this agency")
+                "Marked-for-reporting items since last email to this agency "
+                "(incidents / counseling / memos you flagged Yes)")
     r += 1
     define(wb, "nrEPVsinceRow", "EmailPreview", f"$B${r+1}")
     header_row(ws, ["Date", "Cadet", "Type", "Severity/Kind", "Description"],
@@ -1260,19 +1355,29 @@ def build_emailpreview(wb):
     r += 1
     since = ('LET(cutoff,IFERROR(MAXIFS(nrELdate,nrELagency,'
              'cfgPreviewAgency),0),')
+    # only rows YOU marked for agency reporting are included (Incidents
+    # "Report to Agency?", Counseling "Agency Notified?", Memos "Report to
+    # Agency?") — everything else stays an academy teaching moment
     ws.cell(row=r, column=2, value=(
         '=IFERROR(' + since +
         'inc,FILTER(HSTACK(nrIN_Date,IFERROR(XLOOKUP(nrIN_PID,rngCadetPIDs,'
         'rngCadetNames),""),IF(SEQUENCE(ROWS(nrIN_Date)),"Incident"),'
-        'nrIN_Sev,nrIN_Desc),(nrIN_Date>cutoff)*(nrIN_Dir="Negative")*'
+        'nrIN_Sev,nrIN_Desc),(nrIN_Date>cutoff)*(nrIN_Report="Yes")*'
         'IFERROR((XLOOKUP(nrIN_PID,rngCadetPIDs,nrCadetAgencyID)='
         'cfgPreviewAgency)+(cfgPreviewAgency=cfgHomeAgency),0)),'
         'cns,FILTER(HSTACK(nrCO_Date,IFERROR(XLOOKUP(nrCO_PID,rngCadetPIDs,'
         'rngCadetNames),""),IF(SEQUENCE(ROWS(nrCO_Date)),"Counseling"),'
-        'nrCO_Type,nrCO_Desc),(nrCO_Date>cutoff)*'
+        'nrCO_Type,nrCO_Desc),(nrCO_Date>cutoff)*(nrCO_Report="Yes")*'
         'IFERROR((XLOOKUP(nrCO_PID,rngCadetPIDs,nrCadetAgencyID)='
         'cfgPreviewAgency)+(cfgPreviewAgency=cfgHomeAgency),0)),'
-        'SORT(VSTACK(inc,cns),1)),"— none since last email —")'))
+        'mem,FILTER(HSTACK(nrME_Assigned,IFERROR(XLOOKUP(nrME_PID,'
+        'rngCadetPIDs,rngCadetNames),""),IF(SEQUENCE(ROWS(nrME_Assigned)),'
+        '"Memo"),nrME_Status,nrME_Subject),(nrME_Assigned>cutoff)*'
+        '(nrME_Report="Yes")*IFERROR((XLOOKUP(nrME_PID,rngCadetPIDs,'
+        'nrCadetAgencyID)=cfgPreviewAgency)+(cfgPreviewAgency='
+        'cfgHomeAgency),0)),'
+        'SORT(VSTACK(inc,cns,mem),1)),'
+        '"— nothing marked for this agency since last email —")'))
     r += 16
     col_widths(ws, {"A": 3, "B": 12, "C": 24, "D": 11, "E": 11, "F": 16,
                     "G": 12, "H": 20, "I": 18, "J": 60})
@@ -1401,7 +1506,12 @@ INPUT_GUIDE = [
     ("Writing", "Type X when an assignment is received (auto-capitalizes)."),
     ("Incidents", "Positive/negative incidents with severity and resolution."),
     ("Counseling", "Every intervention: tutoring, counseling, agency "
-     "notification, performance plans."),
+     "notification, performance plans. 'Agency Notified?' = Yes puts it in "
+     "the next email digest."),
+    ("Memos", "Deficiency memos: assign, link to the I/A/C record, due "
+     "auto-computes, mark received. 'Report to Agency?' is your call."),
+    ("DailyLog", "One row per training day — the digital daily report. "
+     "Counters compute; mark when the leader's signed report is scanned."),
     ("PT", "Baseline and final raw values per event; final points once the "
      "rubric arrives."),
     ("Medical", "Injuries, restrictions, clearances and expirations."),

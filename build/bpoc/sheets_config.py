@@ -75,6 +75,7 @@ SETTINGS = [
     ("Retake Recorded Cap", 70, "Recorded score after a passed retest", "cfgRetakeRecordedCap", None),
     ("Threshold After Exam #", 4, "Category avg enforced after this many exams", "cfgThresholdAfterExam", None),
     ("Retest Within (class days)", 5, "Policy 300.5 retest window", "cfgRetestClassDays", None),
+    ("Memo Due (class days)", 3, "Deficiency memo due this many class days after assignment", "cfgMemoDueClassDays", None),
     ("Weight: Major", 0.4, "Major exams weight", "cfgWeightMajor", "0%"),
     ("Weight: Minor", 0.3, "Minor exams weight", "cfgWeightMinor", "0%"),
     ("Weight: Spelling", 0.1, "Spelling weight", "cfgWeightSpelling", "0%"),
@@ -881,6 +882,13 @@ def build_schedule_items_helper(wb):
         ws.cell(row=r + n_ch + n_sub + j, column=2, value=act)
     last = r + n_ch + n_sub + len(DC.ACTIVITIES) - 1
     define(wb, "nrScheduleItems", "sysListsHelper", f"$B${r}:$B${last}")
+    # all linkable record IDs (Incidents I###, Attendance A###, Counseling
+    # C###) stacked for the Memos "Linked Ref" dropdown
+    ws.cell(row=HDR_ROW, column=4, value="Linkable record IDs").font = F_LABEL
+    ws.cell(row=DATA_ROW, column=4, value=(
+        '=IFERROR(TOCOL(VSTACK(Incidents!$B$6:$B$405,'
+        'Attendance!$B$6:$B$805,Counseling!$B$6:$B$405),1),"")'))
+    define(wb, "nrAllRefIDs", "sysListsHelper", f"$D${DATA_ROW}:$D${DATA_ROW+1615}")
     ws.sheet_state = "hidden"
     return ws
 
