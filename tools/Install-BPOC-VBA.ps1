@@ -80,16 +80,43 @@ try {
     # workbook event: auto-capitalize x -> X on the Writing grid
     $eventCode = @'
 Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
-    If Sh.Name <> "Writing" Then Exit Sub
-    Dim rng As Range
-    Set rng = Application.Intersect(Target, Sh.Range("D6:AQ55"))
-    If rng Is Nothing Then Exit Sub
-    Dim c As Range
-    Application.EnableEvents = False
-    For Each c In rng
-        If LCase$(Trim$(CStr(c.Value))) = "x" Then c.Value = "X"
-    Next c
-    Application.EnableEvents = True
+    ' Writing grid: auto-capitalize x -> X
+    If Sh.Name = "Writing" Then
+        Dim rng As Range
+        Set rng = Application.Intersect(Target, Sh.Range("D6:AQ55"))
+        If Not rng Is Nothing Then
+            Dim c As Range
+            Application.EnableEvents = False
+            For Each c In rng
+                If LCase$(Trim$(CStr(c.Value))) = "x" Then c.Value = "X"
+            Next c
+            Application.EnableEvents = True
+        End If
+        Exit Sub
+    End If
+    ' Schedule instructors: dropdown multi-select (pick again to remove)
+    If Sh.Name = "Schedule" Then
+        If Target.Cells.Count <> 1 Then Exit Sub
+        If Application.Intersect(Target, Sh.Range("I6:I905")) Is Nothing Then Exit Sub
+        Dim newVal As String, oldVal As String
+        newVal = Trim$(CStr(Target.Value))
+        If newVal = "" Or InStr(newVal, ",") > 0 Then Exit Sub
+        Application.EnableEvents = False
+        Application.Undo
+        oldVal = Trim$(CStr(Target.Value))
+        If oldVal = "" Or oldVal = newVal Then
+            Target.Value = newVal
+        ElseIf InStr(", " & oldVal & ",", ", " & newVal & ",") > 0 Then
+            ' toggle off: remove the re-picked name
+            Dim s As String
+            s = Replace(", " & oldVal, ", " & newVal, "")
+            If Left$(s, 2) = ", " Then s = Mid$(s, 3)
+            Target.Value = s
+        Else
+            Target.Value = oldVal & ", " & newVal
+        End If
+        Application.EnableEvents = True
+    End If
 End Sub
 '@
     $twb = $wb.VBProject.VBComponents.Item('ThisWorkbook')

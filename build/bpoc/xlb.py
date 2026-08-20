@@ -101,9 +101,9 @@ def fill_rows(ws, first_row, last_row, cols):
                 c.border = BOX
 
 
-def dv_list(ws, formula, ranges, allow_blank=True):
+def dv_list(ws, formula, ranges, allow_blank=True, enforce=True):
     dv = DataValidation(type="list", formula1=formula, allow_blank=allow_blank,
-                        showErrorMessage=True)
+                        showErrorMessage=enforce)
     for rng in ranges:
         dv.add(rng)
     ws.add_data_validation(dv)

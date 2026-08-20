@@ -1144,6 +1144,9 @@ INPUT_GUIDE = [
     ("Instructors", "Roster with TCOLE PID, certs, SME letters, bio-on-file "
      "status. 'On Schedule?' shows who actually teaches — every co-teacher "
      "needs documentation."),
+    ("InstructorBanks", "Per-topic banks: the certified pool (kept between "
+     "academies) and who you picked to teach THIS academy — those picks "
+     "become the Schedule's instructor dropdown for that topic."),
     ("ChapterMaster", "Chapter hours + the per-chapter TCOLE training-file "
      "record (lesson plan, bio, sign-ins, assessment, grade sheet, eval, "
      "special requirements)."),

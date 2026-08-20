@@ -248,6 +248,37 @@ def seed():
         out += 1
     print(f"Schedule blocks: {out-6}  (skipped holiday rows: {len(skipped)})")
 
+    # ---------- instructor banks from actual schedule usage ---------------
+    import data_lists as DLmod
+    roster = DLmod.INSTRUCTORS + DLmod.GUEST_ENTITIES
+    topic_instr = {}
+    for r in range(6, out):
+        topic = sval(ws.cell(row=r, column=7))
+        itext = sval(ws.cell(row=r, column=9))
+        if not topic or not itext:
+            continue
+        for nm in roster:
+            if nm in itext:
+                topic_instr.setdefault(topic, []).append(nm)
+    ib = v6["InstructorBanks"]
+    topics = {sval(ib.cell(row=r, column=2)): r for r in range(6, 110)
+              if sval(ib.cell(row=r, column=2))}
+    seeded, overflow = 0, []
+    for topic, names in topic_instr.items():
+        row = topics.get(topic)
+        if row is None:
+            continue
+        uniq = list(dict.fromkeys(names))
+        for i, nm in enumerate(uniq[:10]):
+            ib.cell(row=row, column=3 + i).value = nm          # bank C..L
+        for i, nm in enumerate(uniq[:8]):
+            ib.cell(row=row, column=13 + i).value = nm         # teach M..T
+        if len(uniq) > 10:
+            overflow.append(f"{topic} ({len(uniq)})")
+        seeded += 1
+    print(f"Instructor banks seeded: {seeded} topics"
+          + (f"; over 10 instructors: {overflow}" if overflow else ""))
+
     # ---------- backfill exam dates from the schedule's Test-day blocks ----
     # V5.4 stored no exam dates; exam seq n was administered on "Test n" day.
     test_dates = {}

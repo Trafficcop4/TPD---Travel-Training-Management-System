@@ -25,7 +25,7 @@ TAB_SYS = "808080"       # gray = locked engine
 
 TAB_COLORS = {
     TAB_CONFIG: ["StartHere", "InputGuide", "Settings", "Lists", "Agencies",
-                 "Instructors",
+                 "Instructors", "InstructorBanks",
                  "ChapterMaster", "ExamMaster", "ExamPlan", "SkillsMaster",
                  "SpellingMaster", "WritingMaster", "Control", "Schedule"],
     TAB_INPUT: ["Cadets", "ExamScores", "Spelling", "Attendance", "Makeup",
@@ -51,7 +51,8 @@ SHEET_ORDER = [
     "GradChecklist", "Audit", "Addendum",
     "SignIn", "EvalSheet", "SpellingPrint", "WritingHandout",
     "EmailPreview", "EmailLog",
-    "Settings", "Lists", "Agencies", "Instructors", "ChapterMaster",
+    "Settings", "Lists", "Agencies", "Instructors", "InstructorBanks",
+    "ChapterMaster",
     "ExamMaster", "ExamPlan", "SkillsMaster", "SpellingMaster",
     "WritingMaster", "Control", "Schedule",
     "sysGrades", "sysAttendance", "sysSkills", "sysIncidents", "sysFlags",

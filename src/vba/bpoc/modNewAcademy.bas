@@ -45,6 +45,8 @@ Public Sub NewAcademyReset()
     ClearRange "Medical", "N6:N205"
     ClearRange "Certifications", "D6:S55"
     ClearRange "StateExam", "D6:I55": ClearRange "StateExam", "L6:L55"
+    ' per-academy instructor picks cleared; the certified banks persist
+    ClearRange "InstructorBanks", "M6:T105"
     ClearRange "DismissalLog", "C6:C105": ClearRange "DismissalLog", "E6:O105"
     ClearRange "EmailLog", "B6:I505"
     ClearAuditDocs

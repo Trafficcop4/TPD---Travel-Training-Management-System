@@ -51,7 +51,7 @@ def test_postprocess_units():
 
 def test_workbook():
     wb = load_workbook(WB_PATH)
-    check(len(wb.sheetnames) == 54, f"54 sheets ({len(wb.sheetnames)} found)")
+    check(len(wb.sheetnames) == 55, f"55 sheets ({len(wb.sheetnames)} found)")
 
     # every referenced name is defined
     defined = set(wb.defined_names.keys())
@@ -140,6 +140,14 @@ def test_workbook():
           "audit-ready requires bio; guests exempt")
     check("UNRECOGNIZED" in wb["Schedule"]["N6"].value,
           "schedule flags unrecognized instructor entries")
+    check("nrBankTopics" in wb.defined_names and
+          "nrBankSel" in wb.defined_names and
+          any(wb["InstructorBanks"].cell(row=r, column=2).value ==
+              "Arrest and Control" for r in range(6, 110)),
+          "InstructorBanks sheet with per-topic rows")
+    sch_dvs = [dv.formula1 for dv in wb["Schedule"].data_validations.dataValidation]
+    check(any("nrBankSel" in (f or "") for f in sch_dvs),
+          "schedule instructor dropdown is bank-dependent")
     wmG = wm["G6"].value
     check("nrCHfirst" in wmG and "nrCDdate" in wmG,
           "writing due dates computed from schedule")

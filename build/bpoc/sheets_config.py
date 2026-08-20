@@ -322,6 +322,68 @@ def build_instructors(wb):
 
 
 # --------------------------------------------------------------------------
+BANK_SLOTS = 10      # certified instructors per topic
+SEL_SLOTS = 8        # picked to teach this academy
+
+
+def build_instructorbanks(wb):
+    """Per-topic instructor banks: the certified pool persists across
+    academies; the 'Teaching this academy' picks are cleared on reset and
+    drive the Schedule's instructor dropdown for that topic's rows."""
+    from openpyxl.utils import get_column_letter as gcl
+    ws = wb.create_sheet("InstructorBanks")
+    ws.sheet_view.showGridLines = False
+    hdrs = (["Topic / Class"]
+            + [f"Bank {i+1}" for i in range(BANK_SLOTS)]
+            + [f"Teach {i+1}" for i in range(SEL_SLOTS)]
+            + ["# Selected"])
+    header_row(ws, hdrs)
+    first = DATA_ROW
+    topics = ([name for _m, _c, name, _mi, _tp in DC.CHAPTERS]
+              + [name for name, _p, _t in DC.SUBTOPICS]
+              + [a for a in DC.ACTIVITIES if not a.startswith("Test ")
+                 and a != "Lunch"])
+    r = first
+    for t in topics:
+        ws.cell(row=r, column=2, value=t)
+        r += 1
+    last = r + 9        # spare rows
+    bank_first_c, bank_last_c = 3, 2 + BANK_SLOTS               # C..L
+    sel_first_c, sel_last_c = 3 + BANK_SLOTS, 2 + BANK_SLOTS + SEL_SLOTS  # M..T
+    cnt_c = sel_last_c + 1                                       # U
+    cols = {"B": (None, "in")}
+    for c in range(bank_first_c, sel_last_c + 1):
+        cols[gcl(c)] = (None, "in")
+    cols[gcl(cnt_c)] = (
+        'IF($B{r}="","",COUNTA(%s{r}:%s{r}))'
+        % (gcl(sel_first_c), gcl(sel_last_c)), "fx")
+    fill_rows(ws, first, last, cols)
+    dv_list(ws, "=nrInstrNames",
+            [f"{gcl(bank_first_c)}{first}:{gcl(bank_last_c)}{last}"])
+    # academy picks must come from THAT ROW's certified bank
+    dv_list(ws, f"=INDEX(${gcl(bank_first_c)}${first}:${gcl(bank_last_c)}"
+                f"${last},MATCH($B{first},$B${first}:$B${last},0),0)",
+            [f"{gcl(sel_first_c)}{first}:{gcl(sel_last_c)}{last}"],
+            enforce=False)
+    define(wb, "nrBankTopics", "InstructorBanks", f"$B${first}:$B${last}")
+    define(wb, "nrBankGrid", "InstructorBanks",
+           f"${gcl(bank_first_c)}${first}:${gcl(bank_last_c)}${last}")
+    define(wb, "nrBankSel", "InstructorBanks",
+           f"${gcl(sel_first_c)}${first}:${gcl(sel_last_c)}${last}")
+    col_widths(ws, {"A": 3, "B": 46})
+    for c in range(bank_first_c, cnt_c):
+        ws.column_dimensions[gcl(c)].width = 16
+    ws.column_dimensions[gcl(cnt_c)].width = 10
+    sheet_note(ws, "Bank = everyone certified/approved to teach the topic "
+                   "(kept between academies). Teach = who you picked for "
+                   "THIS academy — the Schedule's instructor dropdown for a "
+                   "topic offers exactly these names. Topics without picks "
+                   "fall back to the full roster. New Academy Reset clears "
+                   "Teach columns only.")
+    return ws
+
+
+# --------------------------------------------------------------------------
 def build_chaptermaster(wb):
     ws = wb.create_sheet("ChapterMaster")
     ws.sheet_view.showGridLines = False
@@ -768,7 +830,14 @@ def build_schedule(wb):
         ws[f"D{r2}"].number_format = TIME
         ws[f"E{r2}"].number_format = TIME
     dv_list(ws, "=nrScheduleItems", [f"G{first}:G{last}"])
-    dv_list(ws, "=nrInstrNames", [f"I{first}:I{last}"])
+    # instructor dropdown depends on the row's topic: offers that topic's
+    # "Teaching this academy" picks from InstructorBanks; topics without a
+    # bank row fall back to the full roster. Warning-only so multi-name
+    # combined entries (built by the pick-to-append macro) stay valid.
+    dv_list(ws, f"=IF(IFERROR(MATCH($G{first},nrBankTopics,0),0)=0,"
+                f"nrInstrNames,INDEX(nrBankSel,"
+                f"IFERROR(MATCH($G{first},nrBankTopics,0),1),0))",
+            [f"I{first}:I{last}"], enforce=False)
     define(wb, "nrSCH_Date", "Schedule", f"$B${first}:$B${last}")
     define(wb, "nrSCH_Start", "Schedule", f"$D${first}:$D${last}")
     define(wb, "nrSCH_End", "Schedule", f"$E${first}:$E${last}")
@@ -820,6 +889,7 @@ def build_all_config(wb):
     build_lists(wb)
     build_agencies(wb)
     build_instructors(wb)
+    build_instructorbanks(wb)
     build_chaptermaster(wb)
     build_exammaster(wb)
     build_examplan(wb)
