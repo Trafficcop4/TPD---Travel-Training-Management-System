@@ -795,6 +795,39 @@ def build_dailylog(wb):
     return ws
 
 
+def build_advisoryboard(wb):
+    """TCOLE advisory-board record: roster reference + meeting log with
+    minutes-scanned tracking. Auditors ask for this."""
+    ws = wb.create_sheet("AdvisoryBoard")
+    ws.sheet_view.showGridLines = False
+    header_row(ws, ["Meeting Date", "Type", "Attendees (names/roles)",
+                    "Quorum?", "Topics / Decisions (curriculum approvals, "
+                    "night-fire, policy changes)", "Minutes Scanned?",
+                    "Notes"])
+    first, last = DATA_ROW, DATA_ROW + 49
+    fill_rows(ws, first, last, {
+        "B": (None, "in"), "C": (None, "in"), "D": (None, "in"),
+        "E": (None, "in"), "F": (None, "in"), "G": (None, "in"),
+        "H": (None, "in"),
+    })
+    for r in range(first, last + 1):
+        ws[f"B{r}"].number_format = DATE
+        ws[f"D{r}"].alignment = A_LEFT_WRAP
+        ws[f"F{r}"].alignment = A_LEFT_WRAP
+    dv_list(ws, '"Regular,Curriculum Review,Special"', [f"C{first}:C{last}"])
+    dv_list(ws, "=lstYesNo", [f"E{first}:E{last}", f"G{first}:G{last}"])
+    define(wb, "nrAB_Date", "AdvisoryBoard", f"$B${first}:$B${last}")
+    define(wb, "nrAB_Minutes", "AdvisoryBoard", f"$G${first}:$G${last}")
+    col_widths(ws, {"A": 3, "B": 13, "C": 16, "D": 44, "E": 9, "F": 54,
+                    "G": 15, "H": 26})
+    sheet_note(ws, "TCOLE audits ask for advisory-board composition and "
+                   "meeting minutes. Log every meeting; scan the minutes "
+                   "into the evidence library and mark Scanned = Yes. "
+                   "Decisions the IRG defers to the board (e.g. mandatory "
+                   "night-fire) belong in Topics/Decisions.")
+    return ws
+
+
 def build_all_inputs(wb):
     build_cadets(wb)
     build_examscores(wb)
@@ -811,3 +844,4 @@ def build_all_inputs(wb):
     build_stateexam(wb)
     build_memos(wb)
     build_dailylog(wb)
+    build_advisoryboard(wb)

@@ -125,6 +125,23 @@ PROGRAM_REQS = [
     ("Scanned documents established as legal originals",
      "Records management has confirmed scans serve as originals for "
      "training documents (incl. sign-ins w/ PID)"),
+    ("Exam security maintained",
+     "LMS access controlled; test banks/keys stored securely; spelling "
+     "keys not accessible to cadets"),
+    ("Lesson plans verified against IRG learning objectives",
+     "All ~700 LOs covered unaltered - a PowerPoint alone is not a "
+     "lesson plan"),
+    ("TCLEDDS reporting current",
+     "Enrollments (L1) entered at start; completions and the BPOC "
+     "reported on time; non-BPOC classes within 30 days"),
+    ("Coordinator designation & academy license current",
+     "Appointment letter on file; training-provider license active"),
+    ("Advisory board roster on file; meetings held",
+     "Board composition documented; meetings logged on the "
+     "AdvisoryBoard sheet with minutes scanned"),
+    ("Grade-tamper resistance in place",
+     "Workbook on OneDrive/SharePoint with version history; engine "
+     "sheets password-locked"),
 ]
 
 # Non-chapter schedule activities that appear on the hourly calendar and the

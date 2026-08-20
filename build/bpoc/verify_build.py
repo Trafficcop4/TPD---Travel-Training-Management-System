@@ -51,7 +51,7 @@ def test_postprocess_units():
 
 def test_workbook():
     wb = load_workbook(WB_PATH)
-    check(len(wb.sheetnames) == 59, f"59 sheets ({len(wb.sheetnames)} found)")
+    check(len(wb.sheetnames) == 60, f"60 sheets ({len(wb.sheetnames)} found)")
 
     # every referenced name is defined
     defined = set(wb.defined_names.keys())
@@ -236,6 +236,14 @@ def test_workbook():
     dl = wb["DailyLog"]
     check("nrCDdate" in dl["C6"].value and "nrME_Received" in dl["K6"].value,
           "DailyLog computes day #, class type and counters")
+
+    check("nrAB_Date" in wb.defined_names and
+          "AdvisoryBoard" in wb.sheetnames,
+          "AdvisoryBoard meeting log")
+    aud = wb["Audit"]
+    found_ack = any("Rules Ack" == str(c.value) for row in
+                    aud.iter_rows(min_row=5, max_row=60) for c in row)
+    check(found_ack, "Rules Ack column in enrollment docs grid")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 

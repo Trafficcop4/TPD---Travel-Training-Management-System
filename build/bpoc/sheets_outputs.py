@@ -625,7 +625,7 @@ def build_audit(wb):
     hdr2 = r
     header_row(ws, ["Check", "Value", "Target", "Status", "Detail"], row=r)
     r += 1
-    n_checks = 14
+    n_checks = 16
     for i in range(n_checks):
         sr = FIRST + i
         ws.cell(row=r, column=2, value=f"=sysAudit!$B${sr}").font = F_BODY
@@ -694,8 +694,8 @@ def build_audit(wb):
     r += 1
     doc_hdr = r
     header_row(ws, ["Cadet", "Enroll App", "TCLEDDS L1", "Medical (L2)",
-                    "Psych (L3)", "Background", "Photo ID/DL", "All Docs?"],
-               row=r)
+                    "Psych (L3)", "Background", "Photo ID/DL", "Rules Ack",
+                    "All Docs?"], row=r)
     r += 1
     doc_first = r
     doc_last = r + CADETS - 1
@@ -707,19 +707,19 @@ def build_audit(wb):
         src = FIRST + (rr - doc_first)
         ws.cell(row=rr, column=2,
                 value=f'=IF(Cadets!$B{src}="","",Cadets!$F{src})').font = F_CALC
-        for c in range(3, 9):
+        for c in range(3, 10):
             cc = ws.cell(row=rr, column=c)
             cc.fill = FILL_INPUT
             cc.font = F_INPUT
             cc.border = BOX
-        ws.cell(row=rr, column=9, value=(
-            f'=IF($B{rr}="","",IF(COUNTIF(C{rr}:H{rr},"Yes")=6,"Yes","No"))'
+        ws.cell(row=rr, column=10, value=(
+            f'=IF($B{rr}="","",IF(COUNTIF(C{rr}:I{rr},"Yes")=7,"Yes","No"))'
         )).font = F_CALC
-    dv_list(ws, "=lstYesNo", [f"C{doc_first}:H{doc_last}"])
-    cf_yes_no(ws, f"I{doc_first}:I{doc_last}")
+    dv_list(ws, "=lstYesNo", [f"C{doc_first}:I{doc_last}"])
+    cf_yes_no(ws, f"J{doc_first}:J{doc_last}")
     col_widths(ws, {"A": 3, "B": 30, "C": 11, "D": 11, "E": 12, "F": 11,
                     "G": 12, "H": 12, "I": 10})
-    page_setup_portrait(ws, print_area=f"B{HDR_ROW}:I{doc_last}",
+    page_setup_portrait(ws, print_area=f"B{HDR_ROW}:J{doc_last}",
                         repeat_rows=f"{doc_hdr}:{doc_hdr}")
     sheet_note(ws, "Top: live program checks. Bottom: per-cadet enrollment "
                    "file checklist. Chapter-level records live on "
@@ -1526,6 +1526,8 @@ INPUT_GUIDE = [
      "dates and certificate copies collected."),
     ("StateExam", "TCOLE licensing exam attempts and results (3 max)."),
     ("DismissalLog", "Formal reviews: trigger, decision, approvals."),
+    ("AdvisoryBoard", "Board meeting log: date, attendees, decisions, "
+     "minutes-scanned flag. Auditors ask for this."),
     ("End of academy / as needed", None),
     ("Audit", "Program-requirement checklist answers + per-cadet enrollment "
      "documents grid."),

@@ -487,6 +487,14 @@ def build_sysaudit(wb):
          'SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF="No"))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF="No"))=0,"OK","CHECK")',
          '"IRG requires 70%+ on BOTH firearms courses of fire (ch 41)"'),
+        ("Advisory board meetings on record",
+         'COUNT(nrAB_Date)', ">0",
+         'IF(COUNT(nrAB_Date)>0,"OK","CHECK")',
+         '"Log meetings + scanned minutes on the AdvisoryBoard sheet"'),
+        ("Board minutes not yet scanned",
+         'SUMPRODUCT((nrAB_Date<>"")*(nrAB_Minutes<>"Yes"))', "0",
+         'IF(SUMPRODUCT((nrAB_Date<>"")*(nrAB_Minutes<>"Yes"))=0,"OK","CHECK")',
+         '"Every logged meeting needs its minutes in the evidence library"'),
     ]
     for name, val_fx, target, stat_fx, detail_fx in checks:
         ws.cell(row=r, column=2, value=name).font = F_LABEL

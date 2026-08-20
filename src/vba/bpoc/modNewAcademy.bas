@@ -43,6 +43,7 @@ Public Sub NewAcademyReset()
     ClearRange "Memos", "M6:N305"
     ClearRange "DailyLog", "B6:B175": ClearRange "DailyLog", "E6:H175"
     ClearRange "DailyLog", "L6:N175"
+    ClearRange "AdvisoryBoard", "B6:H55"
     ClearRange "Counseling", "C6:D405": ClearRange "Counseling", "F6:L405"
     ClearRange "Counseling", "M6:N405"
     ClearRange "PT", "D6:Z55"
@@ -77,7 +78,7 @@ Private Sub ClearAuditDocs()
     ' find the docs header by its "Enroll App" label, clear the 50-row grid
     For r = 1 To 120
         If InStr(1, CStr(ws.Cells(r, 3).Value), "Enroll App", vbTextCompare) > 0 Then
-            ws.Range(ws.Cells(r + 1, 3), ws.Cells(r + 50, 8)).ClearContents
+            ws.Range(ws.Cells(r + 1, 3), ws.Cells(r + 50, 9)).ClearContents
             Exit For
         End If
     Next r
