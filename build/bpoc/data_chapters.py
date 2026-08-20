@@ -119,6 +119,12 @@ PROGRAM_REQS = [
      "Auditors sample past courses; files must be producible on request"),
     ("Prior academies' FINAL workbooks archived and locatable",
      "One file per academy; know where every finished class's file lives"),
+    ("Digital evidence library organized per chapter",
+     "LMS test PDFs, ExamSheet grade sheets, scanned spelling tests, "
+     "sign-in scans, evals - one folder per chapter, ChapterPacket as cover"),
+    ("Original sign-in sheets retained (not just scans)",
+     "IRG asks for the ORIGINAL legibly written sign-in w/ PID; verify "
+     "with TCOLE whether scans alone suffice"),
 ]
 
 # Non-chapter schedule activities that appear on the hourly calendar and the

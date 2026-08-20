@@ -61,6 +61,29 @@ the standard.
   cannot be rolled into a later one — new BPOC in its entirety.
 - **State exam** — 250 questions, 70% pass, 3 failed attempts ⇒ new BPOC.
 
+## Where the evidence lives (digital training file)
+
+The workbook is the **index**; the evidence is the PDF library. Exams are
+taken online in the LMS and printed to PDF; spelling tests are scanned.
+Recommended structure — one folder per chapter, ChapterPacket printed as
+the cover sheet:
+
+```
+BPOC-2026-01/
+  Ch23 - Intoxicated Driver (SFST)/
+    00 ChapterPacket.pdf          (cover: what this folder must contain)
+    01 Lesson Plan.pdf            (SME-developed; PPT alone doesn't count)
+    02 Instructor Bios + certs.pdf
+    03 Sign-ins/                  (scans; KEEP the paper originals)
+    04 Assessment.pdf             (LMS test printed to PDF)
+    05 Grade Sheet.pdf            (ExamSheet print or LMS gradebook export)
+    06 Evaluations/               (scanned critiques)
+```
+
+Sign-in caution: the IRG asks for the "original, legibly written sign-in
+sheet including the PID" — retain paper originals and confirm with TCOLE
+whether scans alone satisfy that before discarding anything.
+
 ## Sixty seconds before the auditor arrives
 
 Open the **Audit** sheet: the top block is live engine checks (all should
