@@ -15,6 +15,41 @@ Public Sub btnPrintSignIn()
     PrintSheet "SignIn"
 End Sub
 
+' prints the next 5 class days' daily report/roster forms, each with its
+' own date, day # and schedule pre-filled (from the Control class-day
+' calendar, starting at the SignIn sheet's date or today)
+Public Sub btnPrintSignInWeek()
+    Dim wsS As Worksheet: Set wsS = ThisWorkbook.Worksheets("SignIn")
+    Dim wsC As Worksheet: Set wsC = ThisWorkbook.Worksheets("Control")
+    Dim startDate As Date
+    If IsDate(wsS.Range("C5").Value) Then
+        startDate = CDate(wsS.Range("C5").Value)
+    Else
+        startDate = Date
+    End If
+    Dim keep As Variant: keep = wsS.Range("C5").Value
+    wsS.Unprotect "TPDAcademy"
+    Dim r As Long, printed As Long, d As Variant
+    For r = 6 To 175
+        d = wsC.Cells(r, "I").Value
+        If IsDate(d) Then
+            If CDate(d) >= startDate And printed < 5 Then
+                If wsC.Cells(r, "K").Value = "Yes" Then   ' in session
+                    wsS.Range("C5").Value = CDate(d)
+                    Application.Calculate
+                    wsS.PrintOut
+                    printed = printed + 1
+                End If
+            End If
+        End If
+        If printed >= 5 Then Exit For
+    Next r
+    wsS.Range("C5").Value = keep
+    wsS.Protect "TPDAcademy"
+    MsgBox printed & " daily report form(s) printed (next class days from " & _
+           Format$(startDate, "mm/dd/yyyy") & ").", vbInformation, "Sign-In Week"
+End Sub
+
 Public Sub btnPrintSpelling()
     PrintSheet "SpellingPrint"
 End Sub

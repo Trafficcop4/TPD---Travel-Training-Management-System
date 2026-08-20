@@ -1417,8 +1417,12 @@ def build_printcenter(wb):
     ws.cell(row=r, column=2, value="Print Center").font = F_KPI
     r += 2
     rows = [
-        ("Daily sign-in sheet", "Set the date on SignIn (or here)", "SignIn",
+        ("Daily report & roster (one day)", "Set the date on SignIn; blank "
+         "date prints a generic form the leader dates by hand", "SignIn",
          "btnPrintSignIn"),
+        ("Daily report & roster (week)", "Prints the next 5 class days, "
+         "each pre-filled with its own date, day # and schedule", "SignIn",
+         "btnPrintSignInWeek"),
         ("Course critique stack", "Set chapter on EvalSheet; prints one per "
          "active cadet", "EvalSheet", "btnPrintEvals"),
         ("Spelling test / key", "Set test # and mode on SpellingPrint",

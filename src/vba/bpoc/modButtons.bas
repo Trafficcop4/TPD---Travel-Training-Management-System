@@ -10,6 +10,7 @@ Option Explicit
 Public Sub AddAllButtons()
     AddButtons "PrintCenter", Array( _
         Array("Sign-In Sheet", "modPrint.btnPrintSignIn"), _
+        Array("Sign-In Week (5 days)", "modPrint.btnPrintSignInWeek"), _
         Array("Eval Stack", "modPrint.btnPrintEvals"), _
         Array("Spelling Test/Key", "modPrint.btnPrintSpelling"), _
         Array("Writing Handout", "modPrint.btnPrintWriting"), _

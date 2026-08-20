@@ -128,6 +128,7 @@ End Sub
     $pc.Unprotect($pw) 2>$null
     Remove-OldButtons $pc
     Add-Button $pc 'G6'  1 'Sign-In Sheet'     'modPrint.btnPrintSignIn'
+    Add-Button $pc 'I6'  1 'Sign-In Week'      'modPrint.btnPrintSignInWeek'
     Add-Button $pc 'G8'  1 'Eval Stack'        'modPrint.btnPrintEvals'
     Add-Button $pc 'G10' 1 'Spelling Test/Key' 'modPrint.btnPrintSpelling'
     Add-Button $pc 'G12' 1 'Writing Handout'   'modPrint.btnPrintWriting'
