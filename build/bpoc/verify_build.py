@@ -45,8 +45,16 @@ def test_postprocess_units():
     f = postprocess.fix_formula('=IF(A1="FILTER(","x",LET(d,1,d))')
     check('"FILTER("' in f and "_xlpm.d,1,_xlpm.d" in f,
           "postprocess: strings untouched")
+    # WORKDAY.INTL / NETWORKDAYS.INTL are native ECMA-376 built-ins: an
+    # _xlfn. prefix on them opens as #NAME? in Excel and blanks the whole
+    # class-day calendar (Control!I) the workbook is built on.
     f = postprocess.fix_formula('=WORKDAY.INTL(A1,5,"0000011",B:B)')
-    check(f.startswith('=_xlfn.WORKDAY.INTL('), "postprocess: WORKDAY.INTL")
+    check(f == '=WORKDAY.INTL(A1,5,"0000011",B:B)',
+          "postprocess: WORKDAY.INTL left unprefixed (native function)")
+    from openpyxl.utils import FORMULAE as _BUILTIN
+    native = sorted(k for k in postprocess.XLFN if k in _BUILTIN)
+    check(not native,
+          f"postprocess: no XLFN key is an ECMA-376 built-in {native}")
 
 
 def test_workbook():
@@ -58,9 +66,11 @@ def test_workbook():
     pat = re.compile(r"\b(nr|cfg|lst|rng)[A-Za-z_0-9]+")
     missing = set()
     unprefixed = []
+    # WORKDAY.INTL is deliberately absent: it is a native built-in and must
+    # stay unprefixed (see test_postprocess_units).
     fnpat = re.compile(
         r'(?<![A-Za-z0-9_.])(XLOOKUP|FILTER|SORTBY|SORT|TEXTJOIN|MAXIFS|'
-        r'MINIFS|HSTACK|VSTACK|TAKE|SEQUENCE|LET|WORKDAY\.INTL)\(')
+        r'MINIFS|HSTACK|VSTACK|TAKE|SEQUENCE|LET)\(')
     for ws in wb.worksheets:
         for row in ws.iter_rows():
             for c in row:
@@ -91,12 +101,28 @@ def test_workbook():
     check(cm["S28"].value is not None and "TIM" in cm["S28"].value,
           "ChapterMaster special TCOLE requirements seeded (ch 22)")
 
-    # engine protection
-    for n in ("sysGrades", "sysAttendance", "sysChecks", "sysAudit",
-              "ScoresGrid"):
+    # engine protection — EVERY sys* sheet, not a hand-maintained list.
+    # sysAwards and sysListsHelper were both shipping unprotected because
+    # they were simply missing from the literal below.
+    for n in [s for s in wb.sheetnames if s.startswith("sys")] + ["ScoresGrid"]:
         check(wb[n].protection.sheet, f"{n} locked")
+    # the awards overrides are the whole point of sysAwards, so they must
+    # stay editable through that protection
+    aw = wb["sysAwards"]
+    check(not aw["E6"].protection.locked and not aw["G6"].protection.locked
+          and aw["C6"].protection.locked and aw["F6"].protection.locked,
+          "sysAwards: override/notes unlocked, computed + FINAL locked")
+    check(wb["sysListsHelper"].sheet_state == "veryHidden",
+          "sysListsHelper cannot be unhidden from the tab menu")
     for n in ("Cadets", "ExamScores", "Attendance", "Counseling", "PT"):
         check(not wb[n].protection.sheet, f"{n} open for entry")
+    # protection must never disable SELECTION: the OOXML flags are inverted
+    # (True = "may not select"), and setting both froze every picker cell and
+    # home link on the protected sheets.
+    frozen = [ws.title for ws in wb.worksheets if ws.protection.sheet and
+              (ws.protection.selectLockedCells or
+               ws.protection.selectUnlockedCells)]
+    check(not frozen, f"protected sheets stay selectable {frozen[:5]}")
 
     # printables have print areas
     for n in ("SignIn", "EvalSheet", "SpellingPrint", "WritingHandout",
@@ -115,13 +141,63 @@ def test_workbook():
           "retake cap rule in ExamScores")
     check("cfgRetestClassDays" in es["T6"].value,
           "5-class-day retest deadline in ExamScores")
+    # a date that is not on the class-day calendar must roll forward, and a
+    # deadline that still cannot be computed must SAY so — "Pending" forever
+    # made the policy 300.5 clock unenforceable and invisible to the audit
+    check('nrCDdate,nrCDnum,"",1)' in es["T6"].value and
+          '"CHECK DATE"' in es["U6"].value and
+          "(not a class day)" not in es["T6"].value,
+          "retest deadline rolls to the next class day; bad dates say so")
+    check('nrCDdate,nrCDnum,"",1)' in wb["Memos"]["H6"].value and
+          '"CHECK DATE"' in wb["Memos"]["L6"].value,
+          "memo due date rolls to the next class day; bad dates say so")
+    # text sorts above every number, so an unguarded >= made 'absent' a pass
+    check("ISNUMBER" in es["N6"].value and "ISNUMBER" in es["O6"].value and
+          "ISNUMBER" in es["Q6"].value and "ISNUMBER" in es["R6"].value and
+          "ISNUMBER" in es["M6"].value,
+          "ExamScores pass/retake columns require a numeric score")
+    # a failed attempt 2 always reaches dismissal review, even when the
+    # attempt-1 row was never keyed in
+    check("nrES_Att,1)>0" not in es["R6"].value,
+          "dismissal review does not depend on attempt 1 being on file")
+    # ...and an orphan attempt 2 records at the cap, not at its raw score
+    check("MAX($J6,cfgRetakeRecordedCap)" in es["M6"].value,
+          "passed retake records at the cap (>= the exam's own passing)")
+    check(es["X5"].value == "Row Check" and
+          "RAW SCORE NOT A NUMBER" in es["X6"].value and
+          "DUPLICATE RECORD" in es["X6"].value and
+          "ATTEMPT 2 WITHOUT ATTEMPT 1" in es["X6"].value,
+          "ExamScores Row Check flags the silent data-entry faults")
     sg = wb["sysGrades"]
     check("cfgWeightMajor" in sg["M6"].value, "weighted grade in sysGrades")
+    # counts and averages share criteria so an unscored (pending-retest) row
+    # can never leave the count>0 guard true while the average has no data
+    check(all('nrES_Rec,">=0"' in sg[f"{cl}6"].value for cl in "EFHIJL") and
+          all("IFERROR" in sg[f"{cl}6"].value for cl in "IJL"),
+          "sysGrades counts/averages both require a recorded score")
     ck = wb["sysChecks"]
-    check("PT!$AB" in ck["L6"].value, "final-PT gate wired into sysChecks")
+    check("PT!$AB" in ck["L6"].value and 'PT!$AB6="Yes"' in ck["L6"].value and
+          '"Not taken"' in ck["L6"].value,
+          "final-PT gate wired into sysChecks (affirmative pass test)")
+    check(ck["R5"].value == "Exams Recorded" and '$R6="Yes"' in ck["N6"].value
+          and "Exams not all recorded; " in ck["O6"].value,
+          "graduation requires every exam category actually recorded")
+    check("Final PT failed; " in ck["O6"].value and
+          "Final PT rubric not set; " in ck["O6"].value and
+          "Final PT not assessed; " in ck["O6"].value,
+          "blocking issues name the reason the final PT gate is not met")
+    # absence of assessment is not a pass: sysSkills K only asks "not failed
+    # out, nothing in remediation", so a cadet with zero skills records used
+    # to clear the skills gate outright
+    check(ck["S5"].value == "Skills Assessed" and
+          "sysSkills!$F6" in ck["S6"].value and "rngSM_cat" in ck["S6"].value
+          and '$S6="Yes"' in ck["N6"].value and
+          "Skills not all assessed; " in ck["O6"].value,
+          "graduation requires every skills category actually qualified")
     check(wb["Control"]["I6"].value.startswith("=IF")
-          and "WORKDAY" in wb["Control"]["I6"].value,
-          "class-day calendar generated on Control")
+          and "WORKDAY.INTL(" in wb["Control"]["I6"].value
+          and "_xlfn.WORKDAY" not in wb["Control"]["I6"].value,
+          "class-day calendar generated on Control (native WORKDAY.INTL)")
     cm2 = wb["ChapterMaster"]
     check("nrSCH_ChNum" in cm2["G6"].value,
           "chapter delivered-hours roll up by chapter number")
@@ -147,6 +223,27 @@ def test_workbook():
           "sysAudit literal targets stored as text, not formulas")
     check("unrecognized cadet" in str(sa["B23"].value or ""),
           "sysAudit orphaned-PID check present")
+    # the printed Audit sheet must mirror EVERY engine check: a check the
+    # Dashboard tile counts but the packet never prints is a red tile with
+    # no visible cause
+    import sheets_engine
+    n_eng = len(sheets_engine.AUDIT_CHECKS)
+    aud_rows = [r for r in range(5, 80)
+                if str(wb["Audit"].cell(row=r, column=2).value or
+                       "").startswith("=sysAudit!$B$")]
+    check(len(aud_rows) == n_eng,
+          f"Audit sheet prints all {n_eng} engine checks ({len(aud_rows)})")
+    checks_txt = " | ".join(str(sa.cell(row=r, column=2).value or "")
+                            for r in range(6, 6 + n_eng))
+    check("Duplicate cadet PID or name" in checks_txt and
+          "Exam rows failing Row Check" in checks_txt and
+          "unusable due date" in checks_txt,
+          "sysAudit covers duplicate PIDs, exam row checks and dead due dates")
+    # N/A is an offered answer on the Audit sheet and painted green there —
+    # the engine check must exempt it too or the row is red forever
+    prg = next(str(sa.cell(row=r, column=3).value) for r in range(6, 6 + n_eng)
+               if "Program requirements" in str(sa.cell(row=r, column=2).value))
+    check('nrPRGmet<>"N/A"' in prg, "program-requirement check exempts N/A")
     check("COUNTIFS" in wb["ScoresGrid"]["D6"].value and
           "AVERAGEIFS" in str(wb["ScoresGrid"]["D57"].value or ""),
           "ScoresGrid blanks untaken exams; class avg from the log")
@@ -172,12 +269,19 @@ def test_workbook():
           "ExamSheet per-assessment grade sheet")
     check(wb["ExamScores"].freeze_panes == "D6" and
           wb["Schedule"].freeze_panes == "B6" and
-          wb["ExamScores"].auto_filter.ref == "B5:W5",
-          "freeze panes + log filters")
+          wb["ExamScores"].auto_filter.ref == "B5:X5" and
+          wb["Makeup"].auto_filter.ref == "B5:N5",
+          "freeze panes + log filters (filters cover Row Check)")
     check(any("nrSCH_Date=TODAY()" in str(c.value) for row in
               wb["Dashboard"].iter_rows(min_row=5, max_row=25) for c in row
               if isinstance(c.value, str)),
           "Dashboard Today panel")
+    # a single-ROW Reference without from_rows becomes one series per column
+    dash_charts = wb["Dashboard"]._charts
+    check(len(dash_charts) == 2 and
+          all(len(c.series) == 1 for c in dash_charts),
+          "Dashboard charts plot one series across the categories "
+          f"{[len(c.series) for c in dash_charts]}")
     wmG = wm["G6"].value
     check("nrCHfirst" in wmG and "nrCDdate" in wmG,
           "writing due dates computed from schedule")
@@ -194,9 +298,12 @@ def test_workbook():
           "cert copies outstanding" in wb["sysFlags"]["S6"].value,
           "cert warning flag in sysFlags with reason text")
     wr = wb["Writing"]
+    # "overdue missing" counts anything that is not an X, not merely
+    # blanks: a stray mark used to erase the assignment from the counter,
+    # from the red highlight and from "Writing Current?"
     check('COUNTIF(D6:AQ6,"X")' in wr["AR6"].value and
-          '(D6:AQ6="")' in wr["AS6"].value,
-          "Writing grid counts X marks, blank = not done")
+          '(UPPER(D6:AQ6)<>"X")' in wr["AS6"].value,
+          "Writing grid counts X marks; anything else is not done")
     check(wr["D6"].alignment.horizontal == "center",
           "Writing X cells centered")
     check("InputGuide" in wb.sheetnames and
@@ -217,6 +324,17 @@ def test_workbook():
     se = wb["StateExam"]
     check("new BPOC required" in se["K6"].value,
           "state exam 3-attempt rule")
+    # the category block on the official transcript / cadet profile must show
+    # the FINAL EXAM average (sysGrades L), not the weighted composite (N)
+    check("nrGRfinalExam" in wb.defined_names and
+          str(wb.defined_names["nrGRfinalExam"].value).endswith("$L$6:$L$55"),
+          "nrGRfinalExam points at the final-exam average column")
+    for shname in ("Transcript", "CadetProfile"):
+        sh = wb[shname]
+        cells = [c for row in sh.iter_rows(min_row=5, max_row=40) for c in row
+                 if isinstance(c.value, str) and "nrGRfinalExam" in c.value]
+        check(len(cells) == 1,
+              f"{shname} category block reads the final-exam average")
     check("nrCERTmissing" in str(wb["Dashboard"]["B18"].value or "") or
           any("nrCERTmissing" in str(c.value)
               for row in wb["Dashboard"].iter_rows(min_row=5, max_row=40)
@@ -226,6 +344,34 @@ def test_workbook():
     at = wb["Attendance"]
     check("nrMK_Link" in at["P6"].value and "CLEARED" in at["S6"].value,
           "per-event makeup reconciliation with CLEARED status")
+    # the per-event banner and the sysAttendance owed balance must apply the
+    # SAME criteria, or another cadet's (or another type's) makeup clears an
+    # event the graduation engine still counts as owed
+    check("nrMK_PID" in at["P6"].value and "nrMK_PID" in at["Q6"].value and
+          "nrMK_PID" in at["S6"].value and
+          '"Classroom"' in at["P6"].value and '"PT"' in at["Q6"].value,
+          "Attendance makeup credit filtered by cadet PID + makeup type")
+    # makeup credit is capped at the linked event's OWN duration, and the
+    # sysAttendance roll-up is derived from those capped per-event figures —
+    # otherwise a surplus credit paid off a different absence and the
+    # graduation gate read "no makeup owed" over a still-OPEN event
+    check(at["P6"].value.startswith('=IF(OR($B6="",N($I6)=0),"",MIN(N($I6),')
+          and 'MIN(N($J6),' in at["Q6"].value,
+          "Attendance caps per-event makeup credit at the event's own size")
+    sat = wb["sysAttendance"]
+    check("nrAT_MadeUpMin" in sat["F6"].value and
+          "nrAT_MadeUpSess" in sat["N6"].value and
+          "nrMK_Min" not in sat["F6"].value and
+          "nrMK_Sess" not in sat["N6"].value,
+          "sysAttendance made-up totals come from the capped per-event ledger")
+    mk = wb["Makeup"]
+    check(mk["N5"].value == "Row Check" and "WRONG CADET" in mk["N6"].value and
+          "UNIT MISMATCH" in mk["N6"].value and
+          "NO LINKED EVENT" in mk["N6"].value and
+          "OK (no linked event)" not in mk["N6"].value and
+          '$N6,2)="OK"' in mk["L6"].value,
+          "Makeup row check gates Credit Applies (unlinked / wrong cadet / "
+          "unit / type)")
     mk_dvs = [dv.formula1 for dv in wb["Makeup"].data_validations.dataValidation]
     check(any("nrAT_ID" in (f or "") for f in mk_dvs),
           "Makeup Linked Event dropdown = attendance EventIDs")
@@ -257,6 +403,29 @@ def test_workbook():
     found_ack = any("Rules Ack" == str(c.value) for row in
                     aud.iter_rows(min_row=5, max_row=60) for c in row)
     check(found_ack, "Rules Ack column in enrollment docs grid")
+
+    st = wb["Settings"]
+    tot_row = next(r for r in range(6, 60)
+                   if st.cell(row=r, column=5).value == "cfgTotalScheduledMinutes")
+    tot_chk = str(st.cell(row=tot_row, column=7).value or "")
+    check("SUM(nrSCH_Hrs)" in str(st.cell(row=tot_row, column=6).value or "")
+          and "No schedule entered yet" in tot_chk,
+          "academy length cross-checked against the Schedule")
+    # the silent window this check exists to close: New Academy Reset empties
+    # the Schedule but leaves the previous academy's minutes in C, and an
+    # empty Schedule used to take the blind "No schedule entered yet" branch
+    check(f"AND($F${tot_row}=0,N($C${tot_row})=0)" in tot_chk and
+          "Total Scheduled Minutes still reads" in tot_chk,
+          "stale academy length is reported when the Schedule is empty")
+
+    # every cadet grid keys off Cadets!B (PID) and every log resolves PID by
+    # MATCH on the name, so a repeat of either silently merges two cadets
+    cad_cf = " ".join(str(rule.formula[0]) for rng in
+                      wb["Cadets"].conditional_formatting
+                      for rule in rng.rules if rule.formula)
+    check("COUNTIF(rngCadetPIDs,$B6)>1" in cad_cf and
+          "COUNTIF(rngCadetNames,$F6)>1" in cad_cf,
+          "duplicate PID / duplicate cadet name highlighted on Cadets")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 

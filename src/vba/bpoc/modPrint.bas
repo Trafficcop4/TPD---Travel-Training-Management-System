@@ -27,8 +27,11 @@ Public Sub btnPrintSignInWeek()
     Else
         startDate = Date
     End If
+    ' C5 is already UNLOCKED on SignIn, so no Unprotect is needed - and
+    ' unprotecting here meant a cancelled print left the sheet unprotected
+    ' with C5 stuck on an interim date. Cleanup restores C5 either way.
     Dim keep As Variant: keep = wsS.Range("C5").Value
-    wsS.Unprotect "TPDAcademy"
+    On Error GoTo Cleanup
     Dim r As Long, printed As Long, d As Variant
     For r = 6 To 175
         d = wsC.Cells(r, "I").Value
@@ -45,9 +48,13 @@ Public Sub btnPrintSignInWeek()
         If printed >= 5 Then Exit For
     Next r
     wsS.Range("C5").Value = keep
-    wsS.Protect "TPDAcademy"
     MsgBox printed & " daily report form(s) printed (next class days from " & _
            Format$(startDate, "mm/dd/yyyy") & ").", vbInformation, "Sign-In Week"
+    Exit Sub
+Cleanup:
+    wsS.Range("C5").Value = keep
+    MsgBox "Printing stopped after " & printed & " form(s): " & _
+           Err.Description, vbExclamation, "Sign-In Week"
 End Sub
 
 Public Sub btnPrintSpelling()
@@ -116,8 +123,10 @@ Public Sub btnPrintTranscript()
 
     Dim wsCad As Worksheet: Set wsCad = ThisWorkbook.Worksheets("Cadets")
     Dim r As Long, nm As String, printed As Long
+    ' C5 is unlocked on Transcript; Cleanup puts the picker back even if
+    ' the print is cancelled part-way through the roster
     Dim keep As Variant: keep = wsT.Range("C5").Value
-    wsT.Unprotect "TPDAcademy"
+    On Error GoTo Cleanup
     For r = ROW1 To ROWN
         nm = Trim$(CStr(wsCad.Cells(r, "F").Value))
         If nm <> "" Then
@@ -128,8 +137,12 @@ Public Sub btnPrintTranscript()
         End If
     Next r
     wsT.Range("C5").Value = keep
-    wsT.Protect "TPDAcademy"
     MsgBox printed & " transcript(s) sent to the printer.", vbInformation
+    Exit Sub
+Cleanup:
+    wsT.Range("C5").Value = keep
+    MsgBox "Printing stopped after " & printed & " transcript(s): " & _
+           Err.Description, vbExclamation, "Transcripts"
 End Sub
 
 ' prints the daily report/roster for EVERY in-session class day - the
@@ -153,8 +166,10 @@ Public Sub btnPrintSignInAcademy()
               "Tip: set your default printer to 'Microsoft Print to PDF' " & _
               "first to get one file for binding.", _
               vbYesNo + vbQuestion, "Academy Book") <> vbYes Then Exit Sub
+    ' C5 is unlocked; Cleanup also restores ScreenUpdating, which a
+    ' cancelled 130-page run used to leave switched off for the session
     Dim keep As Variant: keep = wsS.Range("C5").Value
-    wsS.Unprotect "TPDAcademy"
+    On Error GoTo Cleanup
     Application.ScreenUpdating = False
     Dim printed As Long
     For r = 6 To 175
@@ -168,11 +183,16 @@ Public Sub btnPrintSignInAcademy()
     Next r
     Application.ScreenUpdating = True
     wsS.Range("C5").Value = keep
-    wsS.Protect "TPDAcademy"
     MsgBox printed & " forms printed - the academy book is ready to bind." & _
            vbCrLf & "After a mid-academy separation, strike the name by " & _
            "hand on remaining pages or reprint the rest of the book.", _
            vbInformation, "Academy Book"
+    Exit Sub
+Cleanup:
+    Application.ScreenUpdating = True
+    wsS.Range("C5").Value = keep
+    MsgBox "Printing stopped after " & printed & " form(s): " & _
+           Err.Description, vbExclamation, "Academy Book"
 End Sub
 
 Private Sub PrintSheet(nm As String)

@@ -5,9 +5,11 @@ spelling, writing, attendance/makeup, skills, PT, incidents, counseling,
 medical, flags, awards, agency emails, TCOLE audit readiness, and every
 printable (sign-ins, evals, spelling tests, writing handouts, transcripts).
 
-**Color language:** blue cells are yours to type; gray cells calculate;
-yellow cells are pending data (the PT points rubric). Gray `sys*` tabs are
-the locked engine (password `TPDAcademy`) — never edit them.
+**Color language:** white boxes with a blue border are yours to type (what
+you type shows in blue); gray cells calculate; yellow cells are pending data
+(the PT points rubric). Gray `sys*` tabs are the locked engine (password
+`TPDAcademy`) — never edit them. The one exception is **sysAwards**, which is
+deliberately left editable in its override (E) and notes (G) columns.
 **Layout rule:** column A is empty and rows 1–4 are reserved for your own
 headers on every sheet. Tables start at row 5, data at row 6.
 
@@ -30,8 +32,11 @@ headers on every sheet. Tables start at row 5, data at row 6.
    retest deadlines, writing dates and sign-in sheets.
 5. **Schedule** — one row per time block (date, start, end,
    chapter/activity, instructor). Delivered hours reconcile to ChapterMaster
-   live; the audit sheet checks totals against **exactly 736** (excess must
-   be reported as Addendum course #101, never inside the BPOC).
+   live; the audit sheet checks totals against **exactly 736**. Excess is
+   never reported inside the BPOC — it goes to the reporting course the
+   **Addendum** sheet's "Report Under" column names: #2040 Arrest and
+   Control, #2046 Professional Police Driving, #2055 Firearms, and #101
+   Addendum to BPOC for everything else.
 6. **ExamPlan / WritingMaster / SpellingMaster** — pick this academy's
    exams; writing assignments carry their prompts and **compute assigned/due
    dates by matching each topic's chapter to the schedule** (override
@@ -63,9 +68,13 @@ headers on every sheet. Tables start at row 5, data at row 6.
   threshold is a Settings value.
 - **CadetProfile** — pick a cadet, get the whole picture on one printable
   page (grades, projections, attendance, flags, latest incidents/counseling).
-- **GradChecklist / sysChecks** — the graduation gate: 70 in each category,
-  under caps, makeup complete, skills qualified, writing current, final PT
-  passed, no open dismissal review.
+- **GradChecklist / sysChecks** — the graduation gate: 70 in each category
+  *and* every category actually recorded (major, minor, spelling and the
+  final exam), under caps, makeup complete, skills qualified, writing
+  current, no open chain-of-command incident review, final PT **passed**,
+  all certificate copies on file, no open dismissal review. A final PT that
+  was never assessed reads "Not taken" and a final PT rubric that has not
+  been entered on Settings reads "Pending" — both block, neither is a pass.
 - **sysAwards** — Valedictorian, Physical Fitness, Top Gun, Grit computed
   from the data; your override cell always wins (Grit especially is
   decision support, not a verdict).
@@ -91,7 +100,8 @@ schedule.
 ## End of academy
 
 1. Enter final PT points and the Final Exam scores.
-2. GradChecklist all-Yes; print **Transcript** for every cadet (button).
+2. GradChecklist: every gate column Yes and **Blocking Issues empty**; print
+   **Transcript** for every cadet (button).
 3. Confirm the **Audit** sheet is all OK / all Yes.
 4. Record awards (override cells on sysAwards).
 5. Save-As the finished file (e.g. `BPOC-2026-01 FINAL.xlsm`), then run
@@ -115,10 +125,16 @@ powershell -File tools/Install-BPOC-VBA.ps1   # on Windows+Excel: builds the .xl
 - **SignIn** is now the one-page Daily Report & Roster: AM roll call +
   sign-in grid + PM changes + signatures. Print on demand.
 - **Missed time clears by event**: every counting Attendance event stays
-  OPEN until Makeup rows linked to its EventID cover the balance — then it
-  shows CLEARED with the date. Agency recalls get the "Agency Recall"
-  reason, count against the cap, and must be made up like everything else.
-  The Dashboard lists every OPEN event.
+  OPEN until that same cadet's Makeup rows linked to its EventID cover the
+  balance — then it shows CLEARED with the date. Agency recalls get the
+  "Agency Recall" reason, count against the cap, and must be made up like
+  everything else. The Dashboard lists every OPEN event.
+- **Makeup "Row Check"** is the last column on the Makeup sheet. Credit only
+  applies when it reads OK. It refuses another cadet's event (WRONG CADET),
+  an EventID that no longer exists (NO SUCH EVENT), a Type the caps do not
+  credit (TYPE NOT CREDITED — only Classroom and PT do), and minutes booked
+  against a PT event, which is counted in sessions (UNIT MISMATCH). That
+  keeps the CLEARED banner and the `Cl Owed` / `PT Net` balances in step.
 - **Memos**: assigned for deficiencies, linked to the triggering Incident/
   Attendance/Counseling ID (or stand-alone), due N class days later
   (Settings), overdue memos flag the cadet on the WatchList.

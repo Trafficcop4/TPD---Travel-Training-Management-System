@@ -14,7 +14,7 @@ against the live TCOLE rule text.
 | Layer | Examples | Where tracked |
 |---|---|---|
 | **TCOLE rule / IRG mandatory** | 736 hrs exact, per-chapter minimums, learning objectives unaltered, training-file contents, instructor SME documentation, enrollment standards (217.1), Rule 215.9 rules distribution, chapter certifications (TIM, SFST, ALERRT, CPR/AED, TCIC #4800, Crime Stoppers, Seven Step, canine scenarios, CIT lead experience, SIT 3232) | ChapterMaster, Instructors, Audit sheet, sysAudit |
-| **Academy policy (May 2026 manual)** | 40/30/10/20 weights, 70-in-each-category, weekly spelling + 75% intervention, 40 writing assignments, PT program/caps, awards | Engine sheets; tagged Academy policy |
+| **Academy policy (May 2026 manual)** | 40/30/10/20 weights, 70-in-each-category, 12 spelling tests across the academy + 75% intervention, 40 writing assignments, PT program/caps, awards | Engine sheets; tagged Academy policy |
 
 Spelling tests and writing assignments are **encouraged by the IRG, not
 TCOLE-mandated** — during an audit present them as the academy exceeding
@@ -23,7 +23,8 @@ the standard.
 ## The audit trail, piece by piece
 
 - **Hours** — Audit sheet checks delivered hours vs **exactly 736** (over =
-  report the excess as Addendum #101; under = Rule 218.1(C)(4) denial risk)
+  report the excess under the course the Addendum sheet names — #2040,
+  #2046, #2055 or #101; under = Rule 218.1(C)(4) denial risk)
   and flags any chapter under its TCOLE minimum. Source: Schedule →
   ChapterMaster reconciliation.
 - **Per-chapter training file** — ChapterMaster columns: SME **lesson plan**
@@ -46,7 +47,9 @@ the standard.
   reporting, 30-day separate reporting of non-BPOC classes, facility
   standards, mastery-based assessment (never attendance-only).
 - **Per-cadet enrollment file** — Audit sheet grid: enrollment app,
-  TCLEDDS L1, medical L2, psych L3, background, photo ID/DL.
+  TCLEDDS L1, medical L2, psych L3, background, photo ID/DL, Rules Ack
+  (Rule 215.9 acknowledgment) — all **seven** are required for
+  "All Docs? = Yes".
 - **Attendance** — printed daily SignIn sheets (with PID) are the paper
   record; the Attendance/Makeup logs prove missed time was made up
   (IRG: no 10% rule — required content missed must be made up).

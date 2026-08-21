@@ -36,14 +36,17 @@ def build_sysgrades(wb):
                     "LastScore", "PrevScore", "GradeDrop", "ConsecFails"])
     cols = _mirror()
     cols.update({
-        "E": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Major",nrES_Final,"Yes"))', "fx"),
-        "F": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Minor",nrES_Final,"Yes"))', "fx"),
+        # counts and averages must use the SAME criteria or the count=0 guard
+        # on I/J/L is defeated: a pending retest row is the final attempt but
+        # carries no Recorded score, so it must not be counted either.
+        "E": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Major",nrES_Final,"Yes",nrES_Rec,">=0"))', "fx"),
+        "F": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Minor",nrES_Final,"Yes",nrES_Rec,">=0"))', "fx"),
         "G": ('IF($B{r}="","",Spelling!Q{r})', "fx"),
-        "H": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Final",nrES_Final,"Yes"))', "fx"),
-        "I": ('IF(OR($B{r}="",$E{r}=0),"",ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Major",nrES_Final,"Yes"),2))', "fx"),
-        "J": ('IF(OR($B{r}="",$F{r}=0),"",ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Minor",nrES_Final,"Yes"),2))', "fx"),
+        "H": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Final",nrES_Final,"Yes",nrES_Rec,">=0"))', "fx"),
+        "I": ('IF(OR($B{r}="",$E{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Major",nrES_Final,"Yes",nrES_Rec,">=0"),2),""))', "fx"),
+        "J": ('IF(OR($B{r}="",$F{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Minor",nrES_Final,"Yes",nrES_Rec,">=0"),2),""))', "fx"),
         "K": ('IF($B{r}="","",Spelling!P{r})', "fx"),
-        "L": ('IF(OR($B{r}="",$H{r}=0),"",ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Final",nrES_Final,"Yes"),2))', "fx"),
+        "L": ('IF(OR($B{r}="",$H{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Final",nrES_Final,"Yes",nrES_Rec,">=0"),2),""))', "fx"),
         "M": ('IF($B{r}="","",LET(w,($E{r}>0)*cfgWeightMajor+($F{r}>0)*cfgWeightMinor'
               '+(N($G{r})>0)*cfgWeightSpelling+($H{r}>0)*cfgWeightFinal,'
               'IF(w=0,"",ROUND((($E{r}>0)*cfgWeightMajor*N($I{r})'
@@ -95,6 +98,9 @@ def build_sysgrades(wb):
     define(wb, "nrGRrank", "sysGrades", f"$U${FIRST}:$U${LAST}")
     define(wb, "nrGRcurrent", "sysGrades", f"$M${FIRST}:$M${LAST}")
     define(wb, "nrGRfinal", "sysGrades", f"$N${FIRST}:$N${LAST}")
+    # column L is the FINAL EXAM average; column N is the weighted composite.
+    # Outputs that label a row "Final Exam" must read L, never N.
+    define(wb, "nrGRfinalExam", "sysGrades", f"$L${FIRST}:$L${LAST}")
     define(wb, "nrGRacademic", "sysGrades", f"$V${FIRST}:$V${LAST}")
     define(wb, "nrGRmajavg", "sysGrades", f"$I${FIRST}:$I${LAST}")
     define(wb, "nrGRminavg", "sysGrades", f"$J${FIRST}:$J${LAST}")
@@ -123,7 +129,14 @@ def build_sysattendance(wb):
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",SUMIFS(nrAT_Min,nrAT_PID,$B{r},nrAT_Counts,"Yes",nrAT_IsPT,"No"))', "fx"),
-        "F": ('IF($B{r}="","",SUMIFS(nrMK_Min,nrMK_PID,$B{r},nrMK_Credit,"Yes",nrMK_Type,"Classroom"))', "fx"),
+        # made-up minutes are read from the PER-EVENT reconciliation on
+        # Attendance (col P), which is capped at each event's own duration —
+        # NOT from the raw Makeup rows. Summing nrMK_Min directly let a
+        # 360-minute makeup booked against a 120-minute event pay off 240
+        # minutes of a completely different absence, so the gate below read
+        # "no makeup owed" while that event's own ledger still said OPEN.
+        "F": ('IF($B{r}="","",SUMIFS(nrAT_MadeUpMin,nrAT_PID,$B{r},'
+              'nrAT_Counts,"Yes",nrAT_IsPT,"No"))', "fx"),
         "G": ('IF($B{r}="","",MAX(0,$E{r}-$F{r}))', "fx"),
         "H": ('IF($B{r}="","",cfgClassroomCapMinutes)', "fx"),
         "I": ('IF($B{r}="","",IF($H{r}=0,0,$G{r}/$H{r}))', "fx"),
@@ -132,7 +145,8 @@ def build_sysattendance(wb):
         "K": ('IF($B{r}="","",IF($H{r}=0,"Yes",IF($G{r}<$H{r},"Yes","No")))', "fx"),
         "L": ('IF($B{r}="","",MAX(0,$E{r}-$F{r}))', "fx"),
         "M": ('IF($B{r}="","",SUMIFS(nrAT_Sess,nrAT_PID,$B{r},nrAT_Counts,"Yes",nrAT_IsPT,"Yes"))', "fx"),
-        "N": ('IF($B{r}="","",SUMIFS(nrMK_Sess,nrMK_PID,$B{r},nrMK_Credit,"Yes",nrMK_Type,"PT"))', "fx"),
+        "N": ('IF($B{r}="","",SUMIFS(nrAT_MadeUpSess,nrAT_PID,$B{r},'
+              'nrAT_Counts,"Yes",nrAT_IsPT,"Yes"))', "fx"),
         "O": ('IF($B{r}="","",MAX(0,$M{r}-$N{r}))', "fx"),
         "P": ('IF($B{r}="","",cfgPTCapSessions)', "fx"),
         "Q": ('IF($B{r}="","",IF($P{r}=0,0,$O{r}/$P{r}))', "fx"),
@@ -159,10 +173,13 @@ def build_sysattendance(wb):
     define(wb, "nrATTmakeupOK", "sysAttendance", f"$T${FIRST}:$T${LAST}")
     col_widths(ws, {"A": 3, "B": 10, "C": 24})
     sheet_note(ws, "Minutes vs the 5% classroom cap; PT sessions vs the "
-                   "5-session cap (policy 400). 'Cl Owed' = missed minutes "
-                   "not yet made up; 'Makeup Complete?' requires both owed "
-                   "classroom minutes AND owed PT sessions at 0 before "
-                   "graduation. Locked.")
+                   "5-session cap (policy 400). 'Cl MadeUp'/'PT MadeUp' are "
+                   "the sum of the PER-EVENT credits on Attendance (P/Q), "
+                   "each capped at that event's own duration — so these can "
+                   "never disagree with the OPEN/CLEARED banner. 'Cl Owed' = "
+                   "missed minutes not yet made up; 'Makeup Complete?' "
+                   "requires both owed classroom minutes AND owed PT sessions "
+                   "at 0 before graduation. Locked.")
     protect(ws)
     return ws
 
@@ -275,13 +292,17 @@ def build_sysflags(wb):
               'sysAttendance!$Q{r}>=cfgFlagAttendancePct),1,0))', "fx"),
         "J": ('IF($B{r}="","",IF(sysIncidents!$H{r}>=cfgFlagOpenIncidents,1,0))', "fx"),
         "K": ('IF($B{r}="","",IF(N(Writing!$AS{r})>=cfgFlagOverdueWriting,1,0))', "fx"),
-        "L": ('IF($B{r}="","",IF(COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"OVERDUE")>0,1,0))', "fx"),
+        # CHECK DATE counts too: a retest whose deadline could not be computed
+        # is not "fine", it is a policy 300.5 clock that never started
+        "L": ('IF($B{r}="","",IF(COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"OVERDUE")'
+              '+COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"CHECK DATE")>0,1,0))', "fx"),
         "M": ('IF($B{r}="","",IF(OR(PT!$K{r}="No",PT!$AB{r}="No"),1,0))', "fx"),
         "N": ('IF($B{r}="","",IF(COUNTIFS(nrMD_PID,$B{r},nrMD_Status,'
               '"RESTRICTION EXPIRED")>0,1,0))', "fx"),
         "O": ('IF($B{r}="","",IF(Certifications!$U{r}<>"",1,0))', "fx"),
         "P": ('IF($B{r}="","",IF(COUNTIFS(nrME_PID,$B{r},nrME_Status,'
-              '"OVERDUE")>0,1,0))', "fx"),
+              '"OVERDUE")+COUNTIFS(nrME_PID,$B{r},nrME_Status,'
+              '"CHECK DATE")>0,1,0))', "fx"),
         "Q": ('IF($B{r}="","",IF(SUMPRODUCT((nrAT_PID=$B{r})*'
               '(nrAT_Cleared="OPEN"))>0,1,0))', "fx"),
         "R": ('IF($B{r}="","",SUM($E{r}:$Q{r}))', "fx"),
@@ -322,7 +343,7 @@ def build_syschecks(wb):
                     "PT Sessions", "Skills", "Incidents", "Writing",
                     "Makeup Complete", "Final PT Pass", "DismissReview",
                     "GraduationElig", "Blocking Issues", "Final Exam Elig",
-                    "Certs"])
+                    "Certs", "Exams Recorded", "Skills Assessed"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",sysGrades!$V{r})', "fx"),
@@ -332,35 +353,64 @@ def build_syschecks(wb):
         "I": ('IF($B{r}="","",sysIncidents!$K{r})', "fx"),
         "J": ('IF($B{r}="","",IF(Writing!$AT{r}="Yes","Yes","No"))', "fx"),
         "K": ('IF($B{r}="","",sysAttendance!$T{r})', "fx"),
-        "L": ('IF($B{r}="","",IF(PT!$AB{r}="No","No","Yes"))', "fx"),
+        # AFFIRMATIVE test: only an actual pass reads "Yes". A blank PT!AB
+        # (final PT never assessed) and "(rubric pending)" (cfgPTFinalMinPoints
+        # still 0) are distinct blocking states, not passes.
+        "L": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
+              'IF(PT!$AB{r}="(rubric pending)","Pending","Not taken"))))', "fx"),
         "M": ('IF($B{r}="","",IF(OR(sysGrades!$P{r}>0,sysSkills!$J{r}="Yes",'
               'sysIncidents!$J{r}>0),"Yes","No"))', "fx"),
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
-              '$Q{r}="Yes",$M{r}="No"),"Yes","No"))', "fx"),
+              '$Q{r}="Yes",$R{r}="Yes",$S{r}="Yes",$M{r}="No"),"Yes","No"))', "fx"),
         "O": ('IF($B{r}="","",IF($N{r}="Yes","Eligible",TRIM('
               'IF($E{r}<>"Yes","Academic; ","")&'
+              'IF($R{r}<>"Yes","Exams not all recorded; ","")&'
               'IF($F{r}<>"Yes","Classroom; ","")&'
               'IF($G{r}<>"Yes","PT sessions; ","")&'
               'IF($H{r}<>"Yes","Skills; ","")&'
+              'IF($S{r}<>"Yes","Skills not all assessed; ","")&'
               'IF($I{r}<>"Yes","Incidents; ","")&'
               'IF($J{r}<>"Yes","Writing; ","")&'
               'IF($K{r}<>"Yes","Makeup owed; ","")&'
-              'IF($L{r}<>"Yes","Final PT; ","")&'
+              'IF($L{r}="No","Final PT failed; ",'
+              'IF($L{r}="Pending","Final PT rubric not set; ",'
+              'IF($L{r}<>"Yes","Final PT not assessed; ","")))&'
               'IF($Q{r}<>"Yes","Certs; ","")&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
-        "P": ('IF($B{r}="","",IF(PT!$AB{r}="No","No","Yes"))', "fx"),
+        "P": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
+              'IF(PT!$AB{r}="(rubric pending)","Pending","Not taken"))))', "fx"),
         "Q": ('IF($B{r}="","",IF(Certifications!$T{r}="Yes","Yes","No"))', "fx"),
+        # completeness: sysGrades V waives a category whose count is 0 so
+        # mid-academy cadets don't read Academic="No". Graduation must not
+        # inherit that waiver — every category needs at least one record.
+        "R": ('IF($B{r}="","",IF(AND(N(sysGrades!$E{r})>0,N(sysGrades!$F{r})>0,'
+              'N(sysGrades!$G{r})>0,N(sysGrades!$H{r})>0),"Yes","No"))', "fx"),
+        # same shape as R, for skills: sysSkills K only asks "not failed out
+        # and nothing currently in remediation", so a cadet with ZERO skills
+        # records scored as a pass. Graduation additionally requires every
+        # SkillsMaster category to be Qualified (sysSkills F = categories
+        # qualified). Deliberately NOT folded into sysSkills K / nrSKelig,
+        # which stays the mid-academy "on track" label on CadetProfile.
+        "S": ('IF($B{r}="","",IF(N(sysSkills!$F{r})>='
+              'SUMPRODUCT((rngSM_cat<>"")*1),"Yes","No"))', "fx"),
     })
     fill_rows(ws, FIRST, LAST, cols)
     cf_yes_no(ws, f"N{FIRST}:N{LAST}")
     define(wb, "nrCKgradElig", "sysChecks", f"$N${FIRST}:$N${LAST}")
     define(wb, "nrCKblocking", "sysChecks", f"$O${FIRST}:$O${LAST}")
     define(wb, "nrCKfinalExamElig", "sysChecks", f"$P${FIRST}:$P${LAST}")
+    define(wb, "nrCKexamsRecorded", "sysChecks", f"$R${FIRST}:$R${LAST}")
+    define(wb, "nrCKskillsAssessed", "sysChecks", f"$S${FIRST}:$S${LAST}")
     col_widths(ws, {"A": 3, "B": 10, "C": 24, "O": 50})
-    sheet_note(ws, "Graduation gate per policy: 70 in each category, under "
-                   "attendance caps, makeup complete, skills qualified, "
-                   "writing current, final PT passed, all cert copies on "
+    sheet_note(ws, "Graduation gate per policy: 70 in each category, every "
+                   "category actually recorded (Exams Recorded), under "
+                   "attendance caps, makeup complete, EVERY skills category "
+                   "actually qualified (Skills Assessed — no records is not "
+                   "a pass), "
+                   "writing current, no open chain-of-command incident "
+                   "review, final PT PASSED (a blank or '(rubric pending)' "
+                   "final PT blocks — it is not a pass), all cert copies on "
                    "file, no open dismissal review. 'Final Exam Elig' "
                    "enforces 500.1.H. Locked.")
     protect(ws)
@@ -422,26 +472,37 @@ def build_sysawards(wb):
     sheet_note(ws, "Data-driven picks with coordinator override (override "
                    "always wins). Grit is decision support — the computed "
                    "index only sees PT deltas; weigh academic improvement "
-                   "and perseverance before finalizing.")
+                   "and perseverance before finalizing. Only the override (E) "
+                   "and Notes (G) columns are editable — the computed winner "
+                   "and the FINAL winner feed the printed transcript.")
+    # locked like every other engine sheet: C/F are formulas that reach the
+    # OFFICIAL TRANSCRIPT's awards line. E and G are the reason this sheet
+    # exists, so they are explicitly unlocked before protection goes on.
+    protect(ws)
+    from xlb import unlock_range as _unlock
+    _unlock(ws, f"E{FIRST}:E{r-1}")
+    _unlock(ws, f"G{FIRST}:G{r-1}")
     return ws
 
 
 # --------------------------------------------------------------------------
-def build_sysaudit(wb):
-    """TCOLE audit-readiness rollups that need engine math."""
-    ws = wb.create_sheet("sysAudit")
-    ws.sheet_view.showGridLines = False
-    header_row(ws, ["Check", "Value", "Target", "Status", "Detail"])
-    r = FIRST
-    checks = [
+# Module-level so the printable Audit sheet can size its mirror block from
+# len(AUDIT_CHECKS) instead of a hard-coded literal — a check added here but
+# not printed there is a red Dashboard tile with no visible cause.
+AUDIT_CHECKS = [
         ("Delivered hours vs 736 (exact)",
          "nrCHtotalDelivered", "cfgRequiredHours",
          'IF(N(nrCHtotalDelivered)<N(cfgRequiredHours),"SHORT",'
          'IF(N(nrCHtotalDelivered)>N(cfgRequiredHours),"OVER - report excess as #101","OK"))',
-         '"Report the BPOC at exactly 736 hrs; excess must go to Addendum course #101"'),
+         '"Report the BPOC at exactly 736 hrs; excess goes to the reporting course '
+         'the Addendum sheet names - #2040 Arrest and Control, #2046 Professional '
+         'Police Driving, #2055 Firearms, #101 Addendum to BPOC for the rest"'),
+        # <>0 (not >0): a chapter whose delivered hours went NEGATIVE (a
+        # swapped start/end time on a Schedule block) is the most broken
+        # case there is and must not be skipped as "not taught yet".
         ("Chapters short of TCOLE minimum",
-         'SUMPRODUCT((nrCHdeliv<>"")*(nrCHdeliv>0)*(nrCHdeliv<nrCHmin))', "0",
-         'IF(SUMPRODUCT((nrCHdeliv<>"")*(nrCHdeliv>0)*(nrCHdeliv<nrCHmin))=0,"OK","CHECK")',
+         'SUMPRODUCT((nrCHdeliv<>"")*(nrCHdeliv<>0)*(nrCHdeliv<nrCHmin))', "0",
+         'IF(SUMPRODUCT((nrCHdeliv<>"")*(nrCHdeliv<>0)*(nrCHdeliv<nrCHmin))=0,"OK","CHECK")',
          '"Rule 218.1(C)(4): failure to meet minimum course length = denial of training"'),
         ("Chapter training files incomplete",
          'SUMPRODUCT((nrCHname<>"")*(nrCHfileOK="No"))', "0",
@@ -455,9 +516,12 @@ def build_sysaudit(wb):
          'SUMPRODUCT((nrCHname<>"")*(nrCHevals<>"On File")*(nrCHevals<>"N/A"))', "0",
          'IF(SUMPRODUCT((nrCHname<>"")*(nrCHevals<>"On File")*(nrCHevals<>"N/A"))=0,"OK","CHECK")',
          '"Course critiques per chapter (print from Print Center)"'),
+        # N/A is an offered answer on the Audit sheet's own dropdown and its
+        # conditional format paints it green — the engine must agree, or one
+        # legitimate N/A pins this row red forever with nothing to fix.
         ("Program requirements unchecked (Audit sheet)",
-         'SUMPRODUCT((nrPRGitems<>"")*(nrPRGmet<>"Yes"))', "0",
-         'IF(SUMPRODUCT((nrPRGitems<>"")*(nrPRGmet<>"Yes"))=0,"OK","CHECK")',
+         'SUMPRODUCT((nrPRGitems<>"")*(nrPRGmet<>"Yes")*(nrPRGmet<>"N/A"))', "0",
+         'IF(SUMPRODUCT((nrPRGitems<>"")*(nrPRGmet<>"Yes")*(nrPRGmet<>"N/A"))=0,"OK","CHECK")',
          '"Rule 215.9 distribution, TCLEDDS roster, 736 exact reporting, facility, assessments"'),
         ("Teaching instructors lacking documentation",
          'SUMPRODUCT((nrInstrOnSched="Yes")*(nrInstrReady="No"))', "0",
@@ -467,10 +531,15 @@ def build_sysaudit(wb):
          'COUNTIF(nrSCH_InstrOK,"UNRECOGNIZED")', "0",
          'IF(COUNTIF(nrSCH_InstrOK,"UNRECOGNIZED")=0,"OK","CHECK")',
          '"Instructor text matches nobody on the Instructors roster - fix spelling or add them"'),
-        ("Overdue retests",
-         'COUNTIF(nrES_RetStat,"OVERDUE")', "0",
-         'IF(COUNTIF(nrES_RetStat,"OVERDUE")=0,"OK","ACT NOW")',
-         '"Policy 300.5: retest within 5 class days"'),
+        # CHECK DATE rows are counted too: a retest dated on a weekend or a
+        # holiday used to sit at "Pending" forever, so the 5-class-day clock
+        # was unenforceable for exactly the rows that needed it.
+        ("Overdue retests (incl. unusable dates)",
+         'COUNTIF(nrES_RetStat,"OVERDUE")+COUNTIF(nrES_RetStat,"CHECK DATE")', "0",
+         'IF(COUNTIF(nrES_RetStat,"OVERDUE")+COUNTIF(nrES_RetStat,"CHECK DATE")'
+         '=0,"OK","ACT NOW")',
+         '"Policy 300.5: retest within 5 class days. CHECK DATE = the exam date is '
+         'missing or resolves past the last class day, so no deadline exists"'),
         ("Cadets with makeup owed",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrATTmakeupOK="No"))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrATTmakeupOK="No"))=0,"OK","CHECK")',
@@ -513,7 +582,45 @@ def build_sysaudit(wb):
          '+COUNTIF(nrME_PID,"?")+COUNTIF(nrMD_PID,"?")=0,"OK","CHECK")',
          '"A log row\'s cadet name matches nobody on the Cadets roster - '
          'that cadet\'s scores/events are orphaned; fix the spelling"'),
+        # every SUMIFS/COUNTIFS in the engine is keyed on PID, and every log
+        # sheet resolves PID by MATCH on the cadet NAME, so a repeat of
+        # either silently MERGES two cadets' records in both directions.
+        ("Duplicate cadet PID or name on the roster",
+         'SUMPRODUCT((rngCadetPIDs<>"")*(COUNTIF(rngCadetPIDs,rngCadetPIDs)>1))'
+         '+SUMPRODUCT((rngCadetNames<>"")*(COUNTIF(rngCadetNames,rngCadetNames)>1))',
+         "0",
+         'IF(SUMPRODUCT((rngCadetPIDs<>"")*(COUNTIF(rngCadetPIDs,rngCadetPIDs)>1))'
+         '+SUMPRODUCT((rngCadetNames<>"")*(COUNTIF(rngCadetNames,rngCadetNames)>1))'
+         '=0,"OK","CHECK")',
+         '"Two Cadets rows sharing a PID (or a name) merge both cadets\' grades, '
+         'attendance and gates - and swap them onto each other\'s transcript. '
+         'The duplicate cells are highlighted red on Cadets"'),
+        ("Exam rows failing Row Check",
+         'SUMPRODUCT((nrES_RowCheck<>"")*(nrES_RowCheck<>"OK"))', "0",
+         'IF(SUMPRODUCT((nrES_RowCheck<>"")*(nrES_RowCheck<>"OK"))=0,"OK","CHECK")',
+         '"ExamScores Row Check: a non-numeric or out-of-range Raw Score, a '
+         'duplicate RecordID, or an attempt 2 with no attempt 1 on file - each '
+         'silently distorts the category average"'),
+        ("Memos with an unusable due date",
+         'COUNTIF(nrME_Status,"CHECK DATE")', "0",
+         'IF(COUNTIF(nrME_Status,"CHECK DATE")=0,"OK","CHECK")',
+         '"The Assigned date resolves past the last class day, so no due date '
+         'could be computed and the memo can never read OVERDUE"'),
+        # NOTE: no audit row for "skills not all assessed". That condition is
+        # true for every cadet for most of the academy, so an audit row would
+        # sit red from day one and train the coordinator to ignore the block.
+        # It is enforced per cadet instead — sysChecks S -> GradChecklist
+        # ELIGIBLE + the named Blocking Issue.
     ]
+
+
+def build_sysaudit(wb):
+    """TCOLE audit-readiness rollups that need engine math."""
+    ws = wb.create_sheet("sysAudit")
+    ws.sheet_view.showGridLines = False
+    header_row(ws, ["Check", "Value", "Target", "Status", "Detail"])
+    r = FIRST
+    checks = AUDIT_CHECKS
     for name, val_fx, target, stat_fx, detail_fx in checks:
         ws.cell(row=r, column=2, value=name).font = F_LABEL
         v = ws.cell(row=r, column=3, value="=" + val_fx)

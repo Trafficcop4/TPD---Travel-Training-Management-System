@@ -17,9 +17,13 @@ XLFN = {
     "SORTBY": "_xlfn.", "RANDARRAY": "_xlfn.", "HSTACK": "_xlfn.",
     "VSTACK": "_xlfn.", "TAKE": "_xlfn.", "DROP": "_xlfn.",
     "TOCOL": "_xlfn.", "TOROW": "_xlfn.", "ISOWEEKNUM": "_xlfn.",
-    "WORKDAY.INTL": "_xlfn.", "NETWORKDAYS.INTL": "_xlfn.",
     "SORT": "_xlfn._xlws.", "FILTER": "_xlfn._xlws.",
 }
+# NOTE: WORKDAY.INTL / NETWORKDAYS.INTL must NOT be listed above. They are
+# native ECMA-376 built-ins (openpyxl.utils.FORMULAE lists both), so an
+# _xlfn. prefix makes Excel open them as #NAME?. Only functions that are
+# ABSENT from that catalog are "future functions" needing a prefix; the
+# assertion in verify_build.py enforces exactly that.
 
 _FUNC_PAT = re.compile(
     r"(?<![A-Za-z0-9_.])(" +

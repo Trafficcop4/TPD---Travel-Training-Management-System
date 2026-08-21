@@ -89,7 +89,7 @@ def build():
         "Attendance": "B6", "Makeup": "B6", "Skills": "B6", "Incidents": "B6",
         "Counseling": "B6", "Medical": "B6", "DismissalLog": "B6",
         "EmailLog": "B6", "Schedule": "B6", "Agencies": "B6",
-        "Memos": "B6", "DailyLog": "B6", "AdvisoryBoard": "B6",
+        "Memos": "B6", "DailyLog": "B6", "AdvisoryBoard": "B12",
         "Instructors": "C6", "InstructorBanks": "C6", "ChapterMaster": "E6",
         "WritingMaster": "D6", "SpellingMaster": "C6", "ExamMaster": "B6",
         "ExamPlan": "B6",
@@ -98,7 +98,7 @@ def build():
         if name in wb.sheetnames:
             wb[name].freeze_panes = cell
     FILTERS = {
-        "ExamScores": "B5:W5", "Attendance": "B5:S5", "Makeup": "B5:M5",
+        "ExamScores": "B5:X5", "Attendance": "B5:S5", "Makeup": "B5:N5",
         "Skills": "B5:R5", "Incidents": "B5:O5", "Counseling": "B5:N5",
         "Medical": "B5:N5", "Schedule": "B5:N5", "DismissalLog": "B5:O5",
         "EmailLog": "B5:I5", "Memos": "B5:N5", "DailyLog": "B5:N5",

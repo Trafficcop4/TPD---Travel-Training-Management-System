@@ -35,6 +35,10 @@ NAME_MAP = {
 # calendar instructor-text typos -> roster spellings (substring replace)
 INSTR_FIXES = {
     "DJ, Schick": "DJ Schick",
+    # stray comma split one co-teacher into two fragments on 13 blocks; the
+    # workbook's substring matcher then dropped her from the only chapter
+    # she co-taught
+    "Rebekah, Hutson": "Rebekah Hutson",
 }
 
 HOLIDAY_WORDS = ("Memorial Day", "Juneteenth", "Independence Day",
@@ -68,8 +72,10 @@ def seed():
     s54 = v54["Settings"]
     for r54 in range(5, 30):
         nm = sval(s54.cell(row=r54, column=5))
+        # cfgTotalScheduledMinutes is deliberately NOT copied — it is
+        # recomputed from the seeded Schedule at the end of this script
         if nm in ("cfgAcademyClass", "cfgStartDate", "cfgEndDate",
-                  "cfgTotalScheduledMinutes", "cfgCurrentExamNum",
+                  "cfgCurrentExamNum",
                   "cfgCurrentSpellingNum", "cfgHomeAgency"):
             wanted[nm] = s54.cell(row=r54, column=3).value
     for r in range(6, 60):
@@ -266,7 +272,11 @@ def seed():
         ws.cell(row=out, column=3).value = name_to_id.get(agency_name, agency_name)
         ws.cell(row=out, column=4).value = el.cell(row=r54, column=5).value
         ws.cell(row=out, column=5).value = el.cell(row=r54, column=6).value
-        ws.cell(row=out, column=6).value = sval(el.cell(row=r54, column=11)).split(" ")[0]
+        # the email macro writes this as a NUMBER; seeding it as text made
+        # the 36 historic rows a different type from every future row
+        _n = sval(el.cell(row=r54, column=11)).split(" ")[0]
+        ws.cell(row=out, column=6).value = (int(_n) if _n.isdigit()
+                                            else (_n or None))
         ws.cell(row=out, column=8).value = el.cell(row=r54, column=3).value
         out += 1
     print(f"EmailLog runs: {out-6}")
@@ -277,6 +287,7 @@ def seed():
     out = 6
     cur_date = None
     skipped = set()
+    sched_minutes = 0
     for r in range(7, 520):
         d = grid.cell(row=r, column=4).value          # D: date (day rows)
         if isinstance(d, datetime):
@@ -298,10 +309,14 @@ def seed():
         for bad, good in INSTR_FIXES.items():
             instr = instr.replace(bad, good)
         ws.cell(row=out, column=9).value = instr
+        if isinstance(start, time) and isinstance(end, time):
+            sched_minutes += ((end.hour * 60 + end.minute)
+                              - (start.hour * 60 + start.minute))
         out += 1
     import data_lists as DLx
     import re as _re
     ros = DLx.INSTRUCTORS + DLx.GUEST_ENTITIES
+    ros_norm = {" ".join(nm.split()).casefold() for nm in ros}
     unrec = {}
     for r in range(6, out):
         it = sval(ws.cell(row=r, column=9))
@@ -311,12 +326,29 @@ def seed():
         # resolve to a roster name (the workbook's any-match can't see them)
         t2 = _re.sub(r"\(.*?\)", "", str(it))
         for seg in _re.split(r"[&,]| and ", t2):
-            seg = seg.strip()
-            if seg and not any(seg in nm or nm in seg for nm in ros):
+            seg = " ".join(seg.split())
+            # EXACT match after normalising: the old bidirectional
+            # substring test let fragments of a mangled name ("Rebekah",
+            # "Hutson") both pass, so the typo that produced them was
+            # never reported
+            if seg and seg.casefold() not in ros_norm:
                 unrec[seg] = unrec.get(seg, 0) + 1
     if unrec:
         print(f"WARNING unrecognized schedule instructors: {unrec}")
     print(f"Schedule blocks: {out-6}  (skipped holiday rows: {len(skipped)})")
+
+    # ---- academy length comes from the schedule, not from the old workbook --
+    # the V5.4 value (145,800 min = 2,430 hrs) is 2.5x the real 972-hr
+    # calendar, which inflates cfgClassroomCapMinutes (5%) by the same factor
+    st = v6["Settings"]
+    for r in range(6, 60):
+        if sval(st.cell(row=r, column=5)) == "cfgTotalScheduledMinutes":
+            old = st.cell(row=r, column=3).value
+            st.cell(row=r, column=3).value = sched_minutes
+            print(f"cfgTotalScheduledMinutes: {old} -> {sched_minutes} "
+                  f"({sched_minutes/60:.0f} hrs from the schedule); "
+                  f"5% classroom cap = {round(sched_minutes*0.05)} min")
+            break
 
     # ---------- instructor banks from actual schedule usage ---------------
     import data_lists as DLmod
@@ -339,11 +371,14 @@ def seed():
         if row is None:
             continue
         uniq = list(dict.fromkeys(names))
-        for i, nm in enumerate(uniq[:10]):
-            ib.cell(row=row, column=3 + i).value = nm          # bank C..L
-        for i, nm in enumerate(uniq[:8]):
-            ib.cell(row=row, column=13 + i).value = nm         # teach M..T
-        if len(uniq) > 10:
+        from sheets_config import BANK_SLOTS, SEL_SLOTS
+        for i, nm in enumerate(uniq[:BANK_SLOTS]):
+            ib.cell(row=row, column=3 + i).value = nm          # bank C..
+        # slice by the real capacity, not a hard-coded 8: two instructors
+        # already on 18 seeded Schedule blocks used to be dropped here
+        for i, nm in enumerate(uniq[:SEL_SLOTS]):
+            ib.cell(row=row, column=3 + BANK_SLOTS + i).value = nm   # teach
+        if len(uniq) > min(BANK_SLOTS, SEL_SLOTS):
             overflow.append(f"{topic} ({len(uniq)})")
         seeded += 1
     print(f"Instructor banks seeded: {seeded} topics"

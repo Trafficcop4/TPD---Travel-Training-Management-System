@@ -99,13 +99,16 @@ def build_dashboard(wb):
          'SUMPRODUCT((nrCadetStatus="Separated")*1)&" / "&'
          'SUMPRODUCT((nrCadetStatus<>"")*1)')
     _kpi(ws, r, 4, "Class current avg",
-         'IFERROR(ROUND(AVERAGE(IF(nrCadetStatus="Active",nrGRcurrent)),1),"—")')
+         # AVERAGE(IF(...)) is a legacy CSE array formula; stored as an
+         # ordinary formula it silently evaluates to 0. AVERAGEIF needs no
+         # array entry and is what the rest of the sheet already uses.
+         'IFERROR(ROUND(AVERAGEIF(nrCadetStatus,"Active",nrGRcurrent),1),"—")')
     _kpi(ws, r, 6, "Graduation eligible",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrCKgradElig="Yes"))')
     _kpi(ws, r, 8, "Flagged cadets",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrFLcount>0))')
-    _kpi(ws, r, 10, "Overdue retests",
-         'COUNTIF(nrES_RetStat,"OVERDUE")')
+    _kpi(ws, r, 10, "Retests overdue / undated",
+         'COUNTIF(nrES_RetStat,"OVERDUE")+COUNTIF(nrES_RetStat,"CHECK DATE")')
     r += 3
     _kpi(ws, r, 2, "Spelling interventions",
          'COUNTIF(nrSpellFlag,"INTERVENTION")')
@@ -172,8 +175,12 @@ def build_dashboard(wb):
     data = Reference(wb["ScoresGrid"], min_col=4, max_col=28,
                      min_row=CADET_LAST + 2, max_row=CADET_LAST + 2)
     cats = Reference(wb["ScoresGrid"], min_col=4, max_col=28, min_row=HDR_ROW)
-    ch.add_data(data, titles_from_data=False)
+    # the data is one ROW (the class-average row): without from_rows openpyxl
+    # emits one single-point series per column (25 of them), so the line has
+    # nothing to connect and every marker lands on category 1
+    ch.add_data(data, titles_from_data=False, from_rows=True)
     ch.set_categories(cats)
+    ch.legend = None
     ch.y_axis.scaling.min = 50
     ch.y_axis.scaling.max = 100
     ws.add_chart(ch, f"B{chart_anchor_row}")
@@ -186,8 +193,9 @@ def build_dashboard(wb):
     ch2.width = 22
     data2 = Reference(sp, min_col=4, max_col=15, min_row=sr + 1, max_row=sr + 1)
     cats2 = Reference(sp, min_col=4, max_col=15, min_row=HDR_ROW)
-    ch2.add_data(data2, titles_from_data=False)
+    ch2.add_data(data2, titles_from_data=False, from_rows=True)
     ch2.set_categories(cats2)
+    ch2.legend = None
     ch2.y_axis.scaling.min = 0
     ch2.y_axis.scaling.max = 100
     ws.add_chart(ch2, f"B{chart2_anchor}")
@@ -342,10 +350,13 @@ def build_cadetprofile(wb):
     r += 2
     section_bar(ws, r, 2, 10, "Academics (pass = 70 in each category)")
     r += 1
+    # NOTE: "Final exam" is the FINAL-EXAM average (sysGrades L = nrGRfinalExam),
+    # not the weighted composite (sysGrades N = nrGRfinal, shown as "Current
+    # grade" above) — this block is the 70-in-each-category test.
     for lab2, rng in (("Major avg", "nrGRmajavg"),
                       ("Minor avg", f"sysGrades!$J${FIRST}:$J${LAST}"),
                       ("Spelling avg", f"sysGrades!$K${FIRST}:$K${LAST}"),
-                      ("Final", "nrGRfinal")):
+                      ("Final exam avg", "nrGRfinalExam")):
         _profile_label(ws, r, 2, lab2, P + rng + ',"—")')
         r += 1
     r -= 4
@@ -390,13 +401,15 @@ def build_cadetprofile(wb):
     section_bar(ws, r, 2, 10, "Recent incidents & counseling (10 latest)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(nrIN_Date,nrIN_Dir,nrIN_Sev,'
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(TEXT(nrIN_Date,"mm/dd/yyyy"),'
+        'nrIN_Dir,nrIN_Sev,'
         'nrIN_Desc),nrIN_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
         'rngCadetPIDs,"")),FILTER(nrIN_Date,nrIN_PID=XLOOKUP(cfgProfileCadet,'
         'rngCadetNames,rngCadetPIDs,"")),-1),10),"none")'))
     r += 11
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(nrCO_Date,nrCO_Type,nrCO_Desc),'
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(TEXT(nrCO_Date,"mm/dd/yyyy"),'
+        'nrCO_Type,nrCO_Desc),'
         'nrCO_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
         'FILTER(nrCO_Date,nrCO_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
         'rngCadetPIDs,"")),-1),10),"none")'))
@@ -404,43 +417,49 @@ def build_cadetprofile(wb):
     section_bar(ws, r, 2, 10, "Attendance exceptions & makeup (10 latest)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(nrAT_Date,nrAT_Type,'
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(TEXT(nrAT_Date,"mm/dd/yyyy"),'
+        'nrAT_Type,'
         'Attendance!$H$6:$H$805,nrAT_Min,nrAT_Sess,nrAT_Excused),'
         'nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
         'FILTER(nrAT_Date,nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
         'rngCadetPIDs,"")),-1),10),"none")'))
     r += 11
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(Makeup!$C$6:$C$505,nrMK_Type,'
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(TEXT(Makeup!$C$6:$C$505,'
+        '"mm/dd/yyyy"),nrMK_Type,'
         'nrMK_Min,nrMK_Sess,nrMK_Credit),'
         'nrMK_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
         'FILTER(Makeup!$C$6:$C$505,nrMK_PID=XLOOKUP(cfgProfileCadet,'
         'rngCadetNames,rngCadetPIDs,"")),-1),10),"no makeup entries")'))
     r += 11
-    section_bar(ws, r, 2, 10, "OPEN missed time (event / date / type / "
-                              "reason / balance owed)")
+    section_bar(ws, r, 2, 10, "OPEN missed time — 6 most recent "
+                              "(event / date / type / reason / balance owed)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(FILTER(HSTACK(nrAT_ID,TEXT(nrAT_Date,"mm/dd"),'
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(nrAT_ID,TEXT(nrAT_Date,"mm/dd"),'
         'Attendance!$G$6:$G$805,Attendance!$H$6:$H$805,nrAT_Balance),'
         '(nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,""))*'
-        '(nrAT_Cleared="OPEN")),6),"all missed time cleared")'))
+        '(nrAT_Cleared="OPEN")),FILTER(nrAT_Date,'
+        '(nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,""))*'
+        '(nrAT_Cleared="OPEN")),-1),6),"all missed time cleared")'))
     r += 6
-    section_bar(ws, r, 2, 10, "OPEN memos (id / assigned / subject / due / "
-                              "status)")
+    section_bar(ws, r, 2, 10, "OPEN memos — 7 shown (id / assigned / subject "
+                              "/ due / status)")
     r += 1
+    # TAKE(...,7) matches the 7 rows reserved below and the B5:J86 print
+    # area: uncapped, an 8th open memo spilled off the bottom of the page
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(Memos!$B$6:$B$305,'
+        '=IFERROR(TAKE(FILTER(HSTACK(Memos!$B$6:$B$305,'
         'TEXT(nrME_Assigned,"mm/dd"),nrME_Subject,TEXT(nrME_Due,"mm/dd"),'
         'nrME_Status),(nrME_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
-        'rngCadetPIDs,""))*(nrME_Cadet<>"")*(nrME_Received="")),'
+        'rngCadetPIDs,""))*(nrME_Cadet<>"")*(nrME_Received="")),7),'
         '"none outstanding")'))
     r += 6
     col_widths(ws, {"A": 3, "B": 24, "C": 14, "D": 14, "E": 16, "F": 14,
                     "G": 14, "H": 18, "I": 14, "J": 14})
     page_setup_portrait(ws, print_area=f"B{HDR_ROW}:J{r}")
     protect(ws)
-    unlock_range(ws, f"C{HDR_ROW}:E{HDR_ROW}")
+    unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")   # C5 is the only picker
     sheet_note(ws, "Pick a cadet, print (Print Center button or File > "
                    "Print). Everything on one page for agency calls and "
                    "review boards.")
@@ -476,10 +495,13 @@ def build_transcript(wb):
     r += 2
     section_bar(ws, r, 2, 10, "Category averages (70 required in each)")
     r += 1
+    # the four CATEGORY averages the 70-in-each rule is tested against;
+    # the Final Exam row reads sysGrades L (final-exam average), NOT the
+    # weighted composite in N which is already printed as "Final grade"
     for lab2, rng, w in (("Major (40%)", "nrGRmajavg", None),
                          ("Minor (30%)", f"sysGrades!$J${FIRST}:$J${LAST}", None),
                          ("Spelling (10%)", f"sysGrades!$K${FIRST}:$K${LAST}", None),
-                         ("Final Exam (20%)", "nrGRfinal", None)):
+                         ("Final Exam (20%)", "nrGRfinalExam", None)):
         _profile_label(ws, r, 2, lab2, P + rng + ',"—")')
         r += 1
     r += 1
@@ -487,7 +509,8 @@ def build_transcript(wb):
     r += 1
     ws.cell(row=r, column=2, value=(
         '=IFERROR(FILTER(HSTACK(ExamScores!$G$%d:$G$%d,ExamScores!$H$%d:$H$%d,'
-        'ExamScores!$K$%d:$K$%d,ExamScores!$M$%d:$M$%d,ExamScores!$S$%d:$S$%d),'
+        'ExamScores!$K$%d:$K$%d,ExamScores!$M$%d:$M$%d,'
+        'TEXT(ExamScores!$S$%d:$S$%d,"mm/dd/yyyy")),'
         '(nrES_PID=%srngCadetPIDs,""))*(nrES_Final="Yes")*(nrES_Rec<>"")),"—")'
         % (FIRST, FIRST + 1499, FIRST, FIRST + 1499, FIRST, FIRST + 1499,
            FIRST, FIRST + 1499, FIRST, FIRST + 1499, P)))
@@ -548,7 +571,7 @@ def build_transcript(wb):
                     "G": 16, "H": 14, "I": 12, "J": 12})
     page_setup_portrait(ws, print_area=f"B{HDR_ROW}:J{r}")
     protect(ws)
-    unlock_range(ws, f"C{HDR_ROW}:E{HDR_ROW}")
+    unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")   # C5 is the only picker
     sheet_note(ws, "The end-of-academy deliverable per cadet — print one per "
                    "cadet for the agency packet.")
     return ws
@@ -581,13 +604,22 @@ def build_gradchecklist(wb):
     }
     fill_rows(ws, FIRST, LAST, cols)
     cf_yes_no(ws, f"E{FIRST}:O{LAST}")
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 18, "P": 44})
+    # anything that is not a plain "Yes" is a block — "Pending" / "Not taken"
+    # (final PT never assessed, rubric never configured) must read as red,
+    # not as an uncoloured neutral value on the graduation gate
+    cf_formula(ws, f"E{FIRST}:O{LAST}",
+               f'AND(E{FIRST}<>"",E{FIRST}<>"Yes")', FILL_WARNBG)
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 18, "P": 54})
     for cl in "EFGHIJKLMNO":
         ws.column_dimensions[cl].width = 10
     page_setup_landscape(ws, print_area=f"B{HDR_ROW}:P{LAST}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
-    sheet_note(ws, "The final gate before the ceremony — every column must "
-                   "be Yes.")
+    sheet_note(ws, "The final gate before the ceremony — columns Academic "
+                   "through Certs must ALL read Yes and Blocking Issues must "
+                   "be empty. Anything else blocks and is spelled out in "
+                   "Blocking Issues: 'No', 'Pending' (Final PT points rubric "
+                   "not entered on Settings) and 'Not taken' (final PT never "
+                   "assessed) are all blocks, not neutral values.")
     protect(ws)
     return ws
 
@@ -641,7 +673,12 @@ def build_audit(wb):
     hdr2 = r
     header_row(ws, ["Check", "Value", "Target", "Status", "Detail"], row=r)
     r += 1
-    n_checks = 18
+    # driven off the engine's own list — a hard-coded count meant a check
+    # added to sysAudit was counted by the Dashboard "Audit checks failing"
+    # tile but never printed on the packet handed to TCOLE, so the tile went
+    # red with no visible cause
+    from sheets_engine import AUDIT_CHECKS
+    n_checks = len(AUDIT_CHECKS)
     for i in range(n_checks):
         sr = FIRST + i
         ws.cell(row=r, column=2, value=f"=sysAudit!$B${sr}").font = F_BODY
@@ -664,7 +701,8 @@ def build_audit(wb):
         "exam security, student enrollment standards (L2/L3, medical), "
         "attendance records.",
         "Academy Policy (May 2026 manual): weighted grading (40/30/10/20), "
-        "70-in-each-category rule, weekly spelling tests + 75% intervention, "
+        "70-in-each-category rule, 12 spelling tests across the academy + "
+        "75% intervention, "
         "40 writing assignments, PT program and caps, awards.",
     ):
         c = ws.cell(row=r, column=2, value="• " + txt)
@@ -715,10 +753,10 @@ def build_audit(wb):
     r += 1
     doc_first = r
     doc_last = r + CADETS - 1
-    cols = {
-        "B": ('IF(Cadets!$B{rr}="","",Cadets!$F{rr})', "fx"),
-        "I": ('IF($B{r}="","",IF(COUNTIF(C{r}:H{r},"Yes")=6,"Yes","No"))', "fx"),
-    }
+    # (no `cols` dict here: the grid is written cell-by-cell below. A dead
+    # copy used to sit at this spot still describing the PRE-shift layout —
+    # AllDocs in column I counting C:H = 6 — which is exactly the stale
+    # column-letter bug this workbook keeps regressing on.)
     for rr in range(doc_first, doc_last + 1):
         src = FIRST + (rr - doc_first)
         ws.cell(row=rr, column=2,
@@ -1075,8 +1113,11 @@ def build_signin(wb):
     for i in range(CADETS):
         rr = first + i
         src = FIRST + i
+        # gate the row number on the NAME (C), not merely on enrolment:
+        # a separated cadet used to get a numbered but BLANK signature line
+        # on the printed roster. COUNTIF keeps the numbering contiguous.
         ws.cell(row=rr, column=2, value=(
-            f'=IF(Cadets!$B{src}="","",ROW()-{first-1})')).font = F_CALC
+            f'=IF(C{rr}="","",COUNTIF($C${first}:C{rr},"?*"))')).font = F_CALC
         ws.cell(row=rr, column=3, value=(
             f'=IF(Cadets!$B{src}="","",IF(Cadets!$I{src}<>"Active","",'
             f'Cadets!$F{src}))')).font = F_BODY
@@ -1253,7 +1294,10 @@ def build_spellingprint(wb):
     col_widths(ws, {"A": 3, "B": 5, "C": 30, "D": 4, "E": 5, "F": 30})
     page_setup_portrait(ws, print_area=f"B{HDR_ROW+2}:F{r}")
     protect(ws)
-    unlock_range(ws, f"C{HDR_ROW}:E{HDR_ROW}")
+    # two real pickers here (C5 = test #, E5 = Test/Key mode); D5 holds the
+    # "Mode:" label and stays locked so it cannot be erased
+    unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
+    unlock_range(ws, f"E{HDR_ROW}:E{HDR_ROW}")
     sheet_note(ws, "Pick test # and Test/Key mode; print. Words come from "
                    "SpellingMaster.")
     return ws
@@ -1373,8 +1417,14 @@ def build_emailpreview(wb):
     header_row(ws, ["Date", "Cadet", "Type", "Severity/Kind", "Description"],
                row=r)
     r += 1
-    since = ('LET(cutoff,IFERROR(MAXIFS(nrELdate,nrELagency,'
-             'cfgPreviewAgency),0),')
+    # INT() + >= below: EmailLog!B is stamped with Now (date AND time) while
+    # every log dates its rows date-only, so a plain > against the raw
+    # timestamp dropped anything dated on a previous run's calendar day —
+    # permanently, from this preview and from the draft. The VBA sender
+    # (modAgencyEmail.LastEmailDate) applies the identical Int()/>= rule;
+    # these two must stay in lockstep or the preview stops matching the draft.
+    since = ('LET(cutoff,INT(IFERROR(MAXIFS(nrELdate,nrELagency,'
+             'cfgPreviewAgency),0)),')
     # only rows YOU marked for agency reporting are included (Incidents
     # "Report to Agency?", Counseling "Agency Notified?", Memos "Report to
     # Agency?") — everything else stays an academy teaching moment
@@ -1382,19 +1432,19 @@ def build_emailpreview(wb):
         '=IFERROR(' + since +
         'inc,FILTER(HSTACK(nrIN_Date,IFERROR(XLOOKUP(nrIN_PID,rngCadetPIDs,'
         'rngCadetNames),""),IF(SEQUENCE(ROWS(nrIN_Date)),"Incident"),'
-        'nrIN_Sev,nrIN_Desc),(nrIN_Date>cutoff)*(nrIN_Report="Yes")*'
+        'nrIN_Sev,nrIN_Desc),(nrIN_Date>=cutoff)*(nrIN_Report="Yes")*'
         'IFERROR((XLOOKUP(nrIN_PID,rngCadetPIDs,nrCadetAgencyID)='
         'cfgPreviewAgency)+(cfgPreviewAgency=cfgHomeAgency),0),'
         '{"","","","",""}),'
         'cns,FILTER(HSTACK(nrCO_Date,IFERROR(XLOOKUP(nrCO_PID,rngCadetPIDs,'
         'rngCadetNames),""),IF(SEQUENCE(ROWS(nrCO_Date)),"Counseling"),'
-        'nrCO_Type,nrCO_Desc),(nrCO_Date>cutoff)*(nrCO_Report="Yes")*'
+        'nrCO_Type,nrCO_Desc),(nrCO_Date>=cutoff)*(nrCO_Report="Yes")*'
         'IFERROR((XLOOKUP(nrCO_PID,rngCadetPIDs,nrCadetAgencyID)='
         'cfgPreviewAgency)+(cfgPreviewAgency=cfgHomeAgency),0),'
         '{"","","","",""}),'
         'mem,FILTER(HSTACK(nrME_Assigned,IFERROR(XLOOKUP(nrME_PID,'
         'rngCadetPIDs,rngCadetNames),""),IF(SEQUENCE(ROWS(nrME_Assigned)),'
-        '"Memo"),nrME_Status,nrME_Subject),(nrME_Assigned>cutoff)*'
+        '"Memo"),nrME_Status,nrME_Subject),(nrME_Assigned>=cutoff)*'
         '(nrME_Report="Yes")*IFERROR((XLOOKUP(nrME_PID,rngCadetPIDs,'
         'nrCadetAgencyID)=cfgPreviewAgency)+(cfgPreviewAgency='
         'cfgHomeAgency),0),{"","","","",""}),'
@@ -1405,9 +1455,10 @@ def build_emailpreview(wb):
     r += 16
     col_widths(ws, {"A": 3, "B": 12, "C": 24, "D": 11, "E": 11, "F": 16,
                     "G": 12, "H": 20, "I": 18, "J": 60})
-    sheet_note(ws, "Preview of exactly what the Outlook draft will contain. "
-                   "Buttons on Print Center / Dashboard build the drafts — "
-                   "for review, never auto-sent.")
+    sheet_note(ws, "Preview of what the Outlook draft will contain — the "
+                   "same day-granular 'since last email' cutoff the sender "
+                   "uses. The buttons on THIS sheet and on the Dashboard "
+                   "build the drafts — for review, never auto-sent.")
     protect(ws)
     unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
     return ws
@@ -1486,14 +1537,20 @@ def build_printcenter(wb):
         r += 1
     r += 1
     c = ws.cell(row=r, column=2, value=(
-        "Buttons are added by the VBA install (see docs/Setup). Each button "
-        "prints its sheet's defined print area to the default printer; "
-        "Ctrl+P on the sheet does the same thing manually."))
+        "Buttons are added by the BPOC VBA install — run "
+        "tools/Install-BPOC-VBA.ps1 (see docs/BPOC-Coordinator-Guide.md, "
+        "'Rebuilding from source'). Each button prints its sheet's defined "
+        "print area to the default printer; Ctrl+P on the sheet does the "
+        "same thing manually."))
     c.font = F_SMALL
     c.alignment = A_LEFT_WRAP
     ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=6)
     ws.row_dimensions[r].height = 30
-    col_widths(ws, {"A": 3, "B": 26, "C": 52, "D": 16, "E": 20})
+    # F blank gutter; G+H carry the install script's button strip, one
+    # button per table row (rows 8..22) — they need real width or the
+    # captions are clipped to a few characters
+    col_widths(ws, {"A": 3, "B": 26, "C": 52, "D": 16, "E": 20,
+                    "F": 3, "G": 20, "H": 20})
     return ws
 
 
@@ -1587,7 +1644,8 @@ def build_inputguide(wb):
     col_widths(ws, {"A": 3, "B": 18, "C": 90})
     sheet_note(ws, "Only pages that take input are listed — gray sys* tabs "
                    "are the locked calculation engine; green tabs are "
-                   "outputs. Blue cells = type here, gray = calculated.")
+                   "outputs. White boxes with a blue border are yours to type "
+                   "(what you type shows in blue); gray cells calculate.")
     return ws
 
 
@@ -1663,5 +1721,8 @@ def build_all_outputs(wb):
     build_inputguide(wb)
     build_dashboard(wb)     # after ScoresGrid/Spelling exist (charts)
     gray_separated_rows(wb)
+    # NamedRanges BEFORE add_home_links: created after, it was the only
+    # visible sheet with no '◄ Dashboard' link — and it is protected with
+    # nothing unlocked, so there was no way back off it at all.
+    build_namedranges(wb)   # captures every name defined above
     add_home_links(wb)
-    build_namedranges(wb)   # last — captures all names

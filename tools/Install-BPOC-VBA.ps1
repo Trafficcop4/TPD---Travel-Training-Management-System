@@ -43,7 +43,10 @@ function Add-Button($ws, $anchorCell, $widthCells, $caption, $macro) {
     $top    = $anchor.Top + 2
     $width  = 0
     for ($i = 0; $i -lt $widthCells; $i++) { $width += $anchor.Offset(0, $i).Width }
-    $shape = $ws.Shapes.AddFormControl($btnCtrl, $left, $top, $width - 4, 22)
+    # never narrower than the caption needs: anchors on default-width columns
+    # produced ~44pt buttons whose text was clipped to a few characters
+    $w = [Math]::Max($width - 4, 130)
+    $shape = $ws.Shapes.AddFormControl($btnCtrl, $left, $top, $w, 22)
     $shape.Name = "btn_$macro"
     $shape.OnAction = $macro
     $shape.TextFrame.Characters().Text = $caption
@@ -132,21 +135,26 @@ End Sub
     $pc = $wb.Worksheets.Item('PrintCenter')
     $pc.Unprotect($pw) 2>$null
     Remove-OldButtons $pc
-    Add-Button $pc 'G6'  1 'Sign-In Sheet'     'modPrint.btnPrintSignIn'
-    Add-Button $pc 'I6'  1 'Sign-In Week'      'modPrint.btnPrintSignInWeek'
-    Add-Button $pc 'K6'  1 'Academy Book'      'modPrint.btnPrintSignInAcademy'
-    Add-Button $pc 'G8'  1 'Eval Stack'        'modPrint.btnPrintEvals'
-    Add-Button $pc 'G10' 1 'Spelling Test/Key' 'modPrint.btnPrintSpelling'
-    Add-Button $pc 'G12' 1 'Writing Handout'   'modPrint.btnPrintWriting'
-    Add-Button $pc 'G14' 1 'Cadet Profile'     'modPrint.btnPrintProfile'
-    Add-Button $pc 'G16' 1 'Transcript(s)'     'modPrint.btnPrintTranscript'
-    Add-Button $pc 'G18' 1 'Ranking'           'modPrint.btnPrintRanking'
-    Add-Button $pc 'G20' 1 'Grad Checklist'    'modPrint.btnPrintGradCheck'
-    Add-Button $pc 'G22' 1 'Audit Packet'      'modPrint.btnPrintAudit'
-    Add-Button $pc 'G24' 1 'Chapter Packet'    'modPrint.btnPrintChapterPacket'
-    Add-Button $pc 'G26' 1 'Exam Grade Sheet'  'modPrint.btnPrintGradeSheet'
-    Add-Button $pc 'G28' 1 'Addendum Report'   'modPrint.btnPrintAddendum'
-    Add-Button $pc 'G30' 1 'Schedule'          'modPrint.btnPrintSchedule'
+    # ONE button per table row. The printables table is rows 8..22 (one row
+    # each); the old every-other-row grid starting at row 6 put 14 of the 15
+    # buttons beside a row naming a different macro, and the last four at or
+    # below the end of the sheet. Keep this list in the same order as `rows`
+    # in build_printcenter (build/bpoc/sheets_outputs.py).
+    Add-Button $pc 'G8'  2 'Sign-In Sheet'     'modPrint.btnPrintSignIn'
+    Add-Button $pc 'G9'  2 'Sign-In Week'      'modPrint.btnPrintSignInWeek'
+    Add-Button $pc 'G10' 2 'Academy Book'      'modPrint.btnPrintSignInAcademy'
+    Add-Button $pc 'G11' 2 'Eval Stack'        'modPrint.btnPrintEvals'
+    Add-Button $pc 'G12' 2 'Spelling Test/Key' 'modPrint.btnPrintSpelling'
+    Add-Button $pc 'G13' 2 'Writing Handout'   'modPrint.btnPrintWriting'
+    Add-Button $pc 'G14' 2 'Cadet Profile'     'modPrint.btnPrintProfile'
+    Add-Button $pc 'G15' 2 'Transcript(s)'     'modPrint.btnPrintTranscript'
+    Add-Button $pc 'G16' 2 'Ranking'           'modPrint.btnPrintRanking'
+    Add-Button $pc 'G17' 2 'Grad Checklist'    'modPrint.btnPrintGradCheck'
+    Add-Button $pc 'G18' 2 'Audit Packet'      'modPrint.btnPrintAudit'
+    Add-Button $pc 'G19' 2 'Chapter Packet'    'modPrint.btnPrintChapterPacket'
+    Add-Button $pc 'G20' 2 'Exam Grade Sheet'  'modPrint.btnPrintGradeSheet'
+    Add-Button $pc 'G21' 2 'Addendum Report'   'modPrint.btnPrintAddendum'
+    Add-Button $pc 'G22' 2 'Schedule'          'modPrint.btnPrintSchedule'
 
     $dash = $wb.Worksheets.Item('Dashboard')
     Remove-OldButtons $dash
@@ -160,8 +168,8 @@ End Sub
 
     $sh = $wb.Worksheets.Item('StartHere')
     Remove-OldButtons $sh
-    Add-Button $sh 'D16' 1 'New Academy Reset' 'modNewAcademy.NewAcademyReset'
-    Add-Button $sh 'F16' 1 'Startup Review'    'modNewAcademy.AcademyStartupReview'
+    Add-Button $sh 'D16' 2 'New Academy Reset' 'modNewAcademy.NewAcademyReset'
+    Add-Button $sh 'F16' 2 'Startup Review'    'modNewAcademy.AcademyStartupReview'
 
     $out = Join-Path $workbooks 'BPOC_Academy_Management_V6.xlsm'
     $wb.SaveAs($out, $xlsmFmt)

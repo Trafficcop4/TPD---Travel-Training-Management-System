@@ -126,11 +126,20 @@ def cf_formula(ws, rng, formula, fill):
 
 
 def protect(ws, locked=True):
+    """Lock a sheet but leave every cell SELECTABLE.
+
+    The OOXML selectLockedCells / selectUnlockedCells flags are inverted:
+    True means "the user may NOT select" (Excel EnableSelection =
+    xlNoSelection). Setting both to True froze all 22 protected sheets so
+    the printable picker cells (C5) and the B1 home links could not be
+    clicked. openpyxl already defaults both to False, but they are written
+    explicitly here so the intent cannot be misread again.
+    """
     if locked:
         ws.protection.sheet = True
         ws.protection.password = PROTECT_PW
-        ws.protection.selectLockedCells = True
-        ws.protection.selectUnlockedCells = True
+        ws.protection.selectLockedCells = False
+        ws.protection.selectUnlockedCells = False
 
 
 def unlock_range(ws, rng):

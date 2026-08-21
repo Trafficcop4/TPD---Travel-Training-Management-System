@@ -41,6 +41,21 @@ def build_cadets(wb):
         ws[f"L{r}"].number_format = DATE
     dv_list(ws, "=rngAgencyIDs", [f"G{first}:G{last}"])
     dv_list(ws, "=lstCadetStatus", [f"I{first}:I{last}"])
+    # Two rows sharing a PID (a filled-down roster row, a mistyped digit)
+    # merge both cadets' records in BOTH directions: every engine sheet is
+    # mirrored by row off Cadets!B and then keyed on that PID, so one cadet
+    # inherits the other's absences and gates while the other inherits their
+    # grades and class rank — onto the printed transcript. A repeated
+    # computed NAME does the same thing, because every log sheet resolves
+    # PID by MATCH on the name and MATCH returns the first hit.
+    # Added BEFORE the not-Active gray-out rule in gray_separated_rows() so
+    # this warning takes CF priority over the gray fill.
+    cf_formula(ws, f"B{first}:B{last}",
+               f'AND($B{first}<>"",COUNTIF(rngCadetPIDs,$B{first})>1)',
+               FILL_WARNBG)
+    cf_formula(ws, f"F{first}:F{last}",
+               f'AND($F{first}<>"",COUNTIF(rngCadetNames,$F{first})>1)',
+               FILL_WARNBG)
     define(wb, "rngCadetPIDs", "Cadets", f"$B${first}:$B${last}")
     define(wb, "rngCadetNames", "Cadets", f"$F${first}:$F${last}")
     define(wb, "nrCadetAgency", "Cadets", f"$H${first}:$H${last}")
@@ -50,7 +65,9 @@ def build_cadets(wb):
                     "G": 10, "H": 22, "I": 11, "J": 6, "K": 12, "L": 12,
                     "M": 26})
     sheet_note(ws, "PID never changes once set — every other sheet keys off "
-                   "it. Capacity 50 cadets.")
+                   "it. Capacity 50 cadets. A red PID (or red Cadet Name) "
+                   "means two rows share it: fix it immediately, both "
+                   "cadets' records are being merged.")
     return ws
 
 
@@ -62,7 +79,8 @@ def build_examscores(wb):
                     "Exam Name", "Type", "Seq", "Passing", "Attempt #",
                     "Raw Score", "Recorded", "AttemptPass", "Pass?",
                     "FinalAttempt?", "RetakeReq?", "DismissReview?", "Date",
-                    "Retest Due By", "Retest Status", "Entered By", "Notes"])
+                    "Retest Due By", "Retest Status", "Entered By", "Notes",
+                    "Row Check"])
     first, last = DATA_ROW, DATA_ROW + ROWS_EXAMSCORES - 1
     fill_rows(ws, first, last, {
         "B": ('IF($C{r}="","",$D{r}&"-"&$F{r}&"-"&$K{r})', "fx"),
@@ -75,31 +93,66 @@ def build_examscores(wb):
         "I": ('IF($F{r}="","",IFERROR(INDEX(rngEPseq,MATCH($F{r},rngEPcode,0)),""))', "fx"),
         "J": ('IF($F{r}="","",IFERROR(INDEX(rngEPpass,MATCH($F{r},rngEPcode,0)),cfgPassingScore))', "fx"),
         "K": (None, "in"), "L": (None, "in"),
-        "M": ('IF($C{r}="","",IF($L{r}="","",IF($K{r}=1,'
+        # a passed retake records at the cap — MAX(exam's own Passing, the
+        # global 70) so an exam that passes above 70 is not capped below its
+        # own passing mark and then reported as a fail. A raw score that is
+        # not a number passes straight through (text sorts ABOVE any number,
+        # so every >= test below would otherwise read as a pass); Row Check
+        # flags the row instead.
+        "M": ('IF($C{r}="","",IF($L{r}="","",IF(NOT(ISNUMBER($L{r})),$L{r},'
+              'IF($K{r}=1,'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2)>0,"",$L{r}),'
+              'IF($L{r}>=$J{r},MAX($J{r},cfgRetakeRecordedCap),'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)=0,$L{r},'
-              'IF($L{r}>=$J{r},cfgRetakeRecordedCap,'
-              'SUMIFS(nrES_Raw,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1))))))', "fx"),
-        "N": ('IF($C{r}="","",IF($L{r}="","",IF($L{r}>=$J{r},"Yes","No")))', "fx"),
-        "O": ('IF($C{r}="","",IF($M{r}="","",IF($M{r}>=$J{r},"Yes","No")))', "fx"),
+              'SUMIFS(nrES_Raw,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)))))))', "fx"),
+        # ISNUMBER guards: without them 'absent' (or a CSV-pasted text "85")
+        # reported Pass? = Yes in green while the printed grade sheet, whose
+        # SUMIFS coerces text to 0, printed the same record as 0 / FAIL.
+        "N": ('IF($C{r}="","",IF($L{r}="","",IF(NOT(ISNUMBER($L{r})),'
+              '"(not a score)",IF($L{r}>=$J{r},"Yes","No"))))', "fx"),
+        "O": ('IF($C{r}="","",IF($M{r}="","",IF(NOT(ISNUMBER($M{r})),'
+              '"(not a score)",IF($M{r}>=$J{r},"Yes","No"))))', "fx"),
         "P": ('IF($C{r}="","",IF($K{r}="","",IF(COUNTIFS(nrES_PID,$D{r},'
               'nrES_Code,$F{r},nrES_Att,">"&$K{r})=0,"Yes","No")))', "fx"),
-        "Q": ('IF($C{r}="","",IF($L{r}="","",IF(AND($K{r}=1,$L{r}<$J{r},'
+        "Q": ('IF($C{r}="","",IF($L{r}="","",IF(AND($K{r}=1,ISNUMBER($L{r}),'
+              '$L{r}<$J{r},'
               'COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2)=0),"Yes","No")))', "fx"),
-        "R": ('IF($C{r}="","",IF($L{r}="","",IF(AND($K{r}=2,$L{r}<$J{r},'
-              'COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)>0),"Yes","No")))', "fx"),
+        # a FAILED second attempt always reaches dismissal review. Requiring
+        # an attempt-1 row to exist meant a missing attempt-1 flipped the
+        # academic-eligibility gate from No to Yes for a cadet who failed the
+        # retest; the missing attempt-1 is reported by Row Check instead.
+        "R": ('IF($C{r}="","",IF($L{r}="","",IF(AND($K{r}=2,ISNUMBER($L{r}),'
+              '$L{r}<$J{r}),"Yes","No")))', "fx"),
         "S": (None, "in"),
+        # match mode 1 = exact-or-next-larger, so an exam dated on a weekend,
+        # a holiday or any non-class day starts the 5-class-day clock on the
+        # next class day instead of giving up. Only a date past the LAST
+        # class day has no answer, and that says so out loud.
         "T": ('IF($Q{r}<>"Yes","",IF($S{r}="","(enter date)",'
-              'LET(dn,IFERROR(XLOOKUP($S{r},nrCDdate,nrCDnum),""),'
-              'IF(dn="","(not a class day)",'
-              'IFERROR(XLOOKUP(dn+cfgRetestClassDays,nrCDnum,nrCDdate),"")))))', "fx"),
+              'LET(dn,XLOOKUP($S{r},nrCDdate,nrCDnum,"",1),'
+              'IF(dn="","(after last class day)",'
+              'XLOOKUP(dn+cfgRetestClassDays,nrCDnum,nrCDdate,'
+              '"(after last class day)")))))', "fx"),
         # keyed off the failed attempt-1 itself (not Q, which flips to "No"
-        # once attempt 2 exists) so completed retests display "Retested"
-        "U": ('IF(OR($C{r}="",$L{r}="",$K{r}<>1,$L{r}>=$J{r}),"",'
+        # once attempt 2 exists) so completed retests display "Retested".
+        # A due date that could not be computed reads CHECK DATE, never the
+        # reassuring "Pending" that used to hide it from every flag and the
+        # audit sheet forever.
+        "U": ('IF(OR($C{r}="",$L{r}="",$K{r}<>1,NOT(ISNUMBER($L{r})),'
+              '$L{r}>=$J{r}),"",'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
-              'nrES_Att,2)>0,"Retested",IF(OR($T{r}="",NOT(ISNUMBER($T{r}))),"Pending",'
+              'nrES_Att,2)>0,"Retested",IF(NOT(ISNUMBER($T{r})),"CHECK DATE",'
               'IF(TODAY()>$T{r},"OVERDUE","Due "&TEXT($T{r},"mm/dd")))))', "fx"),
         "V": (None, "in"), "W": (None, "in"),
+        # row integrity: every one of these silently distorts a category
+        # average or a policy deadline, and none of them was visible before
+        "X": ('IF($C{r}="","",'
+              'IF(AND($L{r}<>"",NOT(ISNUMBER($L{r}))),"RAW SCORE NOT A NUMBER",'
+              'IF(AND(ISNUMBER($L{r}),OR($L{r}<0,$L{r}>100)),'
+              '"RAW SCORE OUT OF RANGE",'
+              'IF(COUNTIF(nrES_RecID,$B{r})>1,"DUPLICATE RECORD",'
+              'IF(AND($K{r}=2,COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
+              'nrES_Att,1)=0),"ATTEMPT 2 WITHOUT ATTEMPT 1","OK")))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"S{r}"].number_format = DATE
@@ -108,7 +161,12 @@ def build_examscores(wb):
     dv_list(ws, "=rngEPcode", [f"F{first}:F{last}"])
     dv_list(ws, "=lstAttemptNum", [f"K{first}:K{last}"])
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="OVERDUE"', FILL_WARNBG)
+    cf_formula(ws, f"U{first}:U{last}", f'$U{first}="CHECK DATE"', FILL_WARNBG)
+    cf_formula(ws, f"X{first}:X{last}",
+               f'AND($X{first}<>"",$X{first}<>"OK")', FILL_WARNBG)
     cf_yes_no(ws, f"O{first}:O{last}")
+    define(wb, "nrES_RecID", "ExamScores", f"$B${first}:$B${last}")
+    define(wb, "nrES_RowCheck", "ExamScores", f"$X${first}:$X${last}")
     define(wb, "nrES_PID", "ExamScores", f"$D${first}:$D${last}")
     define(wb, "nrES_Code", "ExamScores", f"$F${first}:$F${last}")
     define(wb, "nrES_Type", "ExamScores", f"$H${first}:$H${last}")
@@ -125,10 +183,14 @@ def build_examscores(wb):
     col_widths(ws, {"A": 3, "B": 16, "C": 22, "D": 9, "E": 18, "F": 10,
                     "G": 34, "H": 9, "I": 6, "J": 9, "K": 9, "L": 9, "M": 10,
                     "N": 11, "O": 8, "P": 12, "Q": 11, "R": 13, "S": 11,
-                    "T": 12, "U": 12, "V": 14, "W": 26})
+                    "T": 12, "U": 12, "V": 14, "W": 26, "X": 26})
     sheet_note(ws, "One row per attempt. Attempt 2 of a failed exam records "
                    "at the 70 cap when passed (policy 300.5). Retest Due By "
-                   "= 5 class days after the failed attempt's date.")
+                   "= 5 class days after the failed attempt's date (a date "
+                   "that is not a class day rolls to the next one). Watch "
+                   "Row Check: a score that is not a number, a duplicate "
+                   "RecordID or an attempt 2 with no attempt 1 on file each "
+                   "distort the category average.")
     return ws
 
 
@@ -204,11 +266,21 @@ def build_attendance(wb):
               'IF(AND($G{r}="PT Modified",$L{r}="Received"),"No","Yes")))', "fx"),
         "O": (None, "in"),
         # per-event makeup reconciliation: credited makeup rows linked to
-        # this EventID clear the event when the balance reaches zero
-        "P": ('IF(OR($B{r}="",N($I{r})=0),"",SUMIFS(nrMK_Min,nrMK_Link,$B{r},'
-              'nrMK_Credit,"Yes"))', "fx"),
-        "Q": ('IF(OR($B{r}="",N($J{r})=0),"",SUMIFS(nrMK_Sess,nrMK_Link,$B{r},'
-              'nrMK_Credit,"Yes"))', "fx"),
+        # this EventID clear the event when the balance reaches zero.
+        # Same criteria as the sysAttendance roll-up (PID + credit + type) so
+        # the CLEARED banner and 'Cl Owed'/'PT Net' can never disagree —
+        # without the PID filter another cadet's makeup cleared this event.
+        # MIN(...) caps the credit at THIS event's own duration: makeup is
+        # minute-for-minute (policy 400.5), so surplus minutes booked against
+        # one event must never spill over and pay off a different absence.
+        # sysAttendance rolls these capped per-event figures up, so the cap
+        # is enforced for the graduation gate too, not just for the banner.
+        "P": ('IF(OR($B{r}="",N($I{r})=0),"",MIN(N($I{r}),'
+              'SUMIFS(nrMK_Min,nrMK_Link,$B{r},'
+              'nrMK_Credit,"Yes",nrMK_PID,$E{r},nrMK_Type,"Classroom")))', "fx"),
+        "Q": ('IF(OR($B{r}="",N($J{r})=0),"",MIN(N($J{r}),'
+              'SUMIFS(nrMK_Sess,nrMK_Link,$B{r},'
+              'nrMK_Credit,"Yes",nrMK_PID,$E{r},nrMK_Type,"PT")))', "fx"),
         # balance unit follows the event's own Is PT? flag, not
         # whichever of minutes/sessions happens to be filled first
         "R": ('IF(OR($B{r}="",$N{r}<>"Yes"),"",'
@@ -216,7 +288,8 @@ def build_attendance(wb):
               'IF(N($I{r})>0,N($I{r})-N($P{r}),"")))', "fx"),
         "S": ('IF(OR($B{r}="",$R{r}=""),"",'
               'IF($R{r}<=0,"CLEARED "&IFERROR(TEXT(MAXIFS(nrMK_Date,'
-              'nrMK_Link,$B{r},nrMK_Credit,"Yes"),"mm/dd"),""),"OPEN"))', "fx"),
+              'nrMK_Link,$B{r},nrMK_Credit,"Yes",nrMK_PID,$E{r}),"mm/dd"),""),'
+              '"OPEN"))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"C{r}"].number_format = DATE
@@ -229,6 +302,11 @@ def build_attendance(wb):
     dv_list(ws, "=lstDocumentation", [f"L{first}:L{last}"])
     dv_list(ws, "=lstExcused", [f"M{first}:M{last}"])
     define(wb, "nrAT_ID", "Attendance", f"$B${first}:$B${last}")
+    # capped per-event makeup credit — sysAttendance sums THESE (not the raw
+    # Makeup rows) so an over-credited or unlinked makeup cannot inflate the
+    # roll-up the graduation gate reads
+    define(wb, "nrAT_MadeUpMin", "Attendance", f"$P${first}:$P${last}")
+    define(wb, "nrAT_MadeUpSess", "Attendance", f"$Q${first}:$Q${last}")
     define(wb, "nrAT_Balance", "Attendance", f"$R${first}:$R${last}")
     define(wb, "nrAT_Cleared", "Attendance", f"$S${first}:$S${last}")
     define(wb, "nrAT_Date", "Attendance", f"$C${first}:$C${last}")
@@ -256,7 +334,8 @@ def build_makeup(wb):
     ws.sheet_view.showGridLines = False
     header_row(ws, ["MakeupID", "Date", "Cadet Name", "PID", "Type",
                     "Minutes Credit", "Sessions Credit", "Linked Event",
-                    "Doc Status", "Hold?", "Credit Applies?", "Notes"])
+                    "Doc Status", "Hold?", "Credit Applies?", "Notes",
+                    "Row Check"])
     first, last = DATA_ROW, DATA_ROW + ROWS_MAKEUP - 1
     fill_rows(ws, first, last, {
         "B": ('IF($D{r}="","","M"&TEXT(ROW()-%d,"000"))' % HDR_ROW, "fx"),
@@ -264,8 +343,23 @@ def build_makeup(wb):
         "E": ('IF($D{r}="","",IFERROR(INDEX(rngCadetPIDs,MATCH($D{r},rngCadetNames,0)),"?"))', "fx"),
         "F": (None, "in"), "G": (None, "in"), "H": (None, "in"),
         "I": (None, "in"), "J": (None, "in"), "K": (None, "in"),
-        "L": ('IF($D{r}="","",IF(AND($J{r}="Received",$K{r}<>"Yes"),"Yes","No"))', "fx"),
+        # credit now also requires a SOUND row (N): the wrong cadet's event,
+        # a dangling EventID, a type nothing credits, or minutes booked
+        # against a session-denominated PT event all withhold credit instead
+        # of silently clearing someone else's absence.
+        "L": ('IF($D{r}="","",IF(AND($J{r}="Received",$K{r}<>"Yes",'
+              'LEFT($N{r},2)="OK"),"Yes","No"))', "fx"),
         "M": (None, "in"),
+        # a blank Linked Event is NOT ok: minute-for-minute reconciliation
+        # and a TCOLE hours audit both require every credited minute to be
+        # attached to the specific missed event it makes up.
+        "N": ('IF($D{r}="","",'
+              'IF(AND($F{r}<>"Classroom",$F{r}<>"PT"),"TYPE NOT CREDITED",'
+              'IF($I{r}="","NO LINKED EVENT",'
+              'IF(COUNTIF(nrAT_ID,$I{r})=0,"NO SUCH EVENT",'
+              'IF(INDEX(nrAT_PID,MATCH($I{r},nrAT_ID,0))<>$E{r},"WRONG CADET",'
+              'IF(INDEX(nrAT_IsPT,MATCH($I{r},nrAT_ID,0))<>'
+              'IF($F{r}="PT","Yes","No"),"UNIT MISMATCH","OK"))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"C{r}"].number_format = DATE
@@ -281,14 +375,23 @@ def build_makeup(wb):
     define(wb, "nrMK_Min", "Makeup", f"$G${first}:$G${last}")
     define(wb, "nrMK_Sess", "Makeup", f"$H${first}:$H${last}")
     define(wb, "nrMK_Credit", "Makeup", f"$L${first}:$L${last}")
+    cf_formula(ws, f"N{first}:N{last}",
+               f'AND($N{first}<>"",LEFT($N{first},2)<>"OK")', FILL_WARNBG)
     col_widths(ws, {"A": 3, "B": 10, "C": 11, "D": 22, "E": 9, "F": 14,
                     "G": 13, "H": 13, "I": 13, "J": 12, "K": 8, "L": 13,
-                    "M": 30})
+                    "M": 30, "N": 22})
     sheet_note(ws, "Makeup is minute-for-minute (policy 400.5). Classroom "
                    "skills time cannot be made up. Credit applies only when "
-                   "documentation is Received and no Hold. Pick the missed "
-                   "event's ID in Linked Event — the Attendance sheet clears "
-                   "that event automatically when its balance hits zero.")
+                   "documentation is Received, no Hold, and Row Check is OK. "
+                   "Pick the missed event's ID in Linked Event — the "
+                   "Attendance sheet clears that event automatically when its "
+                   "balance hits zero. Every credited row must name the event "
+                   "it makes up — Row Check refuses credit with no Linked "
+                   "Event, for another cadet's event, an EventID that no "
+                   "longer exists, a Type the caps don't credit, or minutes "
+                   "booked against a PT (session-counted) event. Credit is "
+                   "capped at the linked event's own minutes/sessions; split "
+                   "a long session across rows to cover two events.")
     return ws
 
 
@@ -315,7 +418,7 @@ def build_skills(wb):
         "O": ('IF($C{r}="","",LET(latest,MAXIFS(nrSK_Att,nrSK_PID,$D{r},'
               'nrSK_Cat,$E{r}),res,IF($I{r}=latest,$J{r},""),'
               'IF($I{r}<>latest,"(superseded)",'
-              'IF(res="","Pending",IF(res="Pass","Qualified",'
+              'IF(OR(res="",res="Pending"),"Pending",IF(res="Pass","Qualified",'
               'IF(AND(res="Fail",$N{r}>=$F{r}),"FAILED OUT","Needs Remediation"))))))', "fx"),
         "P": ('IF($C{r}="","",IF($O{r}="FAILED OUT","Yes","No"))', "fx"),
         "Q": (None, "in"),
@@ -368,7 +471,7 @@ def build_writing(wb):
     cA, cB, cC = (get_column_letter(last_ac + 1), get_column_letter(last_ac + 2),
                   get_column_letter(last_ac + 3))
     cols[cA] = ('IF($B{r}="","",COUNTIF(D{r}:%s{r},"X"))' % last_acL, "fx")
-    cols[cB] = ('IF($B{r}="","",SUMPRODUCT((D{r}:%s{r}="")*'
+    cols[cB] = ('IF($B{r}="","",SUMPRODUCT((UPPER(D{r}:%s{r})<>"X")*'
                 '(TRANSPOSE(rngWMdue)<>"")*(TRANSPOSE(rngWMdue)<TODAY())))'
                 % last_acL, "fx")
     cols[cC] = ('IF($B{r}="","",IF(%s{r}=0,"Yes","No"))' % cB, "fx")
@@ -384,7 +487,7 @@ def build_writing(wb):
     for i in range(n):
         cl = get_column_letter(first_ac + i)
         cf_formula(ws, f"{cl}{first}:{cl}{last}",
-                   f'AND($B{first}<>"",{cl}{first}="",'
+                   f'AND($B{first}<>"",UPPER({cl}{first})<>"X",'
                    f'INDEX(rngWMdue,{i+1})<>"",INDEX(rngWMdue,{i+1})<TODAY())',
                    FILL_WARNBG)
     define(wb, "nrWRcurrent", "Writing", f"${cC}${first}:${cC}${last}")
@@ -628,8 +731,8 @@ def build_certifications(wb):
         dcol = get_column_letter(4 + 2 * i)
         ccol = get_column_letter(5 + 2 * i)
         parts.append(
-            f'IF(OR(${dcol}{{r}}="",AND(${ccol}{{r}}<>"Yes",'
-            f'${ccol}{{r}}<>"N/A")),"{nm}","")')
+            f'IF(AND(${ccol}{{r}}<>"N/A",OR(${dcol}{{r}}="",'
+            f'${ccol}{{r}}<>"Yes")),"{nm}","")')
     cols[col_miss] = ('IF($B{r}="","",TEXTJOIN("; ",TRUE,' +
                       ",".join(parts) + "))", "fx")
     cols[col_all] = ('IF($B{r}="","",IF($%s{r}="","Yes","No"))' % col_miss, "fx")
@@ -720,15 +823,22 @@ def build_memos(wb):
         "C": (None, "in"), "D": (None, "in"),
         "E": ('IF($D{r}="","",IFERROR(INDEX(rngCadetPIDs,MATCH($D{r},rngCadetNames,0)),"?"))', "fx"),
         "F": (None, "in"), "G": (None, "in"),
+        # same fix as ExamScores "Retest Due By": match mode 1 rolls a memo
+        # assigned on a non-class day to the next class day instead of
+        # returning text, which used to freeze Status at "Pending" forever
         "H": ('IF(OR($D{r}="",$C{r}=""),"",'
-              'LET(dn,IFERROR(XLOOKUP($C{r},nrCDdate,nrCDnum),""),'
-              'IF(dn="","(not a class day)",'
-              'IFERROR(XLOOKUP(dn+cfgMemoDueClassDays,nrCDnum,nrCDdate),""))))', "fx"),
+              'LET(dn,XLOOKUP($C{r},nrCDdate,nrCDnum,"",1),'
+              'IF(dn="","(after last class day)",'
+              'XLOOKUP(dn+cfgMemoDueClassDays,nrCDnum,nrCDdate,'
+              '"(after last class day)"))))', "fx"),
         "I": (None, "in"),
         "J": ('IF($D{r}="","",IF($I{r}<>"",$I{r},IF(ISNUMBER($H{r}),$H{r},"")))', "fx"),
         "K": (None, "in"),
+        # an uncomputable due date reads CHECK DATE, not "Pending": a memo
+        # that can never become OVERDUE is invisible to every flag
         "L": ('IF($D{r}="","",IF($K{r}<>"","Received "&TEXT($K{r},"mm/dd"),'
-              'IF(AND(ISNUMBER($J{r}),TODAY()>$J{r}),"OVERDUE","Pending")))', "fx"),
+              'IF(ISNUMBER($J{r}),IF(TODAY()>$J{r},"OVERDUE","Pending"),'
+              'IF($H{r}="","Pending","CHECK DATE"))))', "fx"),
         "M": (None, "in"), "N": (None, "in"),
     })
     for r in range(first, last + 1):
@@ -738,6 +848,7 @@ def build_memos(wb):
     dv_list(ws, "=nrAllRefIDs", [f"F{first}:F{last}"], enforce=False)
     dv_list(ws, "=lstYesNo", [f"M{first}:M{last}"])
     cf_formula(ws, f"L{first}:L{last}", f'$L{first}="OVERDUE"', FILL_WARNBG)
+    cf_formula(ws, f"L{first}:L{last}", f'$L{first}="CHECK DATE"', FILL_WARNBG)
     cf_formula(ws, f"L{first}:L{last}",
                f'LEFT($L{first},8)="Received"', FILL_OKBG)
     define(wb, "nrME_Assigned", "Memos", f"$C${first}:$C${last}")
@@ -778,7 +889,7 @@ def build_dailylog(wb):
         "C": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDnum),""))', "fx"),
         "D": ('IF($B{r}="","",TRIM(IF(COUNTIFS(nrSCH_Date,$B{r},nrSCH_Act,'
               '"PT*")>0,"PT + ","")&IF(COUNTIFS(nrSCH_Date,$B{r},nrSCH_Act,'
-              '"Test*")>0,"Test + ","")&"Classroom"))', "fx"),
+              '"*Test*")>0,"Test + ","")&"Classroom"))', "fx"),
         "E": (None, "in"), "F": (None, "in"), "G": (None, "in"),
         "H": (None, "in"),
         "I": ('IF($B{r}="","",COUNTIFS(nrIN_Date,$B{r}))', "fx"),

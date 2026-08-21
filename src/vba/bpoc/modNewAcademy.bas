@@ -53,10 +53,25 @@ Public Sub NewAcademyReset()
     ClearRange "Medical", "N6:N205"
     ClearRange "Certifications", "D6:S55"
     ClearRange "StateExam", "D6:I55": ClearRange "StateExam", "L6:L55"
-    ' per-academy instructor picks cleared; the certified banks persist
-    ClearRange "InstructorBanks", "M6:T105"
+    ' per-academy instructor picks cleared; the certified banks persist.
+    ' M..V = the SEL_SLOTS "Teach" columns in build/bpoc/sheets_config.py -
+    ' keep this range in step with that constant.
+    ClearRange "InstructorBanks", "M6:V105"
+    ' per-chapter TRAINING FILE evidence (sign-in sheets, assessments, grade
+    ' sheets, evals, special-req met) is this academy's audit record - it
+    ' MUST reset or the Audit sheet reports the new class's chapter files
+    ' complete with zero evidence collected. K = default instructor and
+    ' S = the TCOLE special-requirement text are master data; G/H/I/J/U are
+    ' formulas. Rows 6..49 = the 44 TCOLE chapters (nrCHfileOK's span).
+    ClearRange "ChapterMaster", "L6:R49"
+    ClearRange "ChapterMaster", "T6:T49"
     ClearRange "DismissalLog", "C6:C105": ClearRange "DismissalLog", "E6:O105"
     ClearRange "EmailLog", "B6:I505"
+    ' award overrides + notes are LAST academy's decisions, and F = IF(E<>"",
+    ' E, C) means a surviving override permanently beats the new class's
+    ' computed winner on nrAWfinal and the printed transcript. Column F is a
+    ' formula - never clear E6:G9 as one block.
+    ClearRange "sysAwards", "E6:E9": ClearRange "sysAwards", "G6:G9"
     ClearAuditDocs
     If clearSched Then
         ClearRange "Schedule", "B6:B905": ClearRange "Schedule", "D6:E905"
@@ -66,8 +81,16 @@ Public Sub NewAcademyReset()
     SetName "cfgCurrentExamNum", 1
     SetName "cfgCurrentSpellingNum", 1
     Application.ScreenUpdating = True
-    MsgBox "Reset complete. Update Settings (class label, dates) and enter " & _
-           "the new roster.", vbInformation, "New Academy"
+    ' cfgTotalScheduledMinutes is deliberately NOT zeroed here: it drives
+    ' cfgClassroomCapMinutes (the 5% classroom cap), and sysAttendance treats
+    ' a cap of 0 as "everyone passes" - a hard fail-open, worse than a stale
+    ' value. Settings F/G now flags the stale value on sight instead, and the
+    ' message below sends the coordinator there.
+    MsgBox "Reset complete. Update Settings — class label, start/end dates, " & _
+           "and Total Scheduled Minutes (this academy's length; the Check " & _
+           "column beside it will say CHECK until it matches the new " & _
+           "Schedule) — then enter the new roster.", _
+           vbInformation, "New Academy"
     AcademyStartupReview
 End Sub
 
@@ -135,7 +158,16 @@ Public Sub AcademyStartupReview()
     If pv <> "" Then ws.Range("D6").Value = pv
 
     ' 3) alignment confirmations (drive the audit checks)
-    ws.Range("D7").Value = IIf(haveDate, "Yes", "No")
+    ' the prompt above says "leave blank to skip", so a blank answer must not
+    ' overwrite a "Yes" recorded on an earlier run - that flipped the
+    ' governance-alignment audit check to CHECK even though the board minutes
+    ' had been reviewed. Only write when we actually have a date, or when
+    ' nothing has been recorded yet.
+    If haveDate Then
+        ws.Range("D7").Value = "Yes"
+    ElseIf Trim$(CStr(ws.Range("D7").Value)) = "" Then
+        ws.Range("D7").Value = "No"
+    End If
     If MsgBox("Confirm: rule/procedure changes (board + academy policy) " & _
               "have been reviewed and this workbook's settings, hours, " & _
               "prompts and lists match the current rules?", _

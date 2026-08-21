@@ -58,7 +58,8 @@ def build_starthere(wb):
         ws.row_dimensions[r].height = 30
         r += 1
     col_widths(ws, {"A": 3, "B": 34, "C": 90})
-    sheet_note(ws, "Workbook map: blue = you type it, gray = calculated, "
+    sheet_note(ws, "Workbook map: white boxes with a blue border are yours "
+                   "to type (your entries show in blue), gray = calculated, "
                    "sys* sheets are the locked engine.")
     return ws
 
@@ -141,9 +142,32 @@ def build_settings(wb):
         ws.cell(row=r, column=5, value=nm).font = F_SMALL
         define(wb, nm, "Settings", f"$C${r}")
         r += 1
-    # detection helpers for the two "Current #" settings
+    # detection helpers for the "Current #" settings and the academy length
     for i, (lab, _, _, nm, _) in enumerate(SETTINGS):
         row = DATA_ROW + i
+        if nm == "cfgTotalScheduledMinutes":
+            # the Schedule is the authority on academy length; a stale value
+            # here scales cfgClassroomCapMinutes (the 5% attendance cap) by
+            # exactly its own error
+            ws.cell(row=row, column=6, value=(
+                "=IFERROR(ROUND(SUM(nrSCH_Hrs)*60,0),0)"
+            )).font = F_CALC
+            # the empty-schedule branch must still object when C holds the
+            # PREVIOUS academy's minutes: New Academy Reset empties the
+            # Schedule but leaves this value, and a stale value scales
+            # cfgClassroomCapMinutes (and therefore the classroom half of the
+            # graduation gate) by exactly its own error, silently.
+            ws.cell(row=row, column=7, value=(
+                f'=IF(AND($F${row}=0,N($C${row})=0),"No schedule entered yet",'
+                f'IF($F${row}=0,"CHECK - no schedule entered yet, but Total '
+                f'Scheduled Minutes still reads "&TEXT($C${row},"#,##0")'
+                f'&" (the previous academy\'s length, or the shipped default) '
+                f'- enter this academy\'s schedule, then set this to match",'
+                f'IF(ROUND($C${row},0)=ROUND($F${row},0),"OK",'
+                f'"CHECK - schedule totals "&TEXT($F${row},"#,##0")&" min ("'
+                f'&TEXT($F${row}/60,"#,##0")&" hrs); cap would be "'
+                f'&TEXT(ROUND($F${row}*cfgClassroomCapPct,0),"#,##0")&" min")))'
+            )).font = F_SMALL
         if nm == "cfgCurrentExamNum":
             ws.cell(row=row, column=6, value=(
                 "=IFERROR(MAX(FILTER(nrES_Seq,(nrES_Rec<>\"\")*(nrES_Seq<>\"\"))),0)"
@@ -198,7 +222,8 @@ def build_settings(wb):
     define(wb, "nrPTRubricPoints", "Settings", f"$D${rub_first}:$H${r-1}")
     col_widths(ws, {"A": 3, "B": 34, "C": 22, "D": 12, "E": 12, "F": 12,
                     "G": 12, "H": 12, "I": 30})
-    sheet_note(ws, "Blue = edit per academy. Yellow = pending data (PT rubric "
+    sheet_note(ws, "White boxes with a blue border = edit per academy "
+                   "(entries show in blue). Yellow = pending data (PT rubric "
                    "from the other coordinator). Gray = calculated. Internal "
                    "names must not change.")
     return ws
@@ -326,8 +351,12 @@ def build_instructors(wb):
 
 
 # --------------------------------------------------------------------------
-BANK_SLOTS = 10      # certified instructors per topic
-SEL_SLOTS = 8        # picked to teach this academy
+BANK_SLOTS = 10      # certified instructors per topic  -> columns C..L
+# must match BANK_SLOTS: with fewer slots than the bank, a topic taught by
+# more instructors than there are slots lost the overflow from the dropdown
+# that governs those very Schedule rows. Columns M..V; if this changes,
+# update ClearRange "InstructorBanks" in src/vba/bpoc/modNewAcademy.bas.
+SEL_SLOTS = 10       # picked to teach this academy
 
 
 def build_instructorbanks(wb):
@@ -746,13 +775,55 @@ def build_control(wb):
                     "Extra Closure Dates", None, "Day #", "Class Date",
                     "Week #", "In Session?"])
     first = DATA_ROW
+    # ---- Easter / Good Friday computus, computed in plain arithmetic ----
+    # Good Friday was the workbook's only LET-dependent holiday. A single
+    # errored holiday poisons nrAllClosures and silently blanks ALL 170
+    # class days (and therefore every retest/memo/writing deadline), so the
+    # computus is done stepwise in helper cells that any spreadsheet engine
+    # can evaluate. P..AF, rows 6-7 (year 1 / year 2).
+    ws.cell(row=HDR_ROW, column=16,
+            value="Easter computus (helper - do not edit)").font = F_SMALL
+    steps = [
+        ("Y", "{Y}"),
+        ("a", "MOD($P{r},19)"),
+        ("b", "INT($P{r}/100)"),
+        ("c", "MOD($P{r},100)"),
+        ("d", "INT($R{r}/4)"),
+        ("e", "MOD($R{r},4)"),
+        ("f", "INT(($R{r}+8)/25)"),
+        ("g", "INT(($R{r}-$V{r}+1)/3)"),
+        ("h", "MOD(19*$Q{r}+$R{r}-$T{r}-$W{r}+15,30)"),
+        ("i", "INT($S{r}/4)"),
+        ("k", "MOD($S{r},4)"),
+        ("l", "MOD(32+2*$U{r}+2*$Y{r}-$X{r}-$Z{r},7)"),
+        ("m", "INT(($Q{r}+11*$X{r}+22*$AA{r})/451)"),
+        ("mth", "INT(($X{r}+$AA{r}-7*$AB{r}+114)/31)"),
+        ("day", "MOD($X{r}+$AA{r}-7*$AB{r}+114,31)+1"),
+        ("Easter", "DATE($P{r},$AC{r},$AD{r})"),
+        ("GoodFri", "$AE{r}-2"),
+    ]
+    for yr_off, hr in ((0, first), (1, first + 1)):
+        ybase = "YEAR(cfgStartDate)" + ("+1" if yr_off else "")
+        for i, (lab, tmpl) in enumerate(steps):
+            col = 16 + i
+            ws.cell(row=HDR_ROW + 0, column=col).value = None
+            hc = ws.cell(row=hr, column=col)
+            hc.value = "=" + tmpl.format(Y=ybase, r=hr)
+            hc.font = F_SMALL
+            if lab in ("Easter", "GoodFri"):
+                hc.number_format = DATE
+    GOODFRI = {first: "$AF$6", first + 1: "$AF$7"}
+
     r = first
     for name, tmpl in DL.HOLIDAYS:
         ws.cell(row=r, column=2, value=name).font = F_LABEL
-        c1 = ws.cell(row=r, column=3,
-                     value="=" + tmpl.format(Y="YEAR(cfgStartDate)"))
-        c2 = ws.cell(row=r, column=4,
-                     value="=" + tmpl.format(Y="YEAR(cfgStartDate)+1"))
+        if name == "Good Friday":
+            f1, f2 = "=" + GOODFRI[first], "=" + GOODFRI[first + 1]
+        else:
+            f1 = "=" + tmpl.format(Y="YEAR(cfgStartDate)")
+            f2 = "=" + tmpl.format(Y="YEAR(cfgStartDate)+1")
+        c1 = ws.cell(row=r, column=3, value=f1)
+        c2 = ws.cell(row=r, column=4, value=f2)
         for c in (c1, c2):
             c.number_format = DATE
             c.font = F_CALC
@@ -783,13 +854,19 @@ def build_control(wb):
     # combined closures name (holidays yr1+yr2+extra) via helper column M
     ws.cell(row=HDR_ROW, column=13, value="AllClosures").font = F_SMALL
     n_h = hol_last - first + 1
+    # every closure is IFERROR-guarded: WORKDAY.INTL fails outright if ANY
+    # holiday cell is an error or text, which would silently blank all
+    # class days (and every deadline computed from them). A bad holiday now
+    # degrades to a harmless sentinel instead of taking the calendar down.
+    SENT = "DATE(1900,1,1)"
     for i in range(n_h):
-        ws.cell(row=first + i, column=13, value=f"=C{first+i}").number_format = DATE
+        ws.cell(row=first + i, column=13,
+                value=f"=IFERROR(N(C{first+i})+0,{SENT})").number_format = DATE
         ws.cell(row=first + n_h + i, column=13,
-                value=f"=D{first+i}").number_format = DATE
+                value=f"=IFERROR(N(D{first+i})+0,{SENT})").number_format = DATE
     for i in range(15):
         ws.cell(row=first + 2 * n_h + i, column=13,
-                value=f'=IF(F{first+i}="",DATE(1900,1,1),F{first+i})'
+                value=f'=IFERROR(IF(F{first+i}="",{SENT},N(F{first+i})+0),{SENT})'
                 ).number_format = DATE
     all_last = first + 2 * n_h + 14
     define(wb, "nrAllClosures", "Control", f"$M${first}:$M${all_last}")
@@ -842,7 +919,13 @@ def build_schedule(wb):
     # "Teaching this academy" picks from InstructorBanks; topics without a
     # bank row fall back to the full roster. Warning-only so multi-name
     # combined entries (built by the pick-to-append macro) stay valid.
-    dv_list(ws, f"=IF(IFERROR(MATCH($G{first},nrBankTopics,0),0)=0,"
+    # the roster fallback must also fire when the topic HAS a bank row but
+    # nobody has been picked for it yet (the state of every topic in a fresh
+    # template and after every New Academy Reset, which clears M6:T105) —
+    # otherwise the dropdown is empty for all 65 real class topics.
+    dv_list(ws, f"=IF(OR(IFERROR(MATCH($G{first},nrBankTopics,0),0)=0,"
+                f"COUNTA(INDEX(nrBankSel,"
+                f"IFERROR(MATCH($G{first},nrBankTopics,0),1),0))=0),"
                 f"nrInstrNames,INDEX(nrBankSel,"
                 f"IFERROR(MATCH($G{first},nrBankTopics,0),1),0))",
             [f"I{first}:I{last}"], enforce=False)
@@ -860,7 +943,11 @@ def build_schedule(wb):
     col_widths(ws, {"A": 3, "B": 12, "C": 6, "D": 9, "E": 9, "F": 8,
                     "G": 46, "H": 6, "I": 24, "J": 16, "K": 8, "L": 7,
                     "M": 30, "N": 13})
-    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:M{first+400}",
+    # full grid, and out to N: the print area used to stop at M406, silently
+    # dropping every block past row 406 and the whole "Instructor OK?" column
+    # that was appended later. fitToWidth/fitToHeight are already set, so the
+    # trailing empty rows cost no pages.
+    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:N{last}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "One row per time block (a day usually has several). "
                    "Hours, chapter reconciliation, sign-in sheets, writing "
@@ -897,7 +984,13 @@ def build_schedule_items_helper(wb):
         'Attendance!$B$6:$B$805,Counseling!$B$6:$B$405),1),'
         'FILTER(ids,ids<>"")),"")'))
     define(wb, "nrAllRefIDs", "sysListsHelper", f"$D${DATA_ROW}:$D${DATA_ROW+1615}")
-    ws.sheet_state = "hidden"
+    # locked and veryHidden like the rest of the engine: D6 is a dynamic
+    # array (up to 1,600 record IDs) and column B generates the Schedule
+    # dropdown, so one stray value typed in the spill zone kills both
+    # dropdowns workbook-wide. "hidden" alone could be undone from the
+    # right-click tab menu with no password.
+    protect(ws)
+    ws.sheet_state = "veryHidden"
     return ws
 
 

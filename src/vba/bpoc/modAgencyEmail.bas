@@ -107,9 +107,12 @@ NextAg:
         For agRow = ROW1 To agLast
             agID = Trim$(SafeStr(wsAg.Cells(agRow, "B").Value))
             agName = SafeStr(wsAg.Cells(agRow, "C").Value)
-            active = SafeStr(wsAg.Cells(agRow, "H").Value)
-            If agID <> "" And StrComp(Trim$(active), "Yes", vbTextCompare) = 0 Then
-                Dim sect As String
+            ' NO ActiveYN filter here: the per-agency loop above already
+            ' skips inactive agencies, so filtering again meant a cadet whose
+            ' agency is not marked Active appeared in no draft at all - not
+            ' even in the one titled "All Cadets".
+            Dim sect As String
+            If agID <> "" Then
                 sect = AgencyTable(wb, agID, examCol, spellCol, omitSpelling, m)
                 If m > 0 Then
                     allBody = allBody & "<h3 style='margin:16px 0 4px 0'>" & _
@@ -118,6 +121,17 @@ NextAg:
                 End If
             End If
         Next agRow
+        ' count active cadets whose agency produced no section at all
+        Dim wsCadX As Worksheet: Set wsCadX = wb.Worksheets("Cadets")
+        Dim rc As Long, orphan As Long, agOfCadet As String
+        For rc = ROW1 To ROWN
+            If SafeStr(wsCadX.Cells(rc, "B").Value) <> "" And _
+               StrComp(Trim$(SafeStr(wsCadX.Cells(rc, "I").Value)), "Active", _
+                       vbTextCompare) = 0 Then
+                agOfCadet = Trim$(SafeStr(wsCadX.Cells(rc, "G").Value))
+                If agOfCadet = "" Then orphan = orphan + 1
+            End If
+        Next rc
         allBody = allBody & SinceLastSection(wb, homeAgency, hCut, True)
         allBody = allBody & MailFoot()
         If total > 0 Then
@@ -130,8 +144,10 @@ NextAg:
 
     MsgBox made & " draft email(s) opened in Outlook for review." & vbCrLf & _
            IIf(omitSpelling, "Spelling was OMITTED (spelling # < exam #).", _
-               "Spelling #" & spellNum & " included."), vbInformation, _
-           "Agency Score Emails"
+               "Spelling #" & spellNum & " included.") & _
+           IIf(orphan > 0, vbCrLf & orphan & " active cadet(s) have no " & _
+               "AgencyID on Cadets and were reported to nobody.", ""), _
+           vbInformation, "Agency Score Emails"
 End Sub
 
 ' ---------- per-agency cadet table ----------
@@ -239,7 +255,7 @@ Private Function SinceLastSection(wb As Workbook, agID As String, _
         d = wsIn.Cells(r, "C").Value
         pid = SafeStr(wsIn.Cells(r, "E").Value)
         If IsDate(d) And pid <> "" Then
-            If CDate(d) > cutoff And _
+            If CDate(d) >= cutoff And _
                StrComp(SafeStr(wsIn.Cells(r, "O").Value), "Yes", vbTextCompare) = 0 And _
                (isHome Or AgencyOfPID(wsCad, pid) = agID) Then
                 s = s & "<tr><td>" & Format$(CDate(d), "mm/dd") & "</td><td>" & _
@@ -254,7 +270,7 @@ Private Function SinceLastSection(wb As Workbook, agID As String, _
         d = wsCo.Cells(r, "C").Value
         pid = SafeStr(wsCo.Cells(r, "E").Value)
         If IsDate(d) And pid <> "" Then
-            If CDate(d) > cutoff And _
+            If CDate(d) >= cutoff And _
                StrComp(SafeStr(wsCo.Cells(r, "J").Value), "Yes", vbTextCompare) = 0 And _
                (isHome Or AgencyOfPID(wsCad, pid) = agID) Then
                 s = s & "<tr><td>" & Format$(CDate(d), "mm/dd") & "</td><td>" & _
@@ -269,7 +285,7 @@ Private Function SinceLastSection(wb As Workbook, agID As String, _
         d = wsMe.Cells(r, "C").Value
         pid = SafeStr(wsMe.Cells(r, "E").Value)
         If IsDate(d) And pid <> "" Then
-            If CDate(d) > cutoff And _
+            If CDate(d) >= cutoff And _
                StrComp(SafeStr(wsMe.Cells(r, "M").Value), "Yes", vbTextCompare) = 0 And _
                (isHome Or AgencyOfPID(wsCad, pid) = agID) Then
                 s = s & "<tr><td>" & Format$(CDate(d), "mm/dd") & "</td><td>" & _
@@ -317,7 +333,16 @@ Private Function LastEmailDate(wb As Workbook, agID As String) As Date
             If IsDate(d) Then If CDate(d) > best Then best = CDate(d)
         End If
     Next r
-    LastEmailDate = best
+    ' EmailLog!B is stamped with Now (date AND time), but Incidents,
+    ' Counseling and Memos all hold DATE-ONLY values. Comparing a date-only
+    ' entry against a mid-afternoon timestamp with ">" dropped every item
+    ' dated on a run day but entered (or flagged "Report to Agency") after
+    ' that run - permanently, from that digest and every later one. Int()
+    ' makes the cutoff day-granular and the filters use ">=" to match; worst
+    ' case an item is listed once more, instead of being lost silently.
+    ' EmailPreview!B62 applies the identical INT()/>= rule - keep them in
+    ' lockstep or the preview stops matching the draft it claims to show.
+    LastEmailDate = Int(best)
 End Function
 
 ' ---------- lookups ----------
