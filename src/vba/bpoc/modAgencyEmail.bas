@@ -431,6 +431,12 @@ Private Sub LogRun(wb As Workbook, agID As String, examNum As Long, _
     For r = ROW1 To 505
         If Trim$(SafeStr(ws.Cells(r, "B").Value)) = "" Then Exit For
     Next r
+    If r > 505 Then
+        MsgBox "EmailLog is full (rows 6-505) - this run was NOT logged. " & _
+               "Archive or clear old rows so future digests use the right " & _
+               "'since last email' cutoff.", vbExclamation, "Agency Score Emails"
+        Exit Sub
+    End If
     ws.Cells(r, "B").Value = Now
     ws.Cells(r, "C").Value = agID
     ws.Cells(r, "D").Value = examNum

@@ -95,6 +95,7 @@ def seed():
     ws = v6["Cadets"]
     c54 = v54["Cadets"]
     n = 0
+    roster = []                      # "Last, First" as the logs reference them
     for r54 in range(5, 35):
         if c54.cell(row=r54, column=2).value in (None, ""):
             continue
@@ -103,8 +104,37 @@ def seed():
             v = c54.cell(row=r54, column=col).value
             if v is not None:
                 ws.cell(row=r6, column=col).value = v
+        lastn = sval(c54.cell(row=r54, column=3))
+        firstn = sval(c54.cell(row=r54, column=4))
+        mi = sval(c54.cell(row=r54, column=5))
+        if lastn:
+            # exactly what Cadets!F computes: Last, First[ M.]
+            nm = f"{lastn}, {firstn}" if firstn else lastn
+            if mi:
+                nm += f" {mi}."
+            roster.append(nm)
         n += 1
     print(f"Cadets: {n}")
+
+    # every log row's cadet name MUST resolve to a roster PID — a typo in
+    # the source ("Delgoado, Ryan") would otherwise silently orphan that
+    # cadet's records (PID lookup -> "?"). Exact match, else close-match
+    # with a printed correction, else fail loudly.
+    import difflib
+    name_fixes = {}
+
+    def fix_name(nm, where):
+        nm = str(nm).strip()
+        if nm in roster:
+            return nm
+        close = difflib.get_close_matches(nm, roster, n=1, cutoff=0.8)
+        if close:
+            key = (nm, close[0])
+            name_fixes[key] = name_fixes.get(key, 0) + 1
+            return close[0]
+        raise SystemExit(
+            f"seed_bpoc7: {where} cadet name {nm!r} matches nobody on the "
+            f"roster {roster} — fix the source data")
 
     # ---------------- ExamScores ----------------
     ws = v6["ExamScores"]
@@ -113,7 +143,8 @@ def seed():
     for r54 in range(5, 605):
         if sval(e54.cell(row=r54, column=3)) == "":
             continue
-        ws.cell(row=out, column=3).value = e54.cell(row=r54, column=3).value   # name
+        ws.cell(row=out, column=3).value = fix_name(
+            e54.cell(row=r54, column=3).value, "ExamScores")                   # name
         ws.cell(row=out, column=6).value = e54.cell(row=r54, column=6).value   # code
         ws.cell(row=out, column=11).value = e54.cell(row=r54, column=11).value # attempt
         ws.cell(row=out, column=12).value = e54.cell(row=r54, column=12).value # raw
@@ -144,7 +175,10 @@ def seed():
             continue
         m = {3: 3, 4: 4, 7: 7, 8: 8, 9: 9, 10: 10, 12: 12, 13: 13}
         for c54, c6 in m.items():
-            ws.cell(row=out, column=c6).value = at.cell(row=r54, column=c54).value
+            v = at.cell(row=r54, column=c54).value
+            if c6 == 4:
+                v = fix_name(v, "Attendance")
+            ws.cell(row=out, column=c6).value = v
         ws.cell(row=out, column=15).value = at.cell(row=r54, column=16).value  # notes
         out += 1
     print(f"Attendance events: {out-6}")
@@ -157,7 +191,10 @@ def seed():
         if sval(mk.cell(row=r54, column=4)) == "":
             continue
         for col in (3, 4, 6, 7, 8, 9, 10, 11, 13):
-            ws.cell(row=out, column=col).value = mk.cell(row=r54, column=col).value
+            v = mk.cell(row=r54, column=col).value
+            if col == 4:
+                v = fix_name(v, "Makeup")
+            ws.cell(row=out, column=col).value = v
         out += 1
     print(f"Makeup entries: {out-6}")
 
@@ -168,7 +205,8 @@ def seed():
     for r54 in range(5, 605):
         if sval(sk.cell(row=r54, column=3)) == "":
             continue
-        ws.cell(row=out, column=3).value = sk.cell(row=r54, column=3).value    # name
+        ws.cell(row=out, column=3).value = fix_name(
+            sk.cell(row=r54, column=3).value, "Skills")                        # name
         ws.cell(row=out, column=5).value = sk.cell(row=r54, column=5).value    # category
         att = sk.cell(row=r54, column=9).value                                 # attempts used
         ws.cell(row=out, column=9).value = att if isinstance(att, (int, float)) and att else 1
@@ -198,9 +236,15 @@ def seed():
         if sval(inc.cell(row=r54, column=4)) == "":
             continue
         for col in (3, 4, 6, 7, 8, 9, 10, 11, 13, 14):
-            ws.cell(row=out, column=col).value = inc.cell(row=r54, column=col).value
+            v = inc.cell(row=r54, column=col).value
+            if col == 4:
+                v = fix_name(v, "Incidents")
+            ws.cell(row=out, column=col).value = v
         out += 1
     print(f"Incidents: {out-6}")
+    if name_fixes:
+        for (bad, good), cnt in sorted(name_fixes.items()):
+            print(f"NAME FIXED: {bad!r} -> {good!r} ({cnt} row(s))")
 
     # ---------------- EmailLog ----------------
     ws = v6["EmailLog"]

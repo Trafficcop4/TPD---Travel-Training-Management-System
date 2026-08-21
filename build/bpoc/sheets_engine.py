@@ -139,7 +139,7 @@ def build_sysattendance(wb):
         "R": ('IF($B{r}="","",IF($Q{r}>=1,"At Cap",IF($Q{r}>=cfgAttendanceCriticalPct,'
               '"Critical",IF($Q{r}>=cfgAttendanceAdvisoryPct,"Advisory","OK"))))', "fx"),
         "S": ('IF($B{r}="","",IF($P{r}=0,"Yes",IF($O{r}<$P{r},"Yes","No")))', "fx"),
-        "T": ('IF($B{r}="","",IF($L{r}=0,"Yes","No"))', "fx"),
+        "T": ('IF($B{r}="","",IF(AND($L{r}=0,$O{r}=0),"Yes","No"))', "fx"),
         "U": ('IF($B{r}="","",COUNTIFS(nrAT_PID,$B{r},nrAT_Type,"Tardy"))', "fx"),
         "V": ('IF($B{r}="","",COUNTIFS(nrAT_PID,$B{r},nrAT_Type,"Absent Full Day"))', "fx"),
         "W": ('IF($B{r}="","",COUNTIFS(nrAT_PID,$B{r},nrAT_Type,"Absent Partial Day"))', "fx"),
@@ -160,7 +160,9 @@ def build_sysattendance(wb):
     col_widths(ws, {"A": 3, "B": 10, "C": 24})
     sheet_note(ws, "Minutes vs the 5% classroom cap; PT sessions vs the "
                    "5-session cap (policy 400). 'Cl Owed' = missed minutes "
-                   "not yet made up — must reach 0 before graduation. Locked.")
+                   "not yet made up; 'Makeup Complete?' requires both owed "
+                   "classroom minutes AND owed PT sessions at 0 before "
+                   "graduation. Locked.")
     protect(ws)
     return ws
 
@@ -218,7 +220,7 @@ def build_sysincidents(wb):
     ws.sheet_view.showGridLines = False
     header_row(ws, ["PID", "Cadet Name", "Status", "Total", "Negative",
                     "Positive", "Open Negative", "NegMajorCritical",
-                    "OpenChainReview", "ChainReviewCnt", "Incidents Elig",
+                    "OpenChainReview", "Incidents Elig",
                     "Counseling Cnt", "Open Counseling"])
     cols = _mirror()
     cols.update({
@@ -335,7 +337,7 @@ def build_syschecks(wb):
               'sysIncidents!$J{r}>0),"Yes","No"))', "fx"),
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
-              '$M{r}="No"),"Yes","No"))', "fx"),
+              '$Q{r}="Yes",$M{r}="No"),"Yes","No"))', "fx"),
         "O": ('IF($B{r}="","",IF($N{r}="Yes","Eligible",TRIM('
               'IF($E{r}<>"Yes","Academic; ","")&'
               'IF($F{r}<>"Yes","Classroom; ","")&'
@@ -345,6 +347,7 @@ def build_syschecks(wb):
               'IF($J{r}<>"Yes","Writing; ","")&'
               'IF($K{r}<>"Yes","Makeup owed; ","")&'
               'IF($L{r}<>"Yes","Final PT; ","")&'
+              'IF($Q{r}<>"Yes","Certs; ","")&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="No","No","Yes"))', "fx"),
         "Q": ('IF($B{r}="","",IF(Certifications!$T{r}="Yes","Yes","No"))', "fx"),
@@ -357,8 +360,9 @@ def build_syschecks(wb):
     col_widths(ws, {"A": 3, "B": 10, "C": 24, "O": 50})
     sheet_note(ws, "Graduation gate per policy: 70 in each category, under "
                    "attendance caps, makeup complete, skills qualified, "
-                   "writing current, final PT passed, no open dismissal "
-                   "review. 'Final Exam Elig' enforces 500.1.H. Locked.")
+                   "writing current, final PT passed, all cert copies on "
+                   "file, no open dismissal review. 'Final Exam Elig' "
+                   "enforces 500.1.H. Locked.")
     protect(ws)
     return ws
 
@@ -470,7 +474,7 @@ def build_sysaudit(wb):
         ("Cadets with makeup owed",
          'SUMPRODUCT((nrATTmakeupOK="No")*1)', "0",
          'IF(SUMPRODUCT((nrATTmakeupOK="No")*1)=0,"OK","CHECK")',
-         '"Missed minutes not yet made up"'),
+         '"Missed classroom minutes / PT sessions not yet made up"'),
         ("Active cadets failing a category",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrGRacademic="No"))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrGRacademic="No"))=0,"OK","CHECK")',
@@ -488,7 +492,7 @@ def build_sysaudit(wb):
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF="No"))=0,"OK","CHECK")',
          '"IRG requires 70%+ on BOTH firearms courses of fire (ch 41)"'),
         ("Advisory board met within last 12 months",
-         'IFERROR(TEXT(MAX(nrAB_Date),"mm/dd/yyyy"),"none")', "recent",
+         'IF(COUNT(nrAB_Date)=0,"none",TEXT(MAX(nrAB_Date),"mm/dd/yyyy"))', "recent",
          'IF(COUNT(nrAB_Date)=0,"CHECK",IF(MAX(nrAB_Date)>=TODAY()-366,'
          '"OK","CHECK"))',
          '"Board meets 1-2x/year; running list + minutes folder on AdvisoryBoard sheet"'),
@@ -500,14 +504,25 @@ def build_sysaudit(wb):
          'IF(cfgPolicyVersion="","(blank)",cfgPolicyVersion)', "set",
          'IF(cfgPolicyVersion="","CHECK","OK")',
          '"Which policy manual this academy runs under (AdvisoryBoard sheet)"'),
+        ("Log rows with unrecognized cadet name",
+         'COUNTIF(nrES_PID,"?")+COUNTIF(nrAT_PID,"?")+COUNTIF(nrMK_PID,"?")'
+         '+COUNTIF(nrSK_PID,"?")+COUNTIF(nrIN_PID,"?")+COUNTIF(nrCO_PID,"?")'
+         '+COUNTIF(nrME_PID,"?")+COUNTIF(nrMD_PID,"?")', "0",
+         'IF(COUNTIF(nrES_PID,"?")+COUNTIF(nrAT_PID,"?")+COUNTIF(nrMK_PID,"?")'
+         '+COUNTIF(nrSK_PID,"?")+COUNTIF(nrIN_PID,"?")+COUNTIF(nrCO_PID,"?")'
+         '+COUNTIF(nrME_PID,"?")+COUNTIF(nrMD_PID,"?")=0,"OK","CHECK")',
+         '"A log row\'s cadet name matches nobody on the Cadets roster - '
+         'that cadet\'s scores/events are orphaned; fix the spelling"'),
     ]
     for name, val_fx, target, stat_fx, detail_fx in checks:
         ws.cell(row=r, column=2, value=name).font = F_LABEL
         v = ws.cell(row=r, column=3, value="=" + val_fx)
         v.font = F_CALC
         v.border = BOX
+        # cfg* targets are live formulas; digits are numbers; anything else
+        # is a literal display string (never prefix those with "=")
         t = ws.cell(row=r, column=4, value="=" + target if target.startswith("cfg")
-                    else ("=" + target if not target.isdigit() else int(target)))
+                    else (int(target) if target.isdigit() else target))
         t.font = F_CALC
         s = ws.cell(row=r, column=5, value="=" + stat_fx)
         s.font = F_LABEL

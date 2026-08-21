@@ -138,8 +138,18 @@ def test_workbook():
     check('$I6="On File"' in ins["K6"].value and
           '"Guest/Outside","N/A"' in ins["K6"].value.replace("'", '"'),
           "audit-ready requires bio; guests exempt")
-    check("UNRECOGNIZED" in wb["Schedule"]["N6"].value,
-          "schedule flags unrecognized instructor entries")
+    check("UNRECOGNIZED" in wb["Schedule"]["N6"].value and
+          '(nrInstrNames<>"")' in wb["Schedule"]["N6"].value,
+          "schedule flags unrecognized instructor entries (blank-safe)")
+    sa = wb["sysAudit"]
+    check(sa["D20"].value == "recent" and sa["D21"].value == "Yes / Yes" and
+          sa["D22"].value == "set",
+          "sysAudit literal targets stored as text, not formulas")
+    check("unrecognized cadet" in str(sa["B23"].value or ""),
+          "sysAudit orphaned-PID check present")
+    check("COUNTIFS" in wb["ScoresGrid"]["D6"].value and
+          "AVERAGEIFS" in str(wb["ScoresGrid"]["D57"].value or ""),
+          "ScoresGrid blanks untaken exams; class avg from the log")
     check("nrBankTopics" in wb.defined_names and
           "nrBankSel" in wb.defined_names and
           any(wb["InstructorBanks"].cell(row=r, column=2).value ==
@@ -177,8 +187,9 @@ def test_workbook():
           cert["D5"].value == "TIM Date",
           "Certifications grid with to-collect rollup")
     check("Certifications!$T" in wb["sysChecks"]["Q6"].value and
-          '$Q6="Yes"' not in wb["sysChecks"]["N6"].value,
-          "certs are informational on sysChecks, not a grad gate")
+          '$Q6="Yes"' in wb["sysChecks"]["N6"].value and
+          "Certs; " in wb["sysChecks"]["O6"].value,
+          "certs gate graduation on sysChecks (matches GradChecklist note)")
     check("Certifications!$U" in wb["sysFlags"]["O6"].value and
           "cert copies outstanding" in wb["sysFlags"]["S6"].value,
           "cert warning flag in sysFlags with reason text")

@@ -154,8 +154,10 @@ def build_settings(wb):
                 f'IF($F${row}>$C${row},"CHECK - data shows Test "&$F${row},"OK")))'
             )).font = F_SMALL
         if nm == "cfgCurrentSpellingNum":
+            # scan the per-test counts ROW (Spelling!D57:O57), not the
+            # per-cadet '# Taken' column, for the highest administered test
             ws.cell(row=row, column=6, value=(
-                "=MAX(SUMPRODUCT(MAX((nrSpellTaken>0)*COLUMN(nrSpellTaken)))-COLUMN(Spelling!$D$1)+1,0)"
+                "=MAX(SUMPRODUCT(MAX((nrSpellCounts>0)*COLUMN(nrSpellCounts)))-COLUMN(Spelling!$D$1)+1,0)"
             )).font = F_CALC
             ws.cell(row=row, column=7, value=(
                 f'=IF($C${row}<cfgCurrentExamNum,'
@@ -824,8 +826,11 @@ def build_schedule(wb):
         "K": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDweek),""))', "fx"),
         "L": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDnum),""))', "fx"),
         "M": (None, "in"),
+        # (nrInstrNames<>"") guard: SEARCH("",text) returns 1, so blank
+        # roster rows would otherwise match everything and hide typos
         "N": ('IF(OR($B{r}="",$I{r}=""),"",'
-              'IF(SUMPRODUCT(--ISNUMBER(SEARCH(nrInstrNames,$I{r})))>0,"OK",'
+              'IF(SUMPRODUCT((nrInstrNames<>"")*'
+              'ISNUMBER(SEARCH(nrInstrNames,$I{r})))>0,"OK",'
               '"UNRECOGNIZED"))', "fx"),
     })
     for r2 in range(first, last + 1):

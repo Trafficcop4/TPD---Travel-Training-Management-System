@@ -36,9 +36,11 @@ End Sub
 
 Private Sub AddButtons(sheetName As String, defs As Variant)
     Dim ws As Worksheet, b As Object, i As Long
+    Dim wasProtected As Boolean
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(sheetName)
     If ws Is Nothing Then Exit Sub
+    wasProtected = ws.ProtectContents
     ws.Unprotect "TPDAcademy"
     For Each b In ws.Buttons
         b.Delete
@@ -52,4 +54,10 @@ Private Sub AddButtons(sheetName As String, defs As Variant)
         btn.OnAction = defs(i)(1)
         topPos = topPos + 30
     Next i
+    ' restore the protection state this sub found (EmailPreview is locked)
+    If wasProtected Then
+        On Error Resume Next
+        ws.Protect "TPDAcademy"
+        On Error GoTo 0
+    End If
 End Sub

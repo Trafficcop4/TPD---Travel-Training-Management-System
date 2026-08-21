@@ -148,7 +148,7 @@ End Sub
 
 Private Sub ClearAuditDocs()
     ' per-cadet enrollment docs grid + program checklist answers
-    Dim ws As Worksheet, c As Range, firstDoc As Long, r As Long
+    Dim ws As Worksheet, c As Range, firstDoc As Long, r As Long, rr As Long
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets("Audit")
     If ws Is Nothing Then Exit Sub
@@ -157,6 +157,18 @@ Private Sub ClearAuditDocs()
     For r = 1 To 120
         If InStr(1, CStr(ws.Cells(r, 3).Value), "Enroll App", vbTextCompare) > 0 Then
             ws.Range(ws.Cells(r + 1, 3), ws.Cells(r + 50, 9)).ClearContents
+            Exit For
+        End If
+    Next r
+    ' find the program-requirements header by its "Met?" label and clear
+    ' the previous academy's Met?/Notes answers (F/G) under it
+    For r = 1 To 120
+        If StrComp(Trim$(CStr(ws.Cells(r, 6).Value)), "Met?", vbTextCompare) = 0 Then
+            rr = r + 1
+            Do While Trim$(CStr(ws.Cells(rr, 2).Value)) <> ""
+                ws.Range(ws.Cells(rr, 6), ws.Cells(rr, 7)).ClearContents
+                rr = rr + 1
+            Loop
             Exit For
         End If
     Next r

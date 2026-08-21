@@ -72,9 +72,9 @@ def build_dashboard(wb):
         '"  (Week "&XLOOKUP(TODAY(),nrCDdate,nrCDweek)&")",'
         '"(not a class day)")')).font = F_LABEL
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
+        '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
         'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
-        'nrSCH_Date=TODAY()),"— no schedule entered for today —")'))
+        'nrSCH_Date=TODAY()),7),"— no schedule entered for today —")'))
     r += 7
     ws.cell(row=r, column=2, value=(
         '=IF(COUNTIF(nrDL_Date,TODAY())=0,'
@@ -91,9 +91,9 @@ def build_dashboard(wb):
     ws.row_dimensions[r].height = 16
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
+        '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
         'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
-        'nrSCH_Date=TODAY()),"No class scheduled today")'))
+        'nrSCH_Date=TODAY()),8),"No class scheduled today")'))
     r += 8
     _kpi(ws, r, 2, "Separated / total enrolled",
          'SUMPRODUCT((nrCadetStatus="Separated")*1)&" / "&'
@@ -124,9 +124,9 @@ def build_dashboard(wb):
                               "(full list on WatchList)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(SORTBY(FILTER(HSTACK(rngCadetNames,nrCadetAgency,nrFLcount,'
-        'nrFLreasons),(nrFLcount>0)*(nrCadetStatus="Active")),'
-        'FILTER(nrFLcount,(nrFLcount>0)*(nrCadetStatus="Active")),-1),'
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(rngCadetNames,nrCadetAgency,'
+        'nrFLcount,nrFLreasons),(nrFLcount>0)*(nrCadetStatus="Active")),'
+        'FILTER(nrFLcount,(nrFLcount>0)*(nrCadetStatus="Active")),-1),11),'
         '"No flags — clear")'))
     watch_top = r
     r += 11
@@ -134,26 +134,29 @@ def build_dashboard(wb):
                               "from cadets (Certifications sheet)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(rngCadetNames,nrCadetAgency,nrCERTmissing),'
-        '(nrCERTmissing<>"")*(nrCadetStatus="Active")),'
+        '=IFERROR(TAKE(FILTER(HSTACK(rngCadetNames,nrCadetAgency,'
+        'nrCERTmissing),(nrCERTmissing<>"")*(nrCadetStatus="Active")),9),'
         '"All certification copies collected")'))
     r += 9
     section_bar(ws, r, 2, 11, "Open missed-time events — not yet made up "
                               "(Attendance ↔ Makeup by EventID)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(nrAT_ID,Attendance!$D$6:$D$805,'
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(nrAT_ID,Attendance!$D$6:$D$805,'
         'TEXT(nrAT_Date,"mm/dd"),Attendance!$G$6:$G$805,'
-        'Attendance!$H$6:$H$805,nrAT_Balance),'
-        '(nrAT_Cleared="OPEN")),"All missed time cleared")'))
+        'Attendance!$H$6:$H$805,nrAT_Balance),(nrAT_Cleared="OPEN")),'
+        'FILTER(nrAT_Date,(nrAT_Cleared="OPEN")),-1),9),'
+        '"All missed time cleared")'))
     r += 9
     section_bar(ws, r, 2, 11, "Outstanding memos (pending / overdue)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(Memos!$B$6:$B$305,nrME_Cadet,'
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(Memos!$B$6:$B$305,nrME_Cadet,'
         'TEXT(nrME_Assigned,"mm/dd"),nrME_Ref,nrME_Subject,'
         'TEXT(nrME_Due,"mm/dd"),nrME_Status),'
-        '(nrME_Cadet<>"")*(nrME_Received="")),"No memos outstanding")'))
+        '(nrME_Cadet<>"")*(nrME_Received="")),'
+        'FILTER(nrME_Due,(nrME_Cadet<>"")*(nrME_Received="")),1),8),'
+        '"No memos outstanding")'))
     r += 8
     section_bar(ws, r, 2, 11, "Class average by exam")
     chart_anchor_row = r + 1
@@ -215,10 +218,14 @@ def build_scoresgrid(wb):
     }
     for i in range(n_exams):
         cl = get_column_letter(4 + i)
+        # blank (not 0) when the cadet has no recorded final attempt:
+        # SUMIFS returns 0 on no match, so guard with COUNTIFS first
         cols[cl] = (
-            'IF(OR($B{r}="",%s$%d=""),"",IFERROR(SUMIFS(nrES_Rec,nrES_PID,'
-            '$B{r},nrES_Code,%s$%d,nrES_Final,"Yes"),""))'
-            % (cl, HDR_ROW, cl, HDR_ROW), "fx")
+            'IF(OR($B{r}="",%s$%d=""),"",IF(COUNTIFS(nrES_PID,$B{r},'
+            'nrES_Code,%s$%d,nrES_Final,"Yes",nrES_Rec,">=0")=0,"",'
+            'SUMIFS(nrES_Rec,nrES_PID,$B{r},nrES_Code,%s$%d,'
+            'nrES_Final,"Yes")))'
+            % (cl, HDR_ROW, cl, HDR_ROW, cl, HDR_ROW), "fx")
     gcol = get_column_letter(4 + n_exams)
     rcol = get_column_letter(5 + n_exams)
     cols[gcol] = ('IF($B{r}="","",sysGrades!$M{r})', "fx")
@@ -229,8 +236,11 @@ def build_scoresgrid(wb):
     ws.cell(row=ar, column=3, value="Class average:").font = F_LABEL
     for i in range(n_exams):
         cl = get_column_letter(4 + i)
-        ws[f"{cl}{ar}"] = (f'=IF({cl}{HDR_ROW}="","",IFERROR(ROUND(AVERAGEIF('
-                           f'{cl}{FIRST}:{cl}{LAST},"<>"),1),""))')
+        # average recorded final attempts straight from the log so untaken
+        # exams / cadets with no attempt can never drag the average down
+        ws[f"{cl}{ar}"] = (f'=IF({cl}{HDR_ROW}="","",IFERROR(ROUND('
+                           f'AVERAGEIFS(nrES_Rec,nrES_Code,{cl}{HDR_ROW},'
+                           f'nrES_Final,"Yes"),1),""))')
         ws[f"{cl}{ar}"].font = F_CALC
     define(wb, "nrSGclassavg", "ScoresGrid",
            f"$D${ar}:${get_column_letter(3+n_exams)}${ar}")
@@ -411,10 +421,10 @@ def build_cadetprofile(wb):
                               "reason / balance owed)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(nrAT_ID,TEXT(nrAT_Date,"mm/dd"),'
+        '=IFERROR(TAKE(FILTER(HSTACK(nrAT_ID,TEXT(nrAT_Date,"mm/dd"),'
         'Attendance!$G$6:$G$805,Attendance!$H$6:$H$805,nrAT_Balance),'
         '(nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,""))*'
-        '(nrAT_Cleared="OPEN")),"all missed time cleared")'))
+        '(nrAT_Cleared="OPEN")),6),"all missed time cleared")'))
     r += 6
     section_bar(ws, r, 2, 10, "OPEN memos (id / assigned / subject / due / "
                               "status)")
@@ -625,7 +635,7 @@ def build_audit(wb):
     hdr2 = r
     header_row(ws, ["Check", "Value", "Target", "Status", "Detail"], row=r)
     r += 1
-    n_checks = 17
+    n_checks = 18
     for i in range(n_checks):
         sr = FIRST + i
         ws.cell(row=r, column=2, value=f"=sysAudit!$B${sr}").font = F_BODY
@@ -885,16 +895,17 @@ def build_chapterpacket(wb):
                              "(from the schedule)")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(nrInstrNames,nrInstrReady,nrInstrChTaught),'
-        'ISNUMBER(SEARCH(", "&' + C + '&",",", "&nrInstrChTaught&","))),'
+        '=IFERROR(TAKE(FILTER(HSTACK(nrInstrNames,nrInstrReady,'
+        'nrInstrChTaught),'
+        'ISNUMBER(SEARCH(", "&' + C + '&",",", "&nrInstrChTaught&","))),12),'
         '"— none on the schedule yet —")'))
     r += 12
     section_bar(ws, r, 2, 9, "Schedule blocks delivered")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(TEXT(nrSCH_Date,"mm/dd/yyyy"),'
+        '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Date,"mm/dd/yyyy"),'
         'TEXT(nrSCH_Start,"h:mm AM/PM"),TEXT(nrSCH_End,"h:mm AM/PM"),'
-        'nrSCH_Act,nrSCH_Instr),nrSCH_ChNum=' + C + '),'
+        'nrSCH_Act,nrSCH_Instr),nrSCH_ChNum=' + C + '),32),'
         '"— no blocks scheduled —")'))
     r += 32
     ws.cell(row=r, column=2, value="Training Coordinator:").font = F_LABEL
@@ -1032,9 +1043,10 @@ def build_signin(wb):
     section_bar(ws, r, 2, 9, "Instruction scheduled this date")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
+        '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
         'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
-        'nrSCH_Date=cfgSignInDate),"— no schedule entered for this date —")'))
+        'nrSCH_Date=cfgSignInDate),9),'
+        '"— no schedule entered for this date —")'))
     r += 9
     section_bar(ws, r, 2, 9, "AM roll call")
     r += 1
@@ -1318,8 +1330,10 @@ def build_emailpreview(wb):
         ws.cell(row=rr, column=2, value=(
             f'=IF({pred},Cadets!$F{src},"")')).font = F_CALC
         ws.cell(row=rr, column=3, value=(
-            f'=IF($B{rr}="","",IFERROR(SUMIFS(nrES_Rec,nrES_PID,Cadets!$B{src},'
-            f'nrES_Seq,cfgCurrentExamNum,nrES_Final,"Yes"),""))')).font = F_CALC
+            f'=IF($B{rr}="","",IF(COUNTIFS(nrES_PID,Cadets!$B{src},'
+            f'nrES_Seq,cfgCurrentExamNum,nrES_Final,"Yes",nrES_Rec,">=0")=0,'
+            f'"",SUMIFS(nrES_Rec,nrES_PID,Cadets!$B{src},'
+            f'nrES_Seq,cfgCurrentExamNum,nrES_Final,"Yes")))')).font = F_CALC
         ws.cell(row=rr, column=4, value=(
             f'=IF($B{rr}="","",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,'
             f'nrES_Seq,cfgCurrentExamNum,nrES_Final,"Yes"),1),""))')).font = F_CALC

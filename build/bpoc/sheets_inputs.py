@@ -93,7 +93,10 @@ def build_examscores(wb):
               'LET(dn,IFERROR(XLOOKUP($S{r},nrCDdate,nrCDnum),""),'
               'IF(dn="","(not a class day)",'
               'IFERROR(XLOOKUP(dn+cfgRetestClassDays,nrCDnum,nrCDdate),"")))))', "fx"),
-        "U": ('IF($Q{r}<>"Yes","",IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
+        # keyed off the failed attempt-1 itself (not Q, which flips to "No"
+        # once attempt 2 exists) so completed retests display "Retested"
+        "U": ('IF(OR($C{r}="",$L{r}="",$K{r}<>1,$L{r}>=$J{r}),"",'
+              'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
               'nrES_Att,2)>0,"Retested",IF(OR($T{r}="",NOT(ISNUMBER($T{r}))),"Pending",'
               'IF(TODAY()>$T{r},"OVERDUE","Due "&TEXT($T{r},"mm/dd")))))', "fx"),
         "V": (None, "in"), "W": (None, "in"),
@@ -516,11 +519,14 @@ def build_pt(wb):
                   'IF($AA{r}>=cfgPTFinalMinPoints,"Yes","No"))))', "fx")
     # improvement index: mean % gain on countable events (pushups, situps)
     # plus % time cut on runs (agility, 1.5mi, 300m); ignores blanks
-    cols["AC"] = ('IF($B{r}="","",LET(pu,IFERROR(($O{r}-$F{r})/$F{r},""),'
-                  'su,IFERROR(($P{r}-$G{r})/$G{r},""),'
-                  'ag,IFERROR(($H{r}-$Q{r})/$H{r},""),'
-                  'mi,IFERROR(($I{r}-$R{r})/$I{r},""),'
-                  'tm,IFERROR(($J{r}-$S{r})/$J{r},""),'
+    # each delta only counts when BOTH baseline and final are entered —
+    # a blank final would otherwise read as a +/-100% swing
+    cols["AC"] = ('IF($B{r}="","",LET('
+                  'pu,IF(COUNT($F{r},$O{r})=2,IFERROR(($O{r}-$F{r})/$F{r},""),""),'
+                  'su,IF(COUNT($G{r},$P{r})=2,IFERROR(($P{r}-$G{r})/$G{r},""),""),'
+                  'ag,IF(COUNT($H{r},$Q{r})=2,IFERROR(($H{r}-$Q{r})/$H{r},""),""),'
+                  'mi,IF(COUNT($I{r},$R{r})=2,IFERROR(($I{r}-$R{r})/$I{r},""),""),'
+                  'tm,IF(COUNT($J{r},$S{r})=2,IFERROR(($J{r}-$S{r})/$J{r},""),""),'
                   'vals,IFERROR(FILTER(HSTACK(pu,su,ag,mi,tm),'
                   'ISNUMBER(HSTACK(pu,su,ag,mi,tm))),""),'
                   'IF(COUNT(vals)=0,"",ROUND(AVERAGE(vals)*100,1))))', "fx")
