@@ -111,6 +111,7 @@ INSTRUCTORS = [
     "John Hebert", "DJ Schick", "Brandon Lott", "Ryan Tack",
     "Amanda Cook", "Teressa Dell", "Steve Black", "Chad Homer",
     "Mike Saxion", "Justin Utley", "Jason Burton", "Nathan Elliott",
+    "Lyndsay Rogers", "Pedro Maya",
 ]
 
 # ------------------------------------------------------------------ agencies

@@ -890,9 +890,12 @@ def build_schedule_items_helper(wb):
     # all linkable record IDs (Incidents I###, Attendance A###, Counseling
     # C###) stacked for the Memos "Linked Ref" dropdown
     ws.cell(row=HDR_ROW, column=4, value="Linkable record IDs").font = F_LABEL
+    # formula-produced "" strings are NOT blank, so TOCOL(...,1) alone
+    # would leave hundreds of empty entries in the dropdown — strip them
     ws.cell(row=DATA_ROW, column=4, value=(
-        '=IFERROR(TOCOL(VSTACK(Incidents!$B$6:$B$405,'
-        'Attendance!$B$6:$B$805,Counseling!$B$6:$B$405),1),"")'))
+        '=IFERROR(LET(ids,TOCOL(VSTACK(Incidents!$B$6:$B$405,'
+        'Attendance!$B$6:$B$805,Counseling!$B$6:$B$405),1),'
+        'FILTER(ids,ids<>"")),"")'))
     define(wb, "nrAllRefIDs", "sysListsHelper", f"$D${DATA_ROW}:$D${DATA_ROW+1615}")
     ws.sheet_state = "hidden"
     return ws

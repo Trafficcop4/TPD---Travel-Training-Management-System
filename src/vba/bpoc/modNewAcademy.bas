@@ -98,6 +98,12 @@ Public Sub AcademyStartupReview()
                 firstEmpty = r
             End If
         Next r
+        If Not exists And firstEmpty = 0 Then
+            MsgBox "The AdvisoryBoard meeting list is FULL (30 rows) - " & _
+                   "this meeting was NOT recorded. Archive old rows and " & _
+                   "re-run the Startup Review.", vbExclamation, _
+                   "Academy Startup Review"
+        End If
         If Not exists And firstEmpty > 0 Then
             ws.Cells(firstEmpty, "B").Value = d
             ws.Cells(firstEmpty, "C").Value = _

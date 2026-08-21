@@ -80,6 +80,8 @@ try {
     # workbook event: auto-capitalize x -> X on the Writing grid
     $eventCode = @'
 Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
+    ' any runtime error must never leave EnableEvents off
+    On Error GoTo Cleanup
     ' Writing grid: auto-capitalize x -> X
     If Sh.Name = "Writing" Then
         Dim rng As Range
@@ -117,6 +119,9 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
         End If
         Application.EnableEvents = True
     End If
+    Exit Sub
+Cleanup:
+    Application.EnableEvents = True
 End Sub
 '@
     $twb = $wb.VBProject.VBComponents.Item('ThisWorkbook')

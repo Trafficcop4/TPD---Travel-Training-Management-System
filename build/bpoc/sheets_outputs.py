@@ -491,6 +491,12 @@ def build_transcript(wb):
         '(nrES_PID=%srngCadetPIDs,""))*(nrES_Final="Yes")*(nrES_Rec<>"")),"—")'
         % (FIRST, FIRST + 1499, FIRST, FIRST + 1499, FIRST, FIRST + 1499,
            FIRST, FIRST + 1499, FIRST, FIRST + 1499, P)))
+    # cap to the reserved window so a long log can never #SPILL! into the
+    # section bar below (25 exams max on the plan)
+    v17 = ws.cell(row=r, column=2).value
+    assert v17.startswith('=IFERROR(FILTER(') and v17.endswith('),"—")')
+    ws.cell(row=r, column=2).value = (
+        '=IFERROR(TAKE(' + v17[len('=IFERROR('):-len(',"—")')] + ',26),"—")')
     r += 26
     section_bar(ws, r, 2, 10, "Attendance / Skills / PT / Writing / Conduct")
     r += 1
@@ -1378,19 +1384,23 @@ def build_emailpreview(wb):
         'rngCadetNames),""),IF(SEQUENCE(ROWS(nrIN_Date)),"Incident"),'
         'nrIN_Sev,nrIN_Desc),(nrIN_Date>cutoff)*(nrIN_Report="Yes")*'
         'IFERROR((XLOOKUP(nrIN_PID,rngCadetPIDs,nrCadetAgencyID)='
-        'cfgPreviewAgency)+(cfgPreviewAgency=cfgHomeAgency),0)),'
+        'cfgPreviewAgency)+(cfgPreviewAgency=cfgHomeAgency),0),'
+        '{"","","","",""}),'
         'cns,FILTER(HSTACK(nrCO_Date,IFERROR(XLOOKUP(nrCO_PID,rngCadetPIDs,'
         'rngCadetNames),""),IF(SEQUENCE(ROWS(nrCO_Date)),"Counseling"),'
         'nrCO_Type,nrCO_Desc),(nrCO_Date>cutoff)*(nrCO_Report="Yes")*'
         'IFERROR((XLOOKUP(nrCO_PID,rngCadetPIDs,nrCadetAgencyID)='
-        'cfgPreviewAgency)+(cfgPreviewAgency=cfgHomeAgency),0)),'
+        'cfgPreviewAgency)+(cfgPreviewAgency=cfgHomeAgency),0),'
+        '{"","","","",""}),'
         'mem,FILTER(HSTACK(nrME_Assigned,IFERROR(XLOOKUP(nrME_PID,'
         'rngCadetPIDs,rngCadetNames),""),IF(SEQUENCE(ROWS(nrME_Assigned)),'
         '"Memo"),nrME_Status,nrME_Subject),(nrME_Assigned>cutoff)*'
         '(nrME_Report="Yes")*IFERROR((XLOOKUP(nrME_PID,rngCadetPIDs,'
         'nrCadetAgencyID)=cfgPreviewAgency)+(cfgPreviewAgency='
-        'cfgHomeAgency),0)),'
-        'SORT(VSTACK(inc,cns,mem),1)),'
+        'cfgHomeAgency),0),{"","","","",""}),'
+        'all,VSTACK(inc,cns,mem),'
+        'SORT(FILTER(all,INDEX(all,0,1)<>"",'
+        '"— nothing marked for this agency since last email —"),1)),'
         '"— nothing marked for this agency since last email —")'))
     r += 16
     col_widths(ws, {"A": 3, "B": 12, "C": 24, "D": 11, "E": 11, "F": 16,

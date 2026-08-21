@@ -32,6 +32,11 @@ NAME_MAP = {
     "Interacting with Deaf and Hard of Hearing ":
         "Interacting with Deaf and Hard of Hearing",
 }
+# calendar instructor-text typos -> roster spellings (substring replace)
+INSTR_FIXES = {
+    "DJ, Schick": "DJ Schick",
+}
+
 HOLIDAY_WORDS = ("Memorial Day", "Juneteenth", "Independence Day",
                  "Labor Day", "Holiday", "July 4th", "4th of July")
 
@@ -178,6 +183,8 @@ def seed():
             v = at.cell(row=r54, column=c54).value
             if c6 == 4:
                 v = fix_name(v, "Attendance")
+            if c6 == 3 and isinstance(v, datetime):
+                v = v.replace(hour=0, minute=0, second=0, microsecond=0)
             ws.cell(row=out, column=c6).value = v
         ws.cell(row=out, column=15).value = at.cell(row=r54, column=16).value  # notes
         out += 1
@@ -288,8 +295,27 @@ def seed():
         ws.cell(row=out, column=4).value = start
         ws.cell(row=out, column=5).value = end
         ws.cell(row=out, column=7).value = map_class(cls)
+        for bad, good in INSTR_FIXES.items():
+            instr = instr.replace(bad, good)
         ws.cell(row=out, column=9).value = instr
         out += 1
+    import data_lists as DLx
+    import re as _re
+    ros = DLx.INSTRUCTORS + DLx.GUEST_ENTITIES
+    unrec = {}
+    for r in range(6, out):
+        it = sval(ws.cell(row=r, column=9))
+        if not it:
+            continue
+        # segment-level: co-teachers hidden in multi-name strings must each
+        # resolve to a roster name (the workbook's any-match can't see them)
+        t2 = _re.sub(r"\(.*?\)", "", str(it))
+        for seg in _re.split(r"[&,]| and ", t2):
+            seg = seg.strip()
+            if seg and not any(seg in nm or nm in seg for nm in ros):
+                unrec[seg] = unrec.get(seg, 0) + 1
+    if unrec:
+        print(f"WARNING unrecognized schedule instructors: {unrec}")
     print(f"Schedule blocks: {out-6}  (skipped holiday rows: {len(skipped)})")
 
     # ---------- instructor banks from actual schedule usage ---------------

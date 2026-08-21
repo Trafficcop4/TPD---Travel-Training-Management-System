@@ -209,9 +209,11 @@ def build_attendance(wb):
               'nrMK_Credit,"Yes"))', "fx"),
         "Q": ('IF(OR($B{r}="",N($J{r})=0),"",SUMIFS(nrMK_Sess,nrMK_Link,$B{r},'
               'nrMK_Credit,"Yes"))', "fx"),
+        # balance unit follows the event's own Is PT? flag, not
+        # whichever of minutes/sessions happens to be filled first
         "R": ('IF(OR($B{r}="",$N{r}<>"Yes"),"",'
-              'IF(N($I{r})>0,N($I{r})-N($P{r}),'
-              'IF(N($J{r})>0,N($J{r})-N($Q{r}),"")))', "fx"),
+              'IF($K{r}="Yes",IF(N($J{r})>0,N($J{r})-N($Q{r}),""),'
+              'IF(N($I{r})>0,N($I{r})-N($P{r}),"")))', "fx"),
         "S": ('IF(OR($B{r}="",$R{r}=""),"",'
               'IF($R{r}<=0,"CLEARED "&IFERROR(TEXT(MAXIFS(nrMK_Date,'
               'nrMK_Link,$B{r},nrMK_Credit,"Yes"),"mm/dd"),""),"OPEN"))', "fx"),
