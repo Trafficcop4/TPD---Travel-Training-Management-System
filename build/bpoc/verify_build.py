@@ -218,10 +218,18 @@ def test_workbook():
           '(nrInstrNames<>"")' in wb["Schedule"]["N6"].value,
           "schedule flags unrecognized instructor entries (blank-safe)")
     sa = wb["sysAudit"]
-    check(sa["D20"].value == "recent" and sa["D21"].value == "Yes / Yes" and
-          sa["D22"].value == "set",
+    # located by check NAME, never by row: hard-coded rows broke every time a
+    # check was inserted above them, which is exactly what column shifts do
+    sa_target = {}
+    for r in range(6, 80):
+        nm = str(sa.cell(row=r, column=2).value or "")
+        if nm:
+            sa_target[nm] = sa.cell(row=r, column=4).value
+    lits = [v for k, v in sa_target.items()
+            if isinstance(v, str) and not str(v).startswith("=")]
+    check("recent" in lits and "Yes / Yes" in lits and "set" in lits,
           "sysAudit literal targets stored as text, not formulas")
-    check("unrecognized cadet" in str(sa["B23"].value or ""),
+    check(any("unrecognized cadet" in k for k in sa_target),
           "sysAudit orphaned-PID check present")
     # the printed Audit sheet must mirror EVERY engine check: a check the
     # Dashboard tile counts but the packet never prints is a red tile with
@@ -426,6 +434,71 @@ def test_workbook():
     check("COUNTIF(rngCadetPIDs,$B6)>1" in cad_cf and
           "COUNTIF(rngCadetNames,$F6)>1" in cad_cf,
           "duplicate PID / duplicate cadet name highlighted on Cadets")
+
+    # ---- regression guards for the round-4 stress-test fixes -------------
+    # a blank picker must not match the blank rows of the log it filters
+    si = wb["SignIn"]
+    check('(nrSCH_Date<>"")*(nrSCH_Date=cfgSignInDate)' in si["B10"].value,
+          "SignIn schedule block ignores empty Schedule rows on a blank date")
+    check('IF(cfgSignInDate=""' in si["B7"].value,
+          "SignIn banner prints a blank date line, not January 0 1900")
+    cprof = wb["CadetProfile"]
+    for cell, nm in (("B27", "nrIN_PID"), ("B38", "nrCO_PID"),
+                     ("B50", "nrAT_PID"), ("B61", "nrMK_PID")):
+        v = cprof[cell].value
+        check(v.count(f'({nm}<>"")') == 2,
+              f"CadetProfile {cell} guards both FILTERs against blank PIDs")
+
+    # chapter numbers are the workbook's join key: nrCHnum and EVERY cell of
+    # EVERY dropdown sourced from it must share one data type, or an exact
+    # XLOOKUP/MATCH silently returns #N/A across two auditor-facing pages
+    cm = wb["ChapterMaster"]
+    check(all(cm.cell(row=r, column=3).data_type == "s"
+              for r in range(6, 50)), "nrCHnum stored as text")
+    for sheet, rngs in (("ChapterPacket", ["C5"]), ("EvalSheet", ["C5"]),
+                        ("ExamPlan", [f"H{r}" for r in range(6, 31)]),
+                        ("WritingMaster", [f"D{r}" for r in range(6, 46)]),
+                        ("ChapterMaster", [f"E{r}" for r in range(56, 71)])):
+        wsx = wb[sheet]
+        dvf = [dv.formula1 for dv in wsx.data_validations.dataValidation]
+        check("=nrCHnum" in dvf, f"{sheet} chapter dropdown reads nrCHnum")
+        bad = [c for c in rngs if wsx[c].number_format != "@"]
+        check(not bad, f"{sheet} chapter cells are text-formatted {bad[:3]}")
+
+    # an unscored attempt-2 row must not delete the failed exam it retests
+    check(all('nrES_Att,2,nrES_Raw,">=0"' in es[c + "6"].value
+              for c in "MQU") and
+          'nrES_Att,">"&$K6,nrES_Raw,">=0"' in es["P6"].value and
+          "RETEST ROW HAS NO SCORE" in es["X6"].value,
+          "a retest only counts once it is scored (M/P/Q/U + Row Check)")
+    # deadlines may not roll onto days the calendar marks In Session? = No
+    check("nrCDinsession" in es["T6"].value and
+          "nrCDinsession" in wb["Memos"]["H6"].value,
+          "retest/memo deadlines are gated on the in-session flag")
+    # MAXIFS returns 0, not an error, so IFERROR never caught the empty case
+    check("(not scheduled)" in wb["ExamSheet"]["B8"].value and
+          "IFERROR(TEXT(_xlfn.MAXIFS" not in wb["ExamSheet"]["B8"].value,
+          "ExamSheet 'Administered' cannot print a 1899 date")
+    # a block may cross midnight; a swapped start/end may not go unnoticed
+    sch = wb["Schedule"]
+    check("MOD($E6-$D6,1)" in sch["F6"].value,
+          "Schedule hours are midnight-safe (never negative)")
+    check("CHECK TIMES" in str(sch["O6"].value or "") and
+          "nrSCH_TimeCheck" in wb.defined_names and
+          sch.auto_filter.ref == "B5:O5",
+          "Schedule Time Check column, named and inside the filter")
+    sp = wb["Spelling"]
+    check("SCORE OUT OF RANGE" in str(sp["S6"].value or "") and
+          "nrSpellRowCheck" in wb.defined_names,
+          "Spelling Row Check catches out-of-range scores")
+    check(any(dv.type == "whole" for dv in
+              sp.data_validations.dataValidation),
+          "Spelling score grid carries 0-100 validation")
+    # the computus helper block must keep the label the loop used to erase
+    ctl = wb["Control"]
+    check("do not edit" in str(ctl["P4"].value or "") and
+          ctl["P5"].value == "Y" and ctl["AF5"].value == "GoodFri",
+          "Control computus helper is labelled")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 

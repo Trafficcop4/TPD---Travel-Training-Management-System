@@ -462,6 +462,10 @@ def build_chaptermaster(wb):
               'OR($S{r}="",$T{r}="Yes",$T{r}="N/A")),"Yes","No"))', "fx"),
     })
     for r2 in range(first, last + 1):
+        # chapter numbers are the workbook's join key and are stored as TEXT;
+        # '@' keeps a hand-typed edit from becoming a number that no
+        # XLOOKUP/MATCH against nrCHnum can match
+        ws[f"C{r2}"].number_format = "@"
         ws[f"I{r2}"].number_format = DATE
         ws[f"J{r2}"].number_format = DATE
         ws[f"S{r2}"].alignment = A_LEFT_WRAP
@@ -525,6 +529,7 @@ def build_chaptermaster(wb):
         p.fill = FILL_INPUT
         p.font = F_INPUT
         p.border = BOX
+        p.number_format = "@"       # parent chapter # — text, like nrCHnum
         t = ws.cell(row=sr, column=6, value=target)
         t.fill = FILL_INPUT
         t.font = F_INPUT
@@ -547,6 +552,8 @@ def build_chaptermaster(wb):
             cc.fill = FILL_INPUT
             cc.font = F_INPUT
             cc.border = BOX
+            if col == 5:            # parent chapter # — text, like nrCHnum
+                cc.number_format = "@"
         ws.cell(row=rr, column=7, value=(
             f'=IF($B{rr}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$B{rr}),2))'
         )).font = F_CALC
@@ -630,6 +637,7 @@ def build_examplan(wb):
     })
     for r2 in range(first, last + 1):
         ws[f"I{r2}"].number_format = DATE
+        ws[f"H{r2}"].number_format = "@"   # chapter key is TEXT (nrCHnum)
     dv_list(ws, "=lstYesNo", [f"B{first}:B{last}"])
     dv_list(ws, "=rngEMcode", [f"C{first}:C{last}"])
     dv_list(ws, "=nrCHnum", [f"H{first}:H{last}"])
@@ -741,6 +749,7 @@ def build_writingmaster(wb):
     for r2 in range(first, last + 1):
         for cl in "GHIJKL":
             ws[f"{cl}{r2}"].number_format = DATE
+        ws[f"D{r2}"].number_format = "@"   # chapter key is TEXT (nrCHnum)
         ws[f"M{r2}"].alignment = A_LEFT_WRAP
         ws.row_dimensions[r2].height = 42
     dv_list(ws, "=nrCHnum", [f"D{first}:D{last}"])
@@ -781,7 +790,10 @@ def build_control(wb):
     # class days (and therefore every retest/memo/writing deadline), so the
     # computus is done stepwise in helper cells that any spreadsheet engine
     # can evaluate. P..AF, rows 6-7 (year 1 / year 2).
-    ws.cell(row=HDR_ROW, column=16,
+    # the warning lives one row ABOVE the step labels: written into P5 it was
+    # erased a moment later by the loop below, so the 34 live formula cells in
+    # P6:AF7 shipped with no label and no warning on an unprotected sheet
+    ws.cell(row=HDR_ROW - 1, column=16,
             value="Easter computus (helper - do not edit)").font = F_SMALL
     steps = [
         ("Y", "{Y}"),
@@ -806,10 +818,12 @@ def build_control(wb):
         ybase = "YEAR(cfgStartDate)" + ("+1" if yr_off else "")
         for i, (lab, tmpl) in enumerate(steps):
             col = 16 + i
-            ws.cell(row=HDR_ROW + 0, column=col).value = None
+            lc = ws.cell(row=HDR_ROW, column=col, value=lab)
+            lc.font = F_SMALL
             hc = ws.cell(row=hr, column=col)
             hc.value = "=" + tmpl.format(Y=ybase, r=hr)
             hc.font = F_SMALL
+            hc.fill = FILL_CALC          # reads as an engine cell, not input
             if lab in ("Easter", "GoodFri"):
                 hc.number_format = DATE
     GOODFRI = {first: "$AF$6", first + 1: "$AF$7"}
@@ -889,13 +903,21 @@ def build_schedule(wb):
     ws.sheet_view.showGridLines = False
     header_row(ws, ["Date", "Day", "Start", "End", "Hours",
                     "Chapter / Activity", "Ch #", "Instructor", "Location",
-                    "Week #", "Day #", "Notes", "Instructor OK?"])
+                    "Week #", "Day #", "Notes", "Instructor OK?",
+                    "Time Check"])
     first, last = DATA_ROW, DATA_ROW + ROWS_SCHEDULE - 1
     fill_rows(ws, first, last, {
         "B": (None, "in"),
         "C": ('IF($B{r}="","",TEXT($B{r},"ddd"))', "fx"),
         "D": (None, "in"), "E": (None, "in"),
-        "F": ('IF(OR($B{r}="",$D{r}="",$E{r}=""),"",ROUND(($E{r}-$D{r})*24,2))', "fx"),
+        # MOD(...,1): a block that runs to or past midnight (22:00->02:00)
+        # used to compute as NEGATIVE hours, which no error, no row check and
+        # no audit line caught — and those negatives were SUBTRACTED from
+        # ChapterMaster "Delivered Hrs" and from the Settings schedule-minutes
+        # detector. Column O ("Time Check") catches the swapped-time typo
+        # that MOD would otherwise turn into a plausible 22-hour block.
+        "F": ('IF(OR($B{r}="",$D{r}="",$E{r}=""),"",'
+              'ROUND(MOD($E{r}-$D{r},1)*24,2))', "fx"),
         "G": (None, "in"),
         "H": ('IF($G{r}="","",IFERROR(XLOOKUP($G{r},nrCHname,nrCHnum),'
               'IFERROR(XLOOKUP($G{r},nrSUBname,nrSUBparent),"")))', "fx"),
@@ -909,6 +931,11 @@ def build_schedule(wb):
               'IF(SUMPRODUCT((nrInstrNames<>"")*'
               'ISNUMBER(SEARCH(nrInstrNames,$I{r})))>0,"OK",'
               '"UNRECOGNIZED"))', "fx"),
+        # a legitimate block that crosses midnight is short under MOD; a
+        # swapped start/end reads as most of a day. 12 hours separates them.
+        "O": ('IF(OR($B{r}="",$D{r}="",$E{r}=""),"",'
+              'IF($E{r}=$D{r},"CHECK TIMES (start = end)",'
+              'IF($F{r}>12,"CHECK TIMES (End is before Start?)","OK")))', "fx"),
     })
     for r2 in range(first, last + 1):
         ws[f"B{r2}"].number_format = DATE
@@ -938,21 +965,27 @@ def build_schedule(wb):
     define(wb, "nrSCH_Instr", "Schedule", f"$I${first}:$I${last}")
     define(wb, "nrSCH_Loc", "Schedule", f"$J${first}:$J${last}")
     define(wb, "nrSCH_InstrOK", "Schedule", f"$N${first}:$N${last}")
+    define(wb, "nrSCH_TimeCheck", "Schedule", f"$O${first}:$O${last}")
     cf_formula(ws, f"N{first}:N{last}", f'$N{first}="UNRECOGNIZED"',
                FILL_WARNBG)
+    cf_formula(ws, f"O{first}:O{last}",
+               f'AND($O{first}<>"",$O{first}<>"OK")', FILL_WARNBG)
     col_widths(ws, {"A": 3, "B": 12, "C": 6, "D": 9, "E": 9, "F": 8,
                     "G": 46, "H": 6, "I": 24, "J": 16, "K": 8, "L": 7,
-                    "M": 30, "N": 13})
+                    "M": 30, "N": 13, "O": 30})
     # full grid, and out to N: the print area used to stop at M406, silently
     # dropping every block past row 406 and the whole "Instructor OK?" column
     # that was appended later. fitToWidth/fitToHeight are already set, so the
     # trailing empty rows cost no pages.
-    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:N{last}",
+    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:O{last}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "One row per time block (a day usually has several). "
                    "Hours, chapter reconciliation, sign-in sheets, writing "
-                   "dates and eval headers all read from here. Printable "
-                   "as-is (File > Print).")
+                   "dates and eval headers all read from here. A block may "
+                   "run past midnight (22:00-02:00 counts as 4.00 hrs); "
+                   "Time Check flags a block whose End is at or before its "
+                   "Start, because those hours move chapter totals and the "
+                   "5% attendance cap. Printable as-is (File > Print).")
     return ws
 
 

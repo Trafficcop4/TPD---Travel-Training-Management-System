@@ -241,6 +241,38 @@ def seed():
                 n += 1
     print(f"Writing X marks: {n}")
 
+    # ------- WritingMaster override dates (the academy's real handouts) ----
+    # V6 DERIVES Assigned/Due from when the linked chapter is first taught.
+    # That is the right fallback for a fresh academy but it is not what BPOC
+    # 7 actually handed out: ch35 (Patrol Skills) is first taught 10/19 while
+    # its assignments went out 09/07, so 21 of 40 derived due dates land up
+    # to 6 weeks late and every cadet's overdue-writing count (Writing!AS ->
+    # AT -> sysChecks graduation gate) reads short. Copy the authoritative
+    # dates from V5.4 into the override columns I/J; K/L already prefer them.
+    wm54 = v54["WritingMaster"]
+    real = {}
+    for r54 in range(5, 60):
+        num = wm54.cell(row=r54, column=2).value
+        if not isinstance(num, (int, float)):
+            continue
+        real[int(num)] = (wm54.cell(row=r54, column=4).value,
+                          wm54.cell(row=r54, column=5).value)
+    wm = v6["WritingMaster"]
+    n, missing = 0, []
+    for r in range(6, 46):
+        num = wm.cell(row=r, column=2).value
+        if not isinstance(num, (int, float)):
+            continue
+        pair = real.get(int(num))
+        if pair is None or pair[0] is None or pair[1] is None:
+            missing.append(int(num))
+            continue
+        wm.cell(row=r, column=9).value = pair[0]     # I Override Assigned
+        wm.cell(row=r, column=10).value = pair[1]    # J Override Due
+        n += 1
+    print(f"WritingMaster override dates seeded: {n}"
+          + (f"; NO published dates for #{missing}" if missing else ""))
+
     # ---------------- Incidents ----------------
     ws = v6["Incidents"]
     inc = v54["Incidents"]

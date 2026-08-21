@@ -110,6 +110,21 @@ def dv_list(ws, formula, ranges, allow_blank=True, enforce=True):
     return dv
 
 
+def dv_whole(ws, ranges, lo, hi, prompt, allow_blank=True):
+    """Whole-number range validation. Typing is blocked; a PASTE still gets
+    through (Excel drops validation on paste), so every sheet using this must
+    also carry a Row Check formula for the same rule."""
+    dv = DataValidation(type="whole", operator="between",
+                        formula1=str(lo), formula2=str(hi),
+                        allow_blank=allow_blank, showErrorMessage=True)
+    dv.errorTitle = "Out of range"
+    dv.error = prompt
+    for rng in ranges:
+        dv.add(rng)
+    ws.add_data_validation(dv)
+    return dv
+
+
 def name_range(wb, name, sheet, ref):
     define(wb, name, sheet, ref)
 

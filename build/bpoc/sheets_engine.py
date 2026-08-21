@@ -531,6 +531,15 @@ AUDIT_CHECKS = [
          'COUNTIF(nrSCH_InstrOK,"UNRECOGNIZED")', "0",
          'IF(COUNTIF(nrSCH_InstrOK,"UNRECOGNIZED")=0,"OK","CHECK")',
          '"Instructor text matches nobody on the Instructors roster - fix spelling or add them"'),
+        # a swapped start/end time is arithmetic, not a typo Excel can see:
+        # the block's hours land in ChapterMaster "Delivered Hrs" and in the
+        # Settings schedule-minutes detector that sets the 5% attendance cap
+        ("Schedule blocks with impossible times",
+         'SUMPRODUCT((nrSCH_TimeCheck<>"")*(nrSCH_TimeCheck<>"OK"))', "0",
+         'IF(SUMPRODUCT((nrSCH_TimeCheck<>"")*(nrSCH_TimeCheck<>"OK"))=0,'
+         '"OK","CHECK")',
+         '"End time is at or before Start: the block\'s hours are wrong, '
+         'which moves delivered chapter hours and the 5% attendance cap"'),
         # CHECK DATE rows are counted too: a retest dated on a weekend or a
         # holiday used to sit at "Pending" forever, so the 5-class-day clock
         # was unenforceable for exactly the rows that needed it.
@@ -599,8 +608,15 @@ AUDIT_CHECKS = [
          'SUMPRODUCT((nrES_RowCheck<>"")*(nrES_RowCheck<>"OK"))', "0",
          'IF(SUMPRODUCT((nrES_RowCheck<>"")*(nrES_RowCheck<>"OK"))=0,"OK","CHECK")',
          '"ExamScores Row Check: a non-numeric or out-of-range Raw Score, a '
-         'duplicate RecordID, or an attempt 2 with no attempt 1 on file - each '
-         'silently distorts the category average"'),
+         'duplicate RecordID, an attempt 2 with no attempt 1 on file, or a '
+         'retest row logged with no score - each silently distorts the '
+         'category average or stops the 5-class-day retest clock"'),
+        ("Spelling rows failing Row Check",
+         'SUMPRODUCT((nrSpellRowCheck<>"")*(nrSpellRowCheck<>"OK"))', "0",
+         'IF(SUMPRODUCT((nrSpellRowCheck<>"")*(nrSpellRowCheck<>"OK"))=0,'
+         '"OK","CHECK")',
+         '"A spelling score that is text or outside 0-100 inflates the '
+         'cadet average and can hide the policy 300.4.B intervention flag"'),
         ("Memos with an unusable due date",
          'COUNTIF(nrME_Status,"CHECK DATE")', "0",
          'IF(COUNTIF(nrME_Status,"CHECK DATE")=0,"OK","CHECK")',

@@ -11,7 +11,7 @@ from xlb import (
     ROWS_MAKEUP, ROWS_SKILLS, ROWS_INCIDENTS, ROWS_COUNSELING, ROWS_MEDICAL,
     F_HDR, F_CALC, FILL_CALC, F_LABEL, F_SMALL, F_INPUT, FILL_INPUT,
     FILL_YELLOW, A_LEFT_WRAP, A_CENTER, BOX, DATE, TIME,
-    header_row, fill_rows, dv_list, sheet_note, cf_yes_no, cf_formula,
+    header_row, fill_rows, dv_list, dv_whole, sheet_note, cf_yes_no, cf_formula,
     FILL_WARNBG, FILL_OKBG, FILL_AMBER, col_widths, define,
 )
 import data_lists as DL
@@ -99,9 +99,16 @@ def build_examscores(wb):
         # not a number passes straight through (text sorts ABOVE any number,
         # so every >= test below would otherwise read as a pass); Row Check
         # flags the row instead.
+        # every "a retest exists" test below requires a SCORED retest
+        # (nrES_Raw,">=0"). An attempt-2 row logged when the retest is
+        # SCHEDULED, before its score is entered, used to blank attempt 1's
+        # Recorded score, drop the failed exam out of every category average
+        # and flip AcademicElig from No to Yes while silently stopping the
+        # policy-300.5 clock. Row Check reports the unscored row instead.
         "M": ('IF($C{r}="","",IF($L{r}="","",IF(NOT(ISNUMBER($L{r})),$L{r},'
               'IF($K{r}=1,'
-              'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2)>0,"",$L{r}),'
+              'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2,'
+              'nrES_Raw,">=0")>0,"",$L{r}),'
               'IF($L{r}>=$J{r},MAX($J{r},cfgRetakeRecordedCap),'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)=0,$L{r},'
               'SUMIFS(nrES_Raw,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)))))))', "fx"),
@@ -112,11 +119,16 @@ def build_examscores(wb):
               '"(not a score)",IF($L{r}>=$J{r},"Yes","No"))))', "fx"),
         "O": ('IF($C{r}="","",IF($M{r}="","",IF(NOT(ISNUMBER($M{r})),'
               '"(not a score)",IF($M{r}>=$J{r},"Yes","No"))))', "fx"),
+        # a LATER attempt only supersedes this one once it has been scored,
+        # otherwise the placeholder row became the "final" attempt and the
+        # real (failed) score stopped counting anywhere
         "P": ('IF($C{r}="","",IF($K{r}="","",IF(COUNTIFS(nrES_PID,$D{r},'
-              'nrES_Code,$F{r},nrES_Att,">"&$K{r})=0,"Yes","No")))', "fx"),
+              'nrES_Code,$F{r},nrES_Att,">"&$K{r},nrES_Raw,">=0")=0,'
+              '"Yes","No")))', "fx"),
         "Q": ('IF($C{r}="","",IF($L{r}="","",IF(AND($K{r}=1,ISNUMBER($L{r}),'
               '$L{r}<$J{r},'
-              'COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2)=0),"Yes","No")))', "fx"),
+              'COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2,'
+              'nrES_Raw,">=0")=0),"Yes","No")))', "fx"),
         # a FAILED second attempt always reaches dismissal review. Requiring
         # an attempt-1 row to exist meant a missing attempt-1 flipped the
         # academic-eligibility gate from No to Yes for a cadet who failed the
@@ -128,11 +140,16 @@ def build_examscores(wb):
         # a holiday or any non-class day starts the 5-class-day clock on the
         # next class day instead of giving up. Only a date past the LAST
         # class day has no answer, and that says so out loud.
+        # ...and the answer must land on a day the academy is actually IN
+        # SESSION. The class-day table is padded 44 rows past cfgEndDate, so
+        # keying only on "did the lookup fall off the end" let a deadline
+        # roll silently onto rows the same table marks In Session? = No.
         "T": ('IF($Q{r}<>"Yes","",IF($S{r}="","(enter date)",'
               'LET(dn,XLOOKUP($S{r},nrCDdate,nrCDnum,"",1),'
               'IF(dn="","(after last class day)",'
-              'XLOOKUP(dn+cfgRetestClassDays,nrCDnum,nrCDdate,'
-              '"(after last class day)")))))', "fx"),
+              'LET(dd,XLOOKUP(dn+cfgRetestClassDays,nrCDnum,nrCDdate,""),'
+              'ok,XLOOKUP(dn+cfgRetestClassDays,nrCDnum,nrCDinsession,"No"),'
+              'IF(OR(dd="",ok<>"Yes"),"(after last class day)",dd))))))', "fx"),
         # keyed off the failed attempt-1 itself (not Q, which flips to "No"
         # once attempt 2 exists) so completed retests display "Retested".
         # A due date that could not be computed reads CHECK DATE, never the
@@ -141,7 +158,8 @@ def build_examscores(wb):
         "U": ('IF(OR($C{r}="",$L{r}="",$K{r}<>1,NOT(ISNUMBER($L{r})),'
               '$L{r}>=$J{r}),"",'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
-              'nrES_Att,2)>0,"Retested",IF(NOT(ISNUMBER($T{r})),"CHECK DATE",'
+              'nrES_Att,2,nrES_Raw,">=0")>0,"Retested",'
+              'IF(NOT(ISNUMBER($T{r})),"CHECK DATE",'
               'IF(TODAY()>$T{r},"OVERDUE","Due "&TEXT($T{r},"mm/dd")))))', "fx"),
         "V": (None, "in"), "W": (None, "in"),
         # row integrity: every one of these silently distorts a category
@@ -152,7 +170,9 @@ def build_examscores(wb):
               '"RAW SCORE OUT OF RANGE",'
               'IF(COUNTIF(nrES_RecID,$B{r})>1,"DUPLICATE RECORD",'
               'IF(AND($K{r}=2,COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
-              'nrES_Att,1)=0),"ATTEMPT 2 WITHOUT ATTEMPT 1","OK")))))', "fx"),
+              'nrES_Att,1)=0),"ATTEMPT 2 WITHOUT ATTEMPT 1",'
+              'IF(AND($K{r}=2,$L{r}=""),"RETEST ROW HAS NO SCORE",'
+              '"OK"))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"S{r}"].number_format = DATE
@@ -200,7 +220,7 @@ def build_spelling(wb):
     ws.sheet_view.showGridLines = False
     tests = [f"S{n:02d}" for n in range(1, 13)]
     header_row(ws, ["PID", "Cadet Name"] + tests +
-               ["Spelling Avg", "# Taken", "Intervention?"])
+               ["Spelling Avg", "# Taken", "Intervention?", "Row Check"])
     first, last = DATA_ROW, CADET_LAST
     cols = {
         "B": (f'IF(Cadets!$B{{r}}="","",Cadets!$B{{r}})', "fx"),
@@ -209,11 +229,27 @@ def build_spelling(wb):
         "Q": ('IF($C{r}="","",COUNT($D{r}:$O{r}))', "fx"),
         "R": ('IF($C{r}="","",IF($P{r}="","",'
               'IF($P{r}<cfgSpellInterventionAvg,"INTERVENTION","OK")))', "fx"),
+        # a mistyped score (950 for 95) used to sail through: it inflated the
+        # average, MASKED the policy-300.4.B INTERVENTION flag this sheet
+        # exists to raise, and poisoned the class-average row behind the
+        # Dashboard chart. COUNT<>COUNTA catches text; the SUMPRODUCT catches
+        # out-of-range numbers. Data validation alone would not: it does not
+        # fire on paste.
+        "S": ('IF($C{r}="","",'
+              'IF(COUNT($D{r}:$O{r})<>COUNTA($D{r}:$O{r}),'
+              '"SCORE NOT A NUMBER",'
+              'IF(SUMPRODUCT(($D{r}:$O{r}<>"")*'
+              '((N($D{r}:$O{r})<0)+(N($D{r}:$O{r})>100)))>0,'
+              '"SCORE OUT OF RANGE","OK")))', "fx"),
     }
     for i in range(12):
         cols[get_column_letter(4 + i)] = (None, "in")
     fill_rows(ws, first, last, cols)
     cf_formula(ws, f"R{first}:R{last}", f'$R{first}="INTERVENTION"', FILL_WARNBG)
+    cf_formula(ws, f"S{first}:S{last}",
+               f'AND($S{first}<>"",$S{first}<>"OK")', FILL_WARNBG)
+    dv_whole(ws, [f"D{first}:O{last}"], 0, 100,
+             "Spelling scores are 0-100 (25 words x 4 points).")
     # class stats rows below the grid
     sr = last + 2
     ws.cell(row=sr, column=3, value="Scores entered:").font = F_LABEL
@@ -234,12 +270,17 @@ def build_spelling(wb):
     define(wb, "nrSpellAvg", "Spelling", f"$P${first}:$P${last}")
     define(wb, "nrSpellTaken", "Spelling", f"$Q${first}:$Q${last}")
     define(wb, "nrSpellFlag", "Spelling", f"$R${first}:$R${last}")
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "P": 12, "Q": 9, "R": 14})
+    define(wb, "nrSpellRowCheck", "Spelling", f"$S${first}:$S${last}")
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "P": 12, "Q": 9, "R": 14,
+                    "S": 22})
     for i in range(12):
         ws.column_dimensions[get_column_letter(4 + i)].width = 7
     sheet_note(ws, "Scores 0-100 (25 words x 4 pts). Average below the "
                    "Settings intervention threshold (default 75) flags "
-                   "INTERVENTION per policy 300.4.B — see Counseling log.")
+                   "INTERVENTION per policy 300.4.B — see Counseling log. "
+                   "Row Check catches a score that is text or outside "
+                   "0-100: one extra digit hides the intervention flag and "
+                   "moves the class average.")
     return ws
 
 
@@ -826,11 +867,15 @@ def build_memos(wb):
         # same fix as ExamScores "Retest Due By": match mode 1 rolls a memo
         # assigned on a non-class day to the next class day instead of
         # returning text, which used to freeze Status at "Pending" forever
+        # ...and, like the retest clock, the due day must be one the academy
+        # is IN SESSION for: the padded tail of the class-day table would
+        # otherwise hand back a date days past graduation
         "H": ('IF(OR($D{r}="",$C{r}=""),"",'
               'LET(dn,XLOOKUP($C{r},nrCDdate,nrCDnum,"",1),'
               'IF(dn="","(after last class day)",'
-              'XLOOKUP(dn+cfgMemoDueClassDays,nrCDnum,nrCDdate,'
-              '"(after last class day)"))))', "fx"),
+              'LET(dd,XLOOKUP(dn+cfgMemoDueClassDays,nrCDnum,nrCDdate,""),'
+              'ok,XLOOKUP(dn+cfgMemoDueClassDays,nrCDnum,nrCDinsession,"No"),'
+              'IF(OR(dd="",ok<>"Yes"),"(after last class day)",dd)))))', "fx"),
         "I": (None, "in"),
         "J": ('IF($D{r}="","",IF($I{r}<>"",$I{r},IF(ISNUMBER($H{r}),$H{r},"")))', "fx"),
         "K": (None, "in"),

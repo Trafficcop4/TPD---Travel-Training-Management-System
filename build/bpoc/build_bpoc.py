@@ -100,7 +100,7 @@ def build():
     FILTERS = {
         "ExamScores": "B5:X5", "Attendance": "B5:S5", "Makeup": "B5:N5",
         "Skills": "B5:R5", "Incidents": "B5:O5", "Counseling": "B5:N5",
-        "Medical": "B5:N5", "Schedule": "B5:N5", "DismissalLog": "B5:O5",
+        "Medical": "B5:N5", "Schedule": "B5:O5", "DismissalLog": "B5:O5",
         "EmailLog": "B5:I5", "Memos": "B5:N5", "DailyLog": "B5:N5",
     }
     for name, ref in FILTERS.items():

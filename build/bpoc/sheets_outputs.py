@@ -403,16 +403,18 @@ def build_cadetprofile(wb):
     ws.cell(row=r, column=2, value=(
         '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(TEXT(nrIN_Date,"mm/dd/yyyy"),'
         'nrIN_Dir,nrIN_Sev,'
-        'nrIN_Desc),nrIN_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
-        'rngCadetPIDs,"")),FILTER(nrIN_Date,nrIN_PID=XLOOKUP(cfgProfileCadet,'
-        'rngCadetNames,rngCadetPIDs,"")),-1),10),"none")'))
+        'nrIN_Desc),(nrIN_PID<>"")*(nrIN_PID=XLOOKUP(cfgProfileCadet,'
+        'rngCadetNames,rngCadetPIDs,""))),FILTER(nrIN_Date,(nrIN_PID<>"")*'
+        '(nrIN_PID=XLOOKUP(cfgProfileCadet,'
+        'rngCadetNames,rngCadetPIDs,""))),-1),10),"none")'))
     r += 11
     ws.cell(row=r, column=2, value=(
         '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(TEXT(nrCO_Date,"mm/dd/yyyy"),'
-        'nrCO_Type,nrCO_Desc),'
-        'nrCO_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
-        'FILTER(nrCO_Date,nrCO_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
-        'rngCadetPIDs,"")),-1),10),"none")'))
+        'nrCO_Type,nrCO_Desc),(nrCO_PID<>"")*'
+        '(nrCO_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,""))),'
+        'FILTER(nrCO_Date,(nrCO_PID<>"")*'
+        '(nrCO_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
+        'rngCadetPIDs,""))),-1),10),"none")'))
     r += 11
     section_bar(ws, r, 2, 10, "Attendance exceptions & makeup (10 latest)")
     r += 1
@@ -420,17 +422,20 @@ def build_cadetprofile(wb):
         '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(TEXT(nrAT_Date,"mm/dd/yyyy"),'
         'nrAT_Type,'
         'Attendance!$H$6:$H$805,nrAT_Min,nrAT_Sess,nrAT_Excused),'
-        'nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
-        'FILTER(nrAT_Date,nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
-        'rngCadetPIDs,"")),-1),10),"none")'))
+        '(nrAT_PID<>"")*'
+        '(nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,""))),'
+        'FILTER(nrAT_Date,(nrAT_PID<>"")*'
+        '(nrAT_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,'
+        'rngCadetPIDs,""))),-1),10),"none")'))
     r += 11
     ws.cell(row=r, column=2, value=(
         '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(TEXT(Makeup!$C$6:$C$505,'
         '"mm/dd/yyyy"),nrMK_Type,'
-        'nrMK_Min,nrMK_Sess,nrMK_Credit),'
-        'nrMK_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,"")),'
-        'FILTER(Makeup!$C$6:$C$505,nrMK_PID=XLOOKUP(cfgProfileCadet,'
-        'rngCadetNames,rngCadetPIDs,"")),-1),10),"no makeup entries")'))
+        'nrMK_Min,nrMK_Sess,nrMK_Credit),(nrMK_PID<>"")*'
+        '(nrMK_PID=XLOOKUP(cfgProfileCadet,rngCadetNames,rngCadetPIDs,""))),'
+        'FILTER(Makeup!$C$6:$C$505,(nrMK_PID<>"")*'
+        '(nrMK_PID=XLOOKUP(cfgProfileCadet,'
+        'rngCadetNames,rngCadetPIDs,""))),-1),10),"no makeup entries")'))
     r += 11
     section_bar(ws, r, 2, 10, "OPEN missed time — 6 most recent "
                               "(event / date / type / reason / balance owed)")
@@ -882,6 +887,10 @@ def build_chapterpacket(wb):
     sel.fill = FILL_INPUT
     sel.font = F_INPUT
     sel.border = BOX
+    # nrCHnum holds chapter numbers as TEXT; a General-formatted picker turns
+    # a dropdown pick into a NUMBER and every exact XLOOKUP/MATCH/= below
+    # silently returns #N/A. Text format keeps the key type uniform.
+    sel.number_format = "@"
     dv_list(ws, "=nrCHnum", [f"C{r}"])
     define(wb, "cfgPacketChapter", "ChapterPacket", f"$C${r}")
     C = "cfgPacketChapter"
@@ -988,10 +997,20 @@ def build_examsheet(wb):
         '"(set exam #)")')).font = F_KPI
     r += 1
     ws.cell(row=r, column=2, value=(
+        # MAXIFS returns 0 (not an error) when nothing matches, so the old
+        # IFERROR fallback never fired and an unscheduled exam printed
+        # "Administered: 01/00/1900". The schedule block is also named
+        # "Final Test", not "Test 20", so the final exam could never match
+        # the literal key — fall back to the date the exam was actually
+        # taken (first attempt on record) before giving up.
         '="Exam code: "&IFERROR(INDEX(rngEPcode,MATCH(' + E +
         ',IFERROR(rngEPseq+0,-1),0)),"?")&"   Administered: "&'
-        'IFERROR(TEXT(MAXIFS(nrSCH_Date,nrSCH_Act,"Test "&' + E + '),'
-        '"mm/dd/yyyy"),"")&"   Passing score: "&cfgPassingScore&'
+        'LET(s,MAXIFS(nrSCH_Date,nrSCH_Act,"Test "&' + E + '),'
+        'a,IFERROR(MINIFS(nrES_Date,nrES_Code,INDEX(rngEPcode,MATCH(' + E +
+        ',IFERROR(rngEPseq+0,-1),0)),nrES_Att,1,nrES_Date,">0"),0),'
+        'IF(s>0,TEXT(s,"mm/dd/yyyy"),IF(a>0,TEXT(a,"mm/dd/yyyy"),'
+        '"(not scheduled)")))'
+        '&"   Passing score: "&cfgPassingScore&'
         '"   (passed retests record at "&cfgRetakeRecordedCap&")"'
     )).font = F_SMALL
     r += 2
@@ -1081,7 +1100,8 @@ def build_signin(wb):
     r += 2
     ws.cell(row=r, column=2, value=(
         '="TYLER POLICE ACADEMY — "&cfgAcademyClass&" — DAILY REPORT & '
-        'ATTENDANCE ROSTER — "&TEXT(cfgSignInDate,"dddd, mmmm d, yyyy")'
+        'ATTENDANCE ROSTER — "&IF(cfgSignInDate="","(date: ____________)",'
+        'TEXT(cfgSignInDate,"dddd, mmmm d, yyyy"))'
     )).font = F_KPI
     r += 2
     section_bar(ws, r, 2, 9, "Instruction scheduled this date")
@@ -1089,7 +1109,7 @@ def build_signin(wb):
     ws.cell(row=r, column=2, value=(
         '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
         'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
-        'nrSCH_Date=cfgSignInDate),9),'
+        '(nrSCH_Date<>"")*(nrSCH_Date=cfgSignInDate)),9),'
         '"— no schedule entered for this date —")'))
     r += 9
     section_bar(ws, r, 2, 9, "AM roll call")
@@ -1184,6 +1204,8 @@ def build_evalsheet(wb):
     sel.fill = FILL_INPUT
     sel.font = F_INPUT
     sel.border = BOX
+    # see ChapterPacket: nrCHnum is TEXT, so the picker must be text-formatted
+    sel.number_format = "@"
     dv_list(ws, "=nrCHnum", [f"C{r}"])
     define(wb, "cfgEvalChapter", "EvalSheet", f"$C${r}")
     ws.cell(row=r, column=5, value='="(prints for: "&IFERROR(XLOOKUP('
@@ -1671,7 +1693,7 @@ def gray_separated_rows(wb):
     gray_font = _Font(color="9AA5B1", strike=True)
     gray_fill = _Fill("solid", fgColor="EDEFF2")
     targets = {
-        "Writing": "B6:AT55", "Spelling": "B6:R55", "PT": "B6:AC55",
+        "Writing": "B6:AT55", "Spelling": "B6:S55", "PT": "B6:AC55",
         "Certifications": "B6:U55", "ScoresGrid": "B6:AC55",
         "GradChecklist": "B6:P55", "StateExam": "B6:L55",
         "Cadets": "B6:M55",
