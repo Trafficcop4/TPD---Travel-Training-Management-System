@@ -20,7 +20,13 @@ LISTS = {
                "Disciplinary", "Other"],
     "Documentation": ["Not Required", "Pending", "Received"],
     "Excused?": ["Counted", "Excused"],
-    "Makeup Type": ["Classroom", "PT", "Skills", "Admin Approved"],
+    # Only the two types the attendance caps actually credit. The list used
+    # to offer "Skills" and "Admin Approved" as well, and the Makeup Row
+    # Check then rejected both unconditionally as TYPE NOT CREDITED - the
+    # dropdown invited two answers the sheet immediately painted red.
+    # Classroom skills time cannot be made up and there is no administrative
+    # waiver, so those two answers were never valid to begin with.
+    "Makeup Type": ["Classroom", "PT"],
     "Scoring Mode": ["Score", "Pass/Fail"],
     "Skill Result": ["Pass", "Fail", "Pending"],
     "Incident Direction": ["Positive", "Negative", "Informational"],
@@ -50,6 +56,12 @@ LISTS = {
 # ------------------------------------------------------------------ holidays
 # (name, formula template over year cell {Y}) — observed-date logic from the
 # coordinator's calendar workbook (Sat->Fri, Sun->Mon shifts where marked).
+# observed Christmas Day: the federal weekend-shift rule (Sat -> Fri,
+# Sun -> Mon). Referenced twice below, so it lives in one place.
+_XMAS_OBS = ("IF(WEEKDAY(DATE({Y},12,25),2)=6,DATE({Y},12,25)-1,"
+             "IF(WEEKDAY(DATE({Y},12,25),2)=7,DATE({Y},12,25)+1,"
+             "DATE({Y},12,25)))")
+
 HOLIDAYS = [
     ("New Year's Day",
      "IF(WEEKDAY(DATE({Y},1,1),2)=6,DATE({Y},1,1)-1,"
@@ -77,12 +89,25 @@ HOLIDAYS = [
      "DATE({Y},11,1)+MOD(11-WEEKDAY(DATE({Y},11,1),2),7)+21"),
     ("Black Friday",
      "DATE({Y},11,1)+MOD(11-WEEKDAY(DATE({Y},11,1),2),7)+22"),
+    # Christmas Eve and Christmas Day may never resolve to the SAME observed
+    # date. Applying the weekend-shift rule to each date independently
+    # collided in two of the seven calendars: Dec 25 on a Saturday shifted
+    # Christmas Day back onto Friday the 24th (already Christmas Eve), and
+    # Dec 25 on a Monday shifted Christmas Eve (Sunday the 24th) forward onto
+    # Monday the 25th. Either collision silently deletes one closure day from
+    # nrAllClosures, which pulls every later class day - and every Day #,
+    # retest deadline, memo due date and writing date computed from it - one
+    # day earlier with no error anywhere.
+    #
+    # Christmas Day keeps the ordinary federal weekend-shift rule; Christmas
+    # Eve is defined as the WEEKDAY BEFORE the observed Christmas Day, which
+    # is always distinct and always a Mon-Fri class day:
+    #   Fri 12/25 -> Eve Thu 12/24      Sat 12/25 -> Day Fri 12/24, Eve Thu 12/23
+    #   Mon 12/25 -> Day Mon 12/25, Eve Fri 12/22
+    #   Sun 12/25 -> Day Mon 12/26, Eve Fri 12/23
     ("Christmas Eve",
-     "IF(WEEKDAY(DATE({Y},12,24),2)=6,DATE({Y},12,24)-1,"
-     "IF(WEEKDAY(DATE({Y},12,24),2)=7,DATE({Y},12,24)+1,DATE({Y},12,24)))"),
-    ("Christmas Day",
-     "IF(WEEKDAY(DATE({Y},12,25),2)=6,DATE({Y},12,25)-1,"
-     "IF(WEEKDAY(DATE({Y},12,25),2)=7,DATE({Y},12,25)+1,DATE({Y},12,25)))"),
+     "(" + _XMAS_OBS + ")-IF(WEEKDAY(" + _XMAS_OBS + ",2)=1,3,1)"),
+    ("Christmas Day", _XMAS_OBS),
 ]
 
 # ---------------------------------------------------------------- instructors

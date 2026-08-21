@@ -144,7 +144,13 @@ def build_examscores(wb):
         # SESSION. The class-day table is padded 44 rows past cfgEndDate, so
         # keying only on "did the lookup fall off the end" let a deadline
         # roll silently onto rows the same table marks In Session? = No.
-        "T": ('IF($Q{r}<>"Yes","",IF($S{r}="","(enter date)",'
+        # keyed off the FAILED ATTEMPT 1 itself, not off Q ("RetakeReq?"):
+        # Q flips to "No" the moment a scored attempt 2 exists, which erased
+        # the deadline and made a late retest untraceable. The deadline that
+        # applied stays on the row forever so U (and the audit) can compare
+        # the retest's actual date against it.
+        "T": ('IF(OR($C{r}="",$L{r}="",$K{r}<>1,NOT(ISNUMBER($L{r})),'
+              '$L{r}>=$J{r}),"",IF($S{r}="","(enter date)",'
               'LET(dn,XLOOKUP($S{r},nrCDdate,nrCDnum,"",1),'
               'IF(dn="","(after last class day)",'
               'LET(dd,XLOOKUP(dn+cfgRetestClassDays,nrCDnum,nrCDdate,""),'
@@ -155,10 +161,20 @@ def build_examscores(wb):
         # A due date that could not be computed reads CHECK DATE, never the
         # reassuring "Pending" that used to hide it from every flag and the
         # audit sheet forever.
+        # ...and the completed case is CHECKED, not waved through. Before,
+        # any scored attempt-2 row made this read "Retested" regardless of
+        # when it was taken, so a retest months past the policy 300.5 window
+        # left no trace anywhere in the workbook. LATE RETEST is counted by
+        # the sysFlags retest flag and by the sysAudit overdue-retest line.
         "U": ('IF(OR($C{r}="",$L{r}="",$K{r}<>1,NOT(ISNUMBER($L{r})),'
               '$L{r}>=$J{r}),"",'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
-              'nrES_Att,2,nrES_Raw,">=0")>0,"Retested",'
+              'nrES_Att,2,nrES_Raw,">=0")>0,'
+              'IF(IFERROR(MINIFS(nrES_Date,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2,nrES_Raw,">=0",nrES_Date,">0"),0)=0,"RETEST UNDATED",'
+              'IF(NOT(ISNUMBER($T{r})),"RETEST DATE UNCHECKED",'
+              'IF(MINIFS(nrES_Date,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2,nrES_Raw,">=0",nrES_Date,">0")>$T{r},"LATE RETEST "&TEXT('
+              'MINIFS(nrES_Date,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2,nrES_Raw,">=0",nrES_Date,">0"),"mm/dd")&" (due "'
+              '&TEXT($T{r},"mm/dd")&")","Retested"))),'
               'IF(NOT(ISNUMBER($T{r})),"CHECK DATE",'
               'IF(TODAY()>$T{r},"OVERDUE","Due "&TEXT($T{r},"mm/dd")))))', "fx"),
         "V": (None, "in"), "W": (None, "in"),
@@ -172,7 +188,17 @@ def build_examscores(wb):
               'IF(AND($K{r}=2,COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
               'nrES_Att,1)=0),"ATTEMPT 2 WITHOUT ATTEMPT 1",'
               'IF(AND($K{r}=2,$L{r}=""),"RETEST ROW HAS NO SCORE",'
-              '"OK"))))))', "fx"),
+              # 500.1.H: a cadet whose FINAL PT was failed may not sit the
+              # Final Exam. sysChecks column P / nrCKfinalExamElig computed
+              # that rule and was then referenced by nothing at all - no
+              # formula, no validation, no VBA, no printable. This is where
+              # it lands: the moment a Final score is keyed for a cadet whose
+              # final PT reads "No", the row says so and the sysAudit
+              # "Exam rows failing Row Check" line turns red.
+              'IF(AND($H{r}="Final",$L{r}<>"",'
+              'IFERROR(INDEX(nrCKfinalExamElig,MATCH($D{r},rngCadetPIDs,0)),'
+              '"")="No"),"FINAL EXAM AFTER FAILED FINAL PT (500.1.H)",'
+              '"OK")))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"S{r}"].number_format = DATE
@@ -182,6 +208,10 @@ def build_examscores(wb):
     dv_list(ws, "=lstAttemptNum", [f"K{first}:K{last}"])
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="OVERDUE"', FILL_WARNBG)
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="CHECK DATE"', FILL_WARNBG)
+    cf_formula(ws, f"U{first}:U{last}",
+               f'LEFT($U{first},12)="LATE RETEST"', FILL_WARNBG)
+    cf_formula(ws, f"U{first}:U{last}",
+               f'LEFT($U{first},7)="RETEST "', FILL_WARNBG)
     cf_formula(ws, f"X{first}:X{last}",
                f'AND($X{first}<>"",$X{first}<>"OK")', FILL_WARNBG)
     cf_yes_no(ws, f"O{first}:O{last}")
@@ -288,10 +318,12 @@ def build_spelling(wb):
 def build_attendance(wb):
     ws = wb.create_sheet("Attendance")
     ws.sheet_view.showGridLines = False
+    # T ("Row Check") is APPENDED at the end - no existing column moves.
     header_row(ws, ["EventID", "Date", "Cadet Name", "PID", "Agency",
                     "Event Type", "Reason", "Minutes", "Sessions", "Is PT?",
                     "Doc Status", "Excused?", "Counts?", "Notes",
-                    "Made-Up Min", "Made-Up Sess", "Balance", "Cleared?"])
+                    "Made-Up Min", "Made-Up Sess", "Balance", "Cleared?",
+                    "Row Check"])
     first, last = DATA_ROW, DATA_ROW + ROWS_ATTEND - 1
     fill_rows(ws, first, last, {
         "B": ('IF($D{r}="","","A"&TEXT(ROW()-%d,"000"))' % HDR_ROW, "fx"),
@@ -327,16 +359,52 @@ def build_attendance(wb):
         "R": ('IF(OR($B{r}="",$N{r}<>"Yes"),"",'
               'IF($K{r}="Yes",IF(N($J{r})>0,N($J{r})-N($Q{r}),""),'
               'IF(N($I{r})>0,N($I{r})-N($P{r}),"")))', "fx"),
+        # MAXIFS returns 0 when no credited makeup row carries a date, so a
+        # credited Makeup row with a BLANK Date stamped a fabricated
+        # "CLEARED 12/30" onto the policy-400 ledger. A dateless clear now
+        # says so out loud; Makeup Row Check refuses credit for it as well,
+        # so this branch should only ever be reachable on legacy data.
         "S": ('IF(OR($B{r}="",$R{r}=""),"",'
-              'IF($R{r}<=0,"CLEARED "&IFERROR(TEXT(MAXIFS(nrMK_Date,'
-              'nrMK_Link,$B{r},nrMK_Credit,"Yes",nrMK_PID,$E{r}),"mm/dd"),""),'
+              'IF($R{r}<=0,'
+              'IF(IFERROR(MAXIFS(nrMK_Date,nrMK_Link,$B{r},nrMK_Credit,"Yes",'
+              'nrMK_PID,$E{r}),0)=0,"CLEARED (makeup date missing)",'
+              '"CLEARED "&TEXT(MAXIFS(nrMK_Date,nrMK_Link,$B{r},'
+              'nrMK_Credit,"Yes",nrMK_PID,$E{r}),"mm/dd")),'
               '"OPEN"))', "fx"),
+        # A10 / A23: Attendance was the only major log with no Row Check.
+        # Two silent losses lived here: a counted absence whose unit column
+        # is BLANK (Sessions blank on a PT event, Minutes blank on a
+        # classroom event) dropped out of BOTH caps and never showed OPEN;
+        # and a row carrying BOTH minutes and sessions silently discarded
+        # whichever one did not match the row's own "Is PT?" flag - in the
+        # balance, in the makeup reconciliation and in the sysAttendance
+        # caps. Neither was visible anywhere until now.
+        "T": ('IF($D{r}="","",'
+              'IF($C{r}="","NO DATE",'
+              'IF($G{r}="","NO EVENT TYPE",'
+              'IF(AND($I{r}<>"",NOT(ISNUMBER($I{r}))),"MINUTES NOT A NUMBER",'
+              'IF(AND($J{r}<>"",NOT(ISNUMBER($J{r}))),"SESSIONS NOT A NUMBER",'
+              'IF(OR(N($I{r})<0,N($J{r})<0),"NEGATIVE MINUTES/SESSIONS",'
+              'IF(AND($K{r}="Yes",N($I{r})>0),'
+              '"MINUTES ON A PT EVENT - not counted (PT counts sessions)",'
+              'IF(AND($K{r}="No",N($J{r})>0),'
+              '"SESSIONS ON A CLASSROOM EVENT - not counted (classroom '
+              'counts minutes)",'
+              'IF(AND($N{r}="Yes",$K{r}="Yes",N($J{r})=0),'
+              '"COUNTED PT EVENT WITH NO SESSIONS - dropped from the PT cap",'
+              'IF(AND($N{r}="Yes",$K{r}="No",N($I{r})=0),'
+              '"COUNTED EVENT WITH NO MINUTES - dropped from the classroom '
+              'cap","OK"))))))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"C{r}"].number_format = DATE
     cf_formula(ws, f"S{first}:S{last}", f'$S{first}="OPEN"', FILL_WARNBG)
     cf_formula(ws, f"S{first}:S{last}",
+               f'$S{first}="CLEARED (makeup date missing)"', FILL_WARNBG)
+    cf_formula(ws, f"S{first}:S{last}",
                f'LEFT($S{first},7)="CLEARED"', FILL_OKBG)
+    cf_formula(ws, f"T{first}:T{last}",
+               f'AND($T{first}<>"",$T{first}<>"OK")', FILL_WARNBG)
     dv_list(ws, "=rngCadetNames", [f"D{first}:D{last}"])
     dv_list(ws, "=lstAttendanceEvent", [f"G{first}:G{last}"])
     dv_list(ws, "=lstReason", [f"H{first}:H{last}"])
@@ -358,15 +426,21 @@ def build_attendance(wb):
     define(wb, "nrAT_IsPT", "Attendance", f"$K${first}:$K${last}")
     define(wb, "nrAT_Excused", "Attendance", f"$M${first}:$M${last}")
     define(wb, "nrAT_Counts", "Attendance", f"$N${first}:$N${last}")
+    define(wb, "nrAT_RowCheck", "Attendance", f"$T${first}:$T${last}")
     col_widths(ws, {"A": 3, "B": 9, "C": 11, "D": 22, "E": 9, "F": 18,
                     "G": 16, "H": 12, "I": 9, "J": 9, "K": 7, "L": 12,
-                    "M": 10, "N": 9, "O": 30})
+                    "M": 10, "N": 9, "O": 30, "T": 46})
     sheet_note(ws, "Exception log: only missed/modified time gets a row. "
                    "Minutes count toward the classroom cap; Sessions toward "
                    "the PT cap. Excused or documented-modified-PT rows don't "
                    "count (policy 400). Each counting event stays OPEN until "
                    "Makeup rows linked to its EventID cover the balance — "
-                   "then it shows CLEARED with the makeup date.")
+                   "then it shows CLEARED with the makeup date. Watch Row "
+                   "Check (last column): a counted row with no minutes (or "
+                   "no sessions on a PT event) is dropped from BOTH caps, "
+                   "and a row carrying the unit that does not match its own "
+                   "'Is PT?' flag has that value discarded everywhere — "
+                   "balance, makeup reconciliation and the caps.")
     return ws
 
 
@@ -394,17 +468,35 @@ def build_makeup(wb):
         # a blank Linked Event is NOT ok: minute-for-minute reconciliation
         # and a TCOLE hours audit both require every credited minute to be
         # attached to the specific missed event it makes up.
+        # A15: a credited row with a BLANK Date used to clear its event
+        # with the fabricated banner "CLEARED 12/30" - a made-up make-up
+        # date on the policy-400 ledger. A22: the sign and magnitude of the
+        # credit were never checked, so a NEGATIVE credit passed as "OK" /
+        # "Credit Applies = Yes" and INCREASED the cadet's owed time - a
+        # silently wrong number rather than an error.
         "N": ('IF($D{r}="","",'
               'IF(AND($F{r}<>"Classroom",$F{r}<>"PT"),"TYPE NOT CREDITED",'
+              'IF($C{r}="","NO MAKEUP DATE",'
+              'IF(NOT(ISNUMBER($C{r})),"MAKEUP DATE NOT A DATE",'
+              'IF(OR(AND($G{r}<>"",NOT(ISNUMBER($G{r}))),'
+              'AND($H{r}<>"",NOT(ISNUMBER($H{r})))),"CREDIT NOT A NUMBER",'
+              'IF(OR(N($G{r})<0,N($H{r})<0),"NEGATIVE CREDIT",'
+              'IF(AND($F{r}="Classroom",N($G{r})<=0),"NO MINUTES CREDITED",'
+              'IF(AND($F{r}="PT",N($H{r})<=0),"NO SESSIONS CREDITED",'
               'IF($I{r}="","NO LINKED EVENT",'
               'IF(COUNTIF(nrAT_ID,$I{r})=0,"NO SUCH EVENT",'
               'IF(INDEX(nrAT_PID,MATCH($I{r},nrAT_ID,0))<>$E{r},"WRONG CADET",'
               'IF(INDEX(nrAT_IsPT,MATCH($I{r},nrAT_ID,0))<>'
-              'IF($F{r}="PT","Yes","No"),"UNIT MISMATCH","OK"))))))', "fx"),
+              'IF($F{r}="PT","Yes","No"),"UNIT MISMATCH","OK"))))))))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"C{r}"].number_format = DATE
     dv_list(ws, "=rngCadetNames", [f"D{first}:D{last}"])
+    # A28: the dropdown used to offer "Skills" and "Admin Approved", which
+    # Row Check rejects unconditionally as TYPE NOT CREDITED - the sheet
+    # invited two answers it then painted red. Only the two types the caps
+    # actually credit are offered; a legacy row still carrying one of them
+    # keeps reading TYPE NOT CREDITED, which is the truth.
     dv_list(ws, "=lstMakeupType", [f"F{first}:F{last}"])
     dv_list(ws, "=nrAT_ID", [f"I{first}:I{last}"], enforce=False)
     dv_list(ws, "=lstDocumentation", [f"J{first}:J{last}"])
@@ -416,13 +508,17 @@ def build_makeup(wb):
     define(wb, "nrMK_Min", "Makeup", f"$G${first}:$G${last}")
     define(wb, "nrMK_Sess", "Makeup", f"$H${first}:$H${last}")
     define(wb, "nrMK_Credit", "Makeup", f"$L${first}:$L${last}")
+    define(wb, "nrMK_RowCheck", "Makeup", f"$N${first}:$N${last}")
     cf_formula(ws, f"N{first}:N{last}",
                f'AND($N{first}<>"",LEFT($N{first},2)<>"OK")', FILL_WARNBG)
     col_widths(ws, {"A": 3, "B": 10, "C": 11, "D": 22, "E": 9, "F": 14,
                     "G": 13, "H": 13, "I": 13, "J": 12, "K": 8, "L": 13,
                     "M": 30, "N": 22})
-    sheet_note(ws, "Makeup is minute-for-minute (policy 400.5). Classroom "
-                   "skills time cannot be made up. Credit applies only when "
+    sheet_note(ws, "Makeup is minute-for-minute (policy 400.5). Only "
+                   "classroom minutes and PT sessions can be made up — "
+                   "skills time cannot, and there is no administrative "
+                   "waiver, so the Type dropdown offers only Classroom and "
+                   "PT. Credit applies only when "
                    "documentation is Received, no Hold, and Row Check is OK. "
                    "Pick the missed event's ID in Linked Event — the "
                    "Attendance sheet clears that event automatically when its "
@@ -430,7 +526,11 @@ def build_makeup(wb):
                    "it makes up — Row Check refuses credit with no Linked "
                    "Event, for another cadet's event, an EventID that no "
                    "longer exists, a Type the caps don't credit, or minutes "
-                   "booked against a PT (session-counted) event. Credit is "
+                   "booked against a PT (session-counted) event. It also "
+                   "refuses a row with no makeup Date (which used to stamp a "
+                   "fabricated CLEARED date on the attendance ledger) and a "
+                   "zero or NEGATIVE credit (which used to pass as OK and "
+                   "increase the cadet's owed time). Credit is "
                    "capped at the linked event's own minutes/sessions; split "
                    "a long session across rows to cover two events.")
     return ws
@@ -455,12 +555,25 @@ def build_skills(wb):
         "H": ('IF($E{r}="","",IFERROR(INDEX(rngSM_pass,MATCH($E{r},rngSM_cat,0)),""))', "fx"),
         "I": (None, "in"), "J": (None, "in"), "K": (None, "in"),
         "L": (None, "in"), "M": (None, "in"),
-        "N": ('IF($C{r}="","",COUNTIFS(nrSK_PID,$D{r},nrSK_Cat,$E{r}))', "fx"),
-        "O": ('IF($C{r}="","",LET(latest,MAXIFS(nrSK_Att,nrSK_PID,$D{r},'
-              'nrSK_Cat,$E{r}),res,IF($I{r}=latest,$J{r},""),'
-              'IF($I{r}<>latest,"(superseded)",'
-              'IF(OR(res="",res="Pending"),"Pending",IF(res="Pass","Qualified",'
-              'IF(AND(res="Fail",$N{r}>=$F{r}),"FAILED OUT","Needs Remediation"))))))', "fx"),
+        # "Attempts Used" counts SCORED attempts (Pass/Fail). A row logged
+        # when the next attempt is merely SCHEDULED is not an attempt used,
+        # and counting it pushed a cadet to FAILED OUT one attempt early.
+        "N": ('IF($C{r}="","",COUNTIFS(nrSK_PID,$D{r},nrSK_Cat,$E{r},'
+              'nrSK_Res,"Pass")+COUNTIFS(nrSK_PID,$D{r},nrSK_Cat,$E{r},'
+              'nrSK_Res,"Fail"))', "fx"),
+        # same placeholder-row bug class as the exam retests: "latest" used
+        # to be the highest attempt number of ANY row, so adding an unscored
+        # next-attempt row made the real "Needs Remediation" / "FAILED OUT"
+        # row read "(superseded)" and the new blank row read "Pending" -
+        # which zeroed sysSkills "Needs Remediation" and flipped Skills Elig
+        # (nrSKelig) from No back to Yes. Only a SCORED row supersedes.
+        "O": ('IF($C{r}="","",'
+              'IF(AND(MAX(MAXIFS(nrSK_Att,nrSK_PID,$D{r},nrSK_Cat,$E{r},nrSK_Res,"Pass"),MAXIFS(nrSK_Att,nrSK_PID,$D{r},nrSK_Cat,$E{r},nrSK_Res,"Fail"))>0,'
+              'N($I{r})<MAX(MAXIFS(nrSK_Att,nrSK_PID,$D{r},nrSK_Cat,$E{r},nrSK_Res,"Pass"),MAXIFS(nrSK_Att,nrSK_PID,$D{r},nrSK_Cat,$E{r},nrSK_Res,"Fail"))),"(superseded)",'
+              'IF(OR($J{r}="",$J{r}="Pending"),"Pending",'
+              'IF($J{r}="Pass","Qualified",'
+              'IF(AND($J{r}="Fail",$N{r}>=$F{r}),"FAILED OUT",'
+              '"Needs Remediation")))))', "fx"),
         "P": ('IF($C{r}="","",IF($O{r}="FAILED OUT","Yes","No"))', "fx"),
         "Q": (None, "in"),
         "R": (None, "in"),
@@ -487,7 +600,12 @@ def build_skills(wb):
     sheet_note(ws, "One row per attempt (firearms scores recorded; Top Gun "
                    "uses the firearms Score column). Firearms rows: set "
                    "Course of Fire 1 or 2 — TCOLE requires 70%+ on BOTH. "
-                   "Exhausting max attempts = separation review (300.7).")
+                   "Exhausting max attempts = separation review (300.7). "
+                   "A next-attempt row logged before it is scored does NOT "
+                   "supersede the previous result and does not consume an "
+                   "attempt: Status stays 'Pending' on the new row and the "
+                   "real result keeps driving Skills eligibility until a "
+                   "Pass or Fail is entered.")
     return ws
 
 

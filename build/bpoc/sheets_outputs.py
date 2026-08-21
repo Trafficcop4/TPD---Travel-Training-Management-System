@@ -107,8 +107,11 @@ def build_dashboard(wb):
          'SUMPRODUCT((nrCadetStatus="Active")*(nrCKgradElig="Yes"))')
     _kpi(ws, r, 8, "Flagged cadets",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrFLcount>0))')
-    _kpi(ws, r, 10, "Retests overdue / undated",
-         'COUNTIF(nrES_RetStat,"OVERDUE")+COUNTIF(nrES_RetStat,"CHECK DATE")')
+    _kpi(ws, r, 10, "Retests overdue / late / undated",
+         'COUNTIF(nrES_RetStat,"OVERDUE")+COUNTIF(nrES_RetStat,"CHECK DATE")'
+         '+COUNTIF(nrES_RetStat,"LATE RETEST*")'
+         '+COUNTIF(nrES_RetStat,"RETEST UNDATED")'
+         '+COUNTIF(nrES_RetStat,"RETEST DATE UNCHECKED")')
     r += 3
     _kpi(ws, r, 2, "Spelling interventions",
          'COUNTIF(nrSpellFlag,"INTERVENTION")')
@@ -202,6 +205,11 @@ def build_dashboard(wb):
 
     col_widths(ws, {"A": 3, "B": 14, "C": 14, "D": 14, "E": 14, "F": 14,
                     "G": 14, "H": 14, "I": 14, "J": 14, "K": 40})
+    # zero input cells: every value here is a formula or a chart, and this is
+    # the landing page, so a stray keystroke on a KPI tile or a navigation
+    # hyperlink was silently destructive. Locked (still fully selectable, and
+    # the macro buttons the installer adds keep working on a locked sheet).
+    protect(ws)
     return ws
 
 
@@ -254,14 +262,21 @@ def build_scoresgrid(wb):
            f"$D${ar}:${get_column_letter(3+n_exams)}${ar}")
     # sub-70 highlighting
     lastcl = get_column_letter(3 + n_exams)
+    # each column is a DIFFERENT exam, and ExamPlan lets an exam carry its
+    # own passing score - comparing every column against the global
+    # cfgPassingScore made these red cells contradict the authoritative
+    # ExamScores "Pass?" column whenever an exam overrode it.
     cf_formula(ws, f"D{FIRST}:{lastcl}{LAST}",
-               f'AND(D{FIRST}<>"",ISNUMBER(D{FIRST}),D{FIRST}<cfgPassingScore)',
+               f'AND(D{FIRST}<>"",ISNUMBER(D{FIRST}),D{FIRST}<'
+               f'IFERROR(INDEX(rngEPpass,MATCH(D${HDR_ROW},rngEPcode,0)),'
+               f'cfgPassingScore))',
                FILL_WARNBG)
     col_widths(ws, {"A": 3, "B": 10, "C": 24})
     for i in range(n_exams):
         ws.column_dimensions[get_column_letter(4 + i)].width = 7
     sheet_note(ws, "Recorded score of each exam's final attempt (retest cap "
-                   "applied). Red = below 70.")
+                   "applied). Red = below THAT exam's own passing score on "
+                   "ExamPlan (70 unless the exam overrides it).")
     protect(ws)
     return ws
 
@@ -621,7 +636,8 @@ def build_gradchecklist(wb):
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "The final gate before the ceremony — columns Academic "
                    "through Certs must ALL read Yes and Blocking Issues must "
-                   "be empty. Anything else blocks and is spelled out in "
+                   "read 'Eligible' — it is never blank for a passing cadet. "
+                   "Anything else blocks and is spelled out in "
                    "Blocking Issues: 'No', 'Pending' (Final PT points rubric "
                    "not entered on Settings) and 'Not taken' (final PT never "
                    "assessed) are all blocks, not neutral values.")
@@ -778,8 +794,19 @@ def build_audit(wb):
     cf_yes_no(ws, f"J{doc_first}:J{doc_last}")
     col_widths(ws, {"A": 3, "B": 30, "C": 11, "D": 11, "E": 12, "F": 11,
                     "G": 12, "H": 12, "I": 10})
-    page_setup_portrait(ws, print_area=f"B{HDR_ROW}:J{doc_last}",
-                        repeat_rows=f"{doc_hdr}:{doc_hdr}")
+    # NO repeat_rows: Excel repeats print titles on EVERY page including
+    # page 1, so naming the enrollment-docs header (which sits ~60 rows into
+    # the print area) printed that header above the report banner on page 1
+    # and twice on the page it naturally falls on.
+    page_setup_portrait(ws, print_area=f"B{HDR_ROW}:J{doc_last}")
+    # ---- A16: the Audit sheet was the last mixed input/formula deliverable
+    # left completely unprotected - 207 formula cells (the sysAudit mirror,
+    # the cadet-name column and the AllDocs roll-up) plus the requirement
+    # labels could be typed over. Its input cells were never unlocked, so
+    # protecting it without this would have frozen the sheet instead.
+    unlock_range(ws, f"F{prg_first}:G{prg_last}")
+    unlock_range(ws, f"C{doc_first}:I{doc_last}")
+    protect(ws)
     sheet_note(ws, "Top: live program checks. Bottom: per-cadet enrollment "
                    "file checklist. Chapter-level records live on "
                    "ChapterMaster; instructor credentials on Instructors.")
@@ -865,8 +892,11 @@ def build_addendum(wb):
     ws.cell(row=r, column=2, value=DL.ACADEMY_ADDRESS).font = F_SMALL
     col_widths(ws, {"A": 3, "B": 7, "C": 46, "D": 12, "E": 12, "F": 11,
                     "G": 30, "H": 4})
+    # print titles must start at the FIRST row of the print area: naming
+    # only the table header (row hdr, three rows in) made Excel repeat it at
+    # the top of page 1 above the banner and again where it naturally falls.
     page_setup_portrait(ws, print_area=f"B{HDR_ROW}:G{r}",
-                        repeat_rows=f"{hdr}:{hdr}")
+                        repeat_rows=f"{HDR_ROW}:{hdr}")
     protect(ws)
     sheet_note(ws, "Fills from ChapterMaster/Schedule automatically — only "
                    "chapters with logged hours show; excess rows highlight. "
@@ -904,11 +934,16 @@ def build_chapterpacket(wb):
     _profile_label(ws, r, 8, "Delivered hrs", X + 'nrCHdeliv),"")')
     r += 1
     _profile_label(ws, r, 2, "First taught",
-                   'IFERROR(TEXT(XLOOKUP(' + C + ',nrCHnum,nrCHfirst),'
-                   '"mm/dd/yyyy"),"")')
+                   'IF(IFERROR(N(XLOOKUP(' + C + ',nrCHnum,nrCHfirst)),0)=0,'
+                   '"(not yet taught)",TEXT(XLOOKUP(' + C +
+                   ',nrCHnum,nrCHfirst),"mm/dd/yyyy"))')
+    # MAXIFS returns 0 (not an error) when the chapter has no schedule
+    # blocks, so IFERROR never fired and this printed 12/30/1899 right beside
+    # the "no hours logged" line on the same page.
     _profile_label(ws, r, 5, "Last taught",
-                   'IFERROR(TEXT(MAXIFS(nrSCH_Date,nrSCH_ChNum,' + C + '),'
-                   '"mm/dd/yyyy"),"")')
+                   'IF(IFERROR(MAXIFS(nrSCH_Date,nrSCH_ChNum,' + C + '),0)=0,'
+                   '"(not yet taught)",TEXT(MAXIFS(nrSCH_Date,nrSCH_ChNum,'
+                   + C + '),"mm/dd/yyyy"))')
     _profile_label(ws, r, 8, "vs TCOLE min",
                    'LET(d,IFERROR(XLOOKUP(' + C + ',nrCHnum,nrCHdeliv),0),'
                    'm,IFERROR(XLOOKUP(' + C + ',nrCHnum,nrCHmin),0),'
@@ -947,19 +982,26 @@ def build_chapterpacket(wb):
     section_bar(ws, r, 2, 9, "Instructors who taught this chapter "
                              "(from the schedule)")
     r += 1
+    # a blank picker degenerates the delimiter-wrapped SEARCH to looking for
+    # ", ," inside ", ," - which matches every instructor who has taught
+    # NOTHING, filling the 12-row instructor reservation with blank rows.
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(FILTER(HSTACK(nrInstrNames,nrInstrReady,'
+        '=IF(' + C + '="","— pick a chapter in C5 —",'
+        'IFERROR(TAKE(FILTER(HSTACK(nrInstrNames,nrInstrReady,'
         'nrInstrChTaught),'
+        '(nrInstrNames<>"")*(nrInstrChTaught<>"")*'
         'ISNUMBER(SEARCH(", "&' + C + '&",",", "&nrInstrChTaught&","))),12),'
-        '"— none on the schedule yet —")'))
+        '"— none on the schedule yet —"))'))
     r += 12
     section_bar(ws, r, 2, 9, "Schedule blocks delivered")
     r += 1
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Date,"mm/dd/yyyy"),'
+        '=IF(' + C + '="","— pick a chapter in C5 —",'
+        'IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Date,"mm/dd/yyyy"),'
         'TEXT(nrSCH_Start,"h:mm AM/PM"),TEXT(nrSCH_End,"h:mm AM/PM"),'
-        'nrSCH_Act,nrSCH_Instr),nrSCH_ChNum=' + C + '),32),'
-        '"— no blocks scheduled —")'))
+        'nrSCH_Act,nrSCH_Instr),(nrSCH_ChNum<>"")*(nrSCH_ChNum='
+        + C + ')),32),'
+        '"— no blocks scheduled —"))'))
     r += 32
     ws.cell(row=r, column=2, value="Training Coordinator:").font = F_LABEL
     ws.cell(row=r, column=4, value="_______________________").font = F_BODY
@@ -990,6 +1032,13 @@ def build_examsheet(wb):
     sel.border = BOX
     define(wb, "cfgGradeSheetExam", "ExamSheet", f"$C${r}")
     E = "cfgGradeSheetExam"
+    # this exam's OWN passing score (ExamPlan lets an exam override the
+    # global 70). The printed grade sheet used to test every score against
+    # cfgPassingScore, so an overriding exam printed a Pass?/FAIL flag and a
+    # fail count that contradicted the authoritative ExamScores "Pass?"
+    # column and the red cells on ScoresGrid.
+    passing = ('IFERROR(INDEX(rngEPpass,MATCH(' + E +
+               ',IFERROR(rngEPseq+0,-1),0)),cfgPassingScore)')
     r += 2
     ws.cell(row=r, column=2, value=(
         '="TYLER POLICE ACADEMY — "&cfgAcademyClass&" — GRADE SHEET — "'
@@ -1010,7 +1059,7 @@ def build_examsheet(wb):
         ',IFERROR(rngEPseq+0,-1),0)),nrES_Att,1,nrES_Date,">0"),0),'
         'IF(s>0,TEXT(s,"mm/dd/yyyy"),IF(a>0,TEXT(a,"mm/dd/yyyy"),'
         '"(not scheduled)")))'
-        '&"   Passing score: "&cfgPassingScore&'
+        '&"   Passing score: "&' + passing + '&'
         '"   (passed retests record at "&cfgRetakeRecordedCap&")"'
     )).font = F_SMALL
     r += 2
@@ -1044,7 +1093,7 @@ def build_examsheet(wb):
             f'nrES_Final,"Yes"))))')).font = F_CALC
         ws.cell(row=rr, column=8, value=(
             f'=IF(OR($C{rr}="",$G{rr}=""),"",'
-            f'IF($G{rr}>=cfgPassingScore,"Pass","FAIL"))')).font = F_CALC
+            f'IF($G{rr}>={passing},"Pass","FAIL"))')).font = F_CALC
         ws.cell(row=rr, column=9, value=(
             f'=IF($C{rr}="","",LET(c,{code},IF(COUNTIFS(nrES_PID,'
             f'Cadets!$B{src},nrES_Code,c,nrES_Att,2)>0,"Retested","")))'
@@ -1062,7 +1111,7 @@ def build_examsheet(wb):
         '&" / "&IFERROR(MINIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),"—")'
         '&" / "&IFERROR(MAXIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),"—")'
         '&" / "&COUNTIFS(nrES_Code,c,nrES_Final,"Yes",'
-        'nrES_Rec,"<"&cfgPassingScore)))')).font = F_CALC
+        'nrES_Rec,"<"&' + passing + ')))')).font = F_CALC
     r += 2
     ws.cell(row=r, column=2, value="Proctor / Instructor: ____________________"
             "____     Training Coordinator: ________________________"
@@ -1071,8 +1120,9 @@ def build_examsheet(wb):
     ws.cell(row=r, column=2, value=DL.ACADEMY_ADDRESS).font = F_SMALL
     col_widths(ws, {"A": 3, "B": 5, "C": 28, "D": 10, "E": 18, "F": 11,
                     "G": 11, "H": 9, "I": 10})
+    # print titles must start at the FIRST row of the print area (row 7)
     page_setup_portrait(ws, print_area=f"B{HDR_ROW+2}:I{r}",
-                        repeat_rows=f"{hdr}:{hdr}")
+                        repeat_rows=f"{HDR_ROW+2}:{hdr}")
     protect(ws)
     unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
     sheet_note(ws, "The IRG requires a grade sheet for each assessment in "
@@ -1347,13 +1397,28 @@ def build_writinghandout(wb):
     ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=8)
     ws.row_dimensions[r].height = 28
     r += 2
-    header_row(ws, ["#", "Title", "Assigned", "Due (1700)", "Prompt"], row=r)
+    header_row(ws, ["#", "Title", "Assigned", None, "Prompt"], row=r)
+    # A35: cfgWritingDueTime was exposed on Settings as "Due time shown on
+    # handouts" and referenced by nothing at all - the header hard-coded
+    # 1700. It is now the live source of this column heading.
+    dh = ws.cell(row=r, column=5, value=(
+        '="Due ("&IFERROR(TEXT(TIMEVALUE(LEFT(TEXT(cfgWritingDueTime,"0000"),2)'
+        '&":"&RIGHT(TEXT(cfgWritingDueTime,"0000"),2)),"h:mm AM/PM"),'
+        'cfgWritingDueTime)&")"'))
+    dh.fill = FILL_HDR
+    dh.font = F_HDR
+    dh.alignment = A_CENTER
+    dh.border = BOX
     r += 1
+    # TAKE(...,8): the only printable digest left without a cap. The sheet
+    # styles exactly 8 rows and the print area stops at row 19, so a longer
+    # week silently lost its wrap formatting and everything past row 19
+    # never printed at all. Capped at what the page can actually hold.
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(FILTER(HSTACK(rngWMnum,rngWMtitle,TEXT(rngWMassigned,'
+        '=IFERROR(TAKE(FILTER(HSTACK(rngWMnum,rngWMtitle,TEXT(rngWMassigned,'
         '"mm/dd"),TEXT(rngWMdue,"mm/dd"),rngWMprompt),'
         'IFERROR(XLOOKUP(rngWMassigned,nrCDdate,nrCDweek),0)=cfgHandoutWeek),'
-        '"— no assignments start this week —")'))
+        '8),"— no assignments start this week —")'))
     for rr in range(r, r + 8):
         ws.row_dimensions[rr].height = 60
         for ccol in range(2, 9):
@@ -1363,7 +1428,11 @@ def build_writinghandout(wb):
     protect(ws)
     unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
     sheet_note(ws, "Pick an academy week; assignments whose computed assigned "
-                   "date falls in that week appear with their prompts.")
+                   "date falls in that week appear with their prompts (up to "
+                   "8 — the page holds 8; a week with more is split across "
+                   "two handouts by moving the extras' Override Assigned "
+                   "dates on WritingMaster). The Due column header shows the "
+                   "Writing Due Time from Settings.")
     return ws
 
 
@@ -1382,9 +1451,12 @@ def build_emailpreview(wb):
     ws.cell(row=r, column=5, value=(
         '="Exam #"&cfgCurrentExamNum&" — "&IFERROR(INDEX(rngEPname,'
         'MATCH(cfgCurrentExamNum,IFERROR(rngEPseq+0,-1),0)),"?")&'
+        # MAXIFS returns 0, not an error, so the IFERROR "never" fallback
+        # was unreachable and an agency with no EmailLog row read 12/30/1899
         '" | Spelling through #"&cfgCurrentSpellingNum&" | Last emailed: "&'
-        'IFERROR(TEXT(MAXIFS(nrELdate,nrELagency,cfgPreviewAgency),'
-        '"mm/dd/yyyy"),"never")')).font = F_SMALL
+        'IF(IFERROR(MAXIFS(nrELdate,nrELagency,cfgPreviewAgency),0)=0,"never",'
+        'TEXT(MAXIFS(nrELdate,nrELagency,cfgPreviewAgency),"mm/dd/yyyy"))'
+        )).font = F_SMALL
     r += 2
     section_bar(ws, r, 2, 12, "Cadet results (as the email will report them)")
     r += 1
@@ -1426,7 +1498,9 @@ def build_emailpreview(wb):
             f'=IF($B{rr}="","",Writing!$AT{src}&" ("&Writing!$AS{src}&'
             f'" overdue)")')).font = F_CALC
         ws.cell(row=rr, column=10, value=(
-            f'=IF($B{rr}="","",sysFlags!$S{src})')).font = F_CALC
+            # sysFlags Reasons is column T (the flag block runs E..R and
+            # Flag Count is S) — see the header note in build_sysflags
+            f'=IF($B{rr}="","",sysFlags!$T{src})')).font = F_CALC
     grid_last = grid_first + CADETS - 1
     define(wb, "nrEPVgrid", "EmailPreview",
            f"$B${grid_first}:$J${grid_last}")
@@ -1439,6 +1513,7 @@ def build_emailpreview(wb):
     header_row(ws, ["Date", "Cadet", "Type", "Severity/Kind", "Description"],
                row=r)
     r += 1
+    since_first = r
     # INT() + >= below: EmailLog!B is stamped with Now (date AND time) while
     # every log dates its rows date-only, so a plain > against the raw
     # timestamp dropped anything dated on a previous run's calendar day —
@@ -1474,6 +1549,15 @@ def build_emailpreview(wb):
         'SORT(FILTER(all,INDEX(all,0,1)<>"",'
         '"— nothing marked for this agency since last email —"),1)),'
         '"— nothing marked for this agency since last email —")'))
+    # this is the workbook's only multi-row spill that carries RAW date
+    # values (it must: the SORT below is on that column, and sorting
+    # mm/dd/yyyy text puts December before February). The spill zone shipped
+    # as General, so every date rendered as a five-digit serial in the
+    # preview the coordinator reads before approving the draft. Formatting
+    # the landing column as a date fixes the display without breaking the
+    # sort; the fallback string still prints as text.
+    for rr in range(since_first, since_first + 16):
+        ws.cell(row=rr, column=2).number_format = DATE
     r += 16
     col_widths(ws, {"A": 3, "B": 12, "C": 24, "D": 11, "E": 11, "F": 16,
                     "G": 12, "H": 20, "I": 18, "J": 60})
@@ -1668,6 +1752,8 @@ def build_inputguide(wb):
                    "are the locked calculation engine; green tabs are "
                    "outputs. White boxes with a blue border are yours to type "
                    "(what you type shows in blue); gray cells calculate.")
+    # pure navigation: every cell is a hyperlink formula or a static label
+    protect(ws)
     return ws
 
 
@@ -1682,8 +1768,13 @@ def add_home_links(wb):
         c = ws["B1"]
         c.value = '=HYPERLINK("#Dashboard!B5","◄ Dashboard")'
         c.font = link_font
+        # LOCKED. A HYPERLINK formula is still clickable on a protected
+        # sheet (protect() leaves every cell selectable), so unlocking B1
+        # bought nothing and cost a lot: it was the only writable cell on
+        # each of the eight sys* engine sheets, which made one keystroke
+        # enough to delete the only navigation off a locked sheet.
         from openpyxl.styles import Protection as _Prot
-        c.protection = _Prot(locked=False)
+        c.protection = _Prot(locked=True)
 
 
 def gray_separated_rows(wb):

@@ -163,6 +163,12 @@ def build_sysattendance(wb):
     # fix column collision: header has 24 cols B..Y; L duplicated (Cl Owed)
     cols["L"] = ('IF($B{r}="","",MAX(0,$E{r}-$F{r}))', "fx")
     fill_rows(ws, FIRST, LAST, cols)
+    # I and Q are fractions of the cap under headers that say "%" - shipped
+    # as General they displayed 0.6521739130434783 on the visible engine
+    # sheet (and in anything that echoed them without its own TEXT()).
+    for rr in range(FIRST, LAST + 1):
+        ws[f"I{rr}"].number_format = "0.0%"
+        ws[f"Q{rr}"].number_format = "0.0%"
     define(wb, "nrATTclTier", "sysAttendance", f"$J${FIRST}:$J${LAST}")
     define(wb, "nrATTclElig", "sysAttendance", f"$K${FIRST}:$K${LAST}")
     define(wb, "nrATTclPct", "sysAttendance", f"$I${FIRST}:$I${LAST}")
@@ -272,10 +278,17 @@ def build_sysflags(wb):
     """Configurable flag engine: one column per flag, reason text, count."""
     ws = wb.create_sheet("sysFlags")
     ws.sheet_view.showGridLines = False
+    # NOTE: the flag block is E..R and "Flag Count"/"Reasons" are S/T.
+    # F:DismissReview was APPENDED at the end of the flag block (R); the
+    # count and reason columns moved one right with it, and every consumer
+    # (nrFLcount / nrFLreasons, EmailPreview's literal sysFlags!$T, and the
+    # verify_build assertions) moved with them. Add new flags at the END of
+    # the block, never in the middle.
     header_row(ws, ["PID", "Cadet Name", "Status", "F:ConsecFails",
                     "F:GradeDrop", "F:CategoryRisk", "F:Spelling",
                     "F:Attendance", "F:Incidents", "F:Writing", "F:Retest",
                     "F:PT", "F:Medical", "F:Certs", "F:Memos", "F:OpenTime",
+                    "F:DismissReview",
                     "Flag Count", "Reasons"])
     cols = _mirror()
     cols.update({
@@ -295,7 +308,11 @@ def build_sysflags(wb):
         # CHECK DATE counts too: a retest whose deadline could not be computed
         # is not "fine", it is a policy 300.5 clock that never started
         "L": ('IF($B{r}="","",IF(COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"OVERDUE")'
-              '+COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"CHECK DATE")>0,1,0))', "fx"),
+              '+COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"CHECK DATE")'
+              '+COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"LATE RETEST*")'
+              '+COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"RETEST UNDATED")'
+              '+COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"RETEST DATE UNCHECKED")'
+              '>0,1,0))', "fx"),
         "M": ('IF($B{r}="","",IF(OR(PT!$K{r}="No",PT!$AB{r}="No"),1,0))', "fx"),
         "N": ('IF($B{r}="","",IF(COUNTIFS(nrMD_PID,$B{r},nrMD_Status,'
               '"RESTRICTION EXPIRED")>0,1,0))', "fx"),
@@ -305,8 +322,15 @@ def build_sysflags(wb):
               '"CHECK DATE")>0,1,0))', "fx"),
         "Q": ('IF($B{r}="","",IF(SUMPRODUCT((nrAT_PID=$B{r})*'
               '(nrAT_Cleared="OPEN"))>0,1,0))', "fx"),
-        "R": ('IF($B{r}="","",SUM($E{r}:$Q{r}))', "fx"),
-        "S": ('IF($B{r}="","",IF($R{r}=0,"",TEXTJOIN("; ",TRUE,'
+        # an open dismissal review (failed retest, skills failed out, open
+        # chain-of-command incident review) blocked graduation but raised no
+        # flag at all: the cadet's Flag Count never moved, they never
+        # appeared on WatchList and the Dashboard "Flagged cadets" tile
+        # never counted them. Same source as the sysChecks M gate.
+        "R": ('IF($B{r}="","",IF(OR(sysGrades!$P{r}>0,'
+              'sysSkills!$J{r}="Yes",sysIncidents!$J{r}>0),1,0))', "fx"),
+        "S": ('IF($B{r}="","",SUM($E{r}:$R{r}))', "fx"),
+        "T": ('IF($B{r}="","",IF($S{r}=0,"",TEXTJOIN("; ",TRUE,'
               'IF($E{r}=1,"consecutive exam fails",""),'
               'IF($F{r}=1,"grade dropped "&sysGrades!$AB{r}&" pts",""),'
               'IF($G{r}=1,"category avg near 70",""),'
@@ -315,20 +339,24 @@ def build_sysflags(wb):
               'sysAttendance!$Q{r}),"0%")&" of cap",""),'
               'IF($J{r}=1,"open negative incidents",""),'
               'IF($K{r}=1,N(Writing!$AS{r})&" overdue writing",""),'
-              'IF($L{r}=1,"RETEST OVERDUE",""),'
+              'IF($L{r}=1,"RETEST OVERDUE / LATE",""),'
               'IF($M{r}=1,"PT failure",""),'
               'IF($N{r}=1,"medical restriction expired",""),'
               'IF($O{r}=1,"cert copies outstanding: "&Certifications!$U{r},""),'
               'IF($P{r}=1,"OVERDUE MEMO",""),'
               'IF($Q{r}=1,SUMPRODUCT((nrAT_PID=$B{r})*(nrAT_Cleared="OPEN"))'
-              '&" uncleared missed-time event(s)",""))))', "fx"),
+              '&" uncleared missed-time event(s)",""),'
+              'IF($R{r}=1,"DISMISSAL REVIEW OPEN"&'
+              'IF(sysGrades!$P{r}>0," (failed retest)",'
+              'IF(sysSkills!$J{r}="Yes"," (skills failed out)",'
+              '" (chain-of-command incident review)")),""))))', "fx"),
     })
     # E needs the row-scoped reference, not the whole named range
     cols["E"] = ('IF($B{r}="","",IF(N(sysGrades!$AC{r})>=cfgFlagConsecFails,1,0))', "fx")
     fill_rows(ws, FIRST, LAST, cols)
-    define(wb, "nrFLcount", "sysFlags", f"$R${FIRST}:$R${LAST}")
-    define(wb, "nrFLreasons", "sysFlags", f"$S${FIRST}:$S${LAST}")
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "S": 70})
+    define(wb, "nrFLcount", "sysFlags", f"$S${FIRST}:$S${LAST}")
+    define(wb, "nrFLreasons", "sysFlags", f"$T${FIRST}:$T${LAST}")
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "T": 70})
     sheet_note(ws, "Each flag threshold lives on Settings. WatchList sorts "
                    "by Flag Count and shows Reasons verbatim. Locked.")
     protect(ws)
@@ -397,6 +425,7 @@ def build_syschecks(wb):
     })
     fill_rows(ws, FIRST, LAST, cols)
     cf_yes_no(ws, f"N{FIRST}:N{LAST}")
+    define(wb, "nrCKdismissRev", "sysChecks", f"$M${FIRST}:$M${LAST}")
     define(wb, "nrCKgradElig", "sysChecks", f"$N${FIRST}:$N${LAST}")
     define(wb, "nrCKblocking", "sysChecks", f"$O${FIRST}:$O${LAST}")
     define(wb, "nrCKfinalExamElig", "sysChecks", f"$P${FIRST}:$P${LAST}")
@@ -543,12 +572,20 @@ AUDIT_CHECKS = [
         # CHECK DATE rows are counted too: a retest dated on a weekend or a
         # holiday used to sit at "Pending" forever, so the 5-class-day clock
         # was unenforceable for exactly the rows that needed it.
-        ("Overdue retests (incl. unusable dates)",
-         'COUNTIF(nrES_RetStat,"OVERDUE")+COUNTIF(nrES_RetStat,"CHECK DATE")', "0",
+        ("Overdue / late retests (incl. unusable dates)",
+         'COUNTIF(nrES_RetStat,"OVERDUE")+COUNTIF(nrES_RetStat,"CHECK DATE")'
+         '+COUNTIF(nrES_RetStat,"LATE RETEST*")'
+         '+COUNTIF(nrES_RetStat,"RETEST UNDATED")'
+         '+COUNTIF(nrES_RetStat,"RETEST DATE UNCHECKED")', "0",
          'IF(COUNTIF(nrES_RetStat,"OVERDUE")+COUNTIF(nrES_RetStat,"CHECK DATE")'
+         '+COUNTIF(nrES_RetStat,"LATE RETEST*")'
+         '+COUNTIF(nrES_RetStat,"RETEST UNDATED")'
+         '+COUNTIF(nrES_RetStat,"RETEST DATE UNCHECKED")'
          '=0,"OK","ACT NOW")',
          '"Policy 300.5: retest within 5 class days. CHECK DATE = the exam date is '
-         'missing or resolves past the last class day, so no deadline exists"'),
+         'missing or resolves past the last class day, so no deadline exists. '
+         'LATE RETEST = the retest WAS taken, but after the 5-class-day '
+         'deadline - it used to read a clean Retested and leave no trace"'),
         ("Cadets with makeup owed",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrATTmakeupOK="No"))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrATTmakeupOK="No"))=0,"OK","CHECK")',
@@ -611,6 +648,52 @@ AUDIT_CHECKS = [
          'duplicate RecordID, an attempt 2 with no attempt 1 on file, or a '
          'retest row logged with no score - each silently distorts the '
          'category average or stops the 5-class-day retest clock"'),
+        # A44: sysAudit rolled up ExamScores Row Check failures but had no
+        # equivalent line for Makeup - "NO SUCH EVENT", "WRONG CADET",
+        # "UNIT MISMATCH", a dateless clear or a negative credit were
+        # visible only in Makeup column N, thirteen columns right of the
+        # entry area, and never reached the Audit sheet or the Dashboard.
+        ("Makeup rows failing Row Check",
+         'SUMPRODUCT((nrMK_RowCheck<>"")*(nrMK_RowCheck<>"OK"))', "0",
+         'IF(SUMPRODUCT((nrMK_RowCheck<>"")*(nrMK_RowCheck<>"OK"))=0,'
+         '"OK","CHECK")',
+         '"Makeup Row Check: an unlinked row, another cadet\'s event, an '
+         'EventID that no longer exists, a Type the caps do not credit, '
+         'minutes booked against a session-counted PT event, a missing '
+         'makeup DATE (which fabricates a CLEARED date on the attendance '
+         'ledger) or a zero/NEGATIVE credit (which increases owed time). '
+         'None of these earns credit, and each one moves the policy-400 '
+         'ledger the wrong way"'),
+        # A10 / A23: the same for Attendance, which had no Row Check at all
+        ("Attendance rows failing Row Check",
+         'SUMPRODUCT((nrAT_RowCheck<>"")*(nrAT_RowCheck<>"OK"))', "0",
+         'IF(SUMPRODUCT((nrAT_RowCheck<>"")*(nrAT_RowCheck<>"OK"))=0,'
+         '"OK","CHECK")',
+         '"Attendance Row Check: a counted absence with no minutes (or no '
+         'sessions on a PT event) is dropped from BOTH caps and never shows '
+         'OPEN; a row carrying the unit that does not match its own Is PT? '
+         'flag has that value discarded from the balance, the makeup '
+         'reconciliation and the caps"'),
+        # A12: an open dismissal review blocked graduation but was counted
+        # nowhere - not on the Audit sheet, not on the Dashboard tile
+        ("Open dismissal reviews (active cadets)",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrCKdismissRev="Yes"))', "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCKdismissRev="Yes"))=0,'
+         '"OK","CHECK")',
+         '"Failed retest, skills failed out, or an open chain-of-command '
+         'incident review. Policy 600.2.E: open a formal review on the '
+         'DismissalLog, record the decision and the Assistant-Chief approval"'),
+        # A29: a closure date that is not a real date is DISCARDED by the
+        # class-day calendar, which moves every later class day silently
+        ("Extra closure dates that are not dates",
+         'SUMPRODUCT((nrExtraClosureCheck<>"")*'
+         '(LEFT(nrExtraClosureCheck,2)<>"OK"))', "0",
+         'IF(SUMPRODUCT((nrExtraClosureCheck<>"")*'
+         '(LEFT(nrExtraClosureCheck,2)<>"OK"))=0,"OK","CHECK")',
+         '"Control > Extra Closure Dates: a pasted text date or a label is '
+         'ignored by the class-day calendar, so the academy silently runs a '
+         'day long and every Day #, retest deadline, memo due date and '
+         'writing date shifts"'),
         ("Spelling rows failing Row Check",
          'SUMPRODUCT((nrSpellRowCheck<>"")*(nrSpellRowCheck<>"OK"))', "0",
          'IF(SUMPRODUCT((nrSpellRowCheck<>"")*(nrSpellRowCheck<>"OK"))=0,'

@@ -302,8 +302,10 @@ def test_workbook():
           '$Q6="Yes"' in wb["sysChecks"]["N6"].value and
           "Certs; " in wb["sysChecks"]["O6"].value,
           "certs gate graduation on sysChecks (matches GradChecklist note)")
+    # sysFlags gained F:DismissReview at the END of the flag block, so the
+    # block is E..R and Flag Count / Reasons are S / T (they were R / S)
     check("Certifications!$U" in wb["sysFlags"]["O6"].value and
-          "cert copies outstanding" in wb["sysFlags"]["S6"].value,
+          "cert copies outstanding" in wb["sysFlags"]["T6"].value,
           "cert warning flag in sysFlags with reason text")
     wr = wb["Writing"]
     # "overdue missing" counts anything that is not an X, not merely
@@ -408,8 +410,11 @@ def test_workbook():
           wb["AdvisoryBoard"]["D6"].value == "May 2026",
           "AdvisoryBoard governance alignment + meeting reference list")
     aud = wb["Audit"]
+    # scan the whole sheet: the program-checks block grows whenever a check
+    # is added to sysAudit, which pushes the enrollment-docs grid down
     found_ack = any("Rules Ack" == str(c.value) for row in
-                    aud.iter_rows(min_row=5, max_row=60) for c in row)
+                    aud.iter_rows(min_row=5, max_row=aud.max_row)
+                    for c in row)
     check(found_ack, "Rules Ack column in enrollment docs grid")
 
     st = wb["Settings"]
@@ -499,6 +504,205 @@ def test_workbook():
     check("do not edit" in str(ctl["P4"].value or "") and
           ctl["P5"].value == "Y" and ctl["AF5"].value == "GoodFri",
           "Control computus helper is labelled")
+
+    # ---- regression guards for the round-5 stress-test fixes -------------
+    ctl2 = wb["Control"]
+    # A00: Christmas Eve and Christmas Day may never resolve to one date.
+    # Eve is derived from the OBSERVED Christmas Day, not shifted separately.
+    hol = {str(ctl2.cell(row=r, column=2).value): r for r in range(6, 20)}
+    eve_f = str(ctl2.cell(row=hol["Christmas Eve"], column=3).value)
+    day_f = str(ctl2.cell(row=hol["Christmas Day"], column=3).value)
+    check("12,25" in eve_f and "12,24" not in eve_f and
+          "IF(WEEKDAY(" in eve_f and ",2)=1,3,1)" in eve_f,
+          "Christmas Eve is the weekday BEFORE the observed Christmas Day")
+    check("12,25" in day_f, "Christmas Day keeps the weekend-shift rule")
+    import datetime as _dt
+    _bad = []
+    for _y in range(2024, 2045):
+        _x = _dt.date(_y, 12, 25)
+        _w = _x.isoweekday()
+        _obs = (_x - _dt.timedelta(1) if _w == 6 else
+                _x + _dt.timedelta(1) if _w == 7 else _x)
+        _eve = _obs - _dt.timedelta(3 if _obs.isoweekday() == 1 else 1)
+        if _eve == _obs or _eve.isoweekday() > 5 or _obs.isoweekday() > 5:
+            _bad.append(_y)
+    check(not _bad, f"Christmas rule yields 2 distinct weekdays every year {_bad}")
+
+    # A01: the WORKDAY.INTL START argument is guarded, not just the holidays
+    check("ISNUMBER(cfgStartDate)" in ctl2["I6"].value and
+          "IFERROR(WORKDAY.INTL(" in ctl2["I6"].value,
+          "class-day calendar survives a blank / non-date Start Date")
+    check("START DATE on Settings" in str(ctl2["H3"].value or ""),
+          "Control says so when the Start Date is unusable")
+    st2 = wb["Settings"]
+    sd_row = next(r for r in range(6, 60)
+                  if st2.cell(row=r, column=5).value == "cfgStartDate")
+    check("FIX - Start Date" in str(st2.cell(row=sd_row, column=7).value or ""),
+          "Settings flags a blank / non-date Start Date")
+
+    # A29: a TEXT extra-closure date is no longer coerced to 0 and dropped
+    n_h_v = sum(1 for r in range(6, 20) if ctl2.cell(row=r, column=2).value)
+    m_extra = str(ctl2.cell(row=6 + 2 * n_h_v, column=13).value)
+    check("ISNUMBER(F6)" in m_extra and "N(F6)" not in m_extra,
+          "extra closure dates are ISNUMBER-guarded, never N()-coerced")
+    check(ctl2["G5"].value == "Closure Check" and
+          "IGNORED" in str(ctl2["G6"].value or "") and
+          "nrExtraClosureCheck" in wb.defined_names,
+          "Control has a Row Check for the extra-closure block")
+    check(any(dv.type == "date" for dv in
+              ctl2.data_validations.dataValidation),
+          "extra closure cells carry date validation")
+
+    # A09: the retest deadline survives the retest, and a late one is named
+    check('$K6<>1' in es["T6"].value and 'IF($Q6<>"Yes"' not in es["T6"].value,
+          "retest deadline keys off the failed attempt 1, not RetakeReq?")
+    check("LATE RETEST" in es["U6"].value and "RETEST UNDATED" in es["U6"].value,
+          "a retest taken after the deadline reads LATE RETEST")
+    check('"LATE RETEST*"' in wb["sysFlags"]["L6"].value,
+          "a late retest raises the sysFlags retest flag")
+
+    # A11: nrCKfinalExamElig (sysChecks P) is referenced by something now
+    check("nrCKfinalExamElig" in es["X6"].value and
+          "500.1.H" in es["X6"].value,
+          "final-PT-blocks-Final-Exam rule is wired into ExamScores Row Check")
+
+    # A12: sysFlags carries a dismissal-review flag that reaches WatchList
+    sf = wb["sysFlags"]
+    check(sf["R5"].value == "F:DismissReview" and
+          sf["S5"].value == "Flag Count" and sf["T5"].value == "Reasons" and
+          "SUM($E6:$R6)" in sf["S6"].value and
+          "DISMISSAL REVIEW OPEN" in sf["T6"].value,
+          "sysFlags flags an open dismissal review (flag block E..R)")
+    check(str(wb.defined_names["nrFLcount"].value).endswith("$S$6:$S$55") and
+          str(wb.defined_names["nrFLreasons"].value).endswith("$T$6:$T$55"),
+          "nrFLcount / nrFLreasons moved with the appended flag column")
+    check("sysFlags!$T6" in wb["EmailPreview"]["J9"].value,
+          "EmailPreview reads the relocated sysFlags Reasons column")
+
+    # A10 / A23: Attendance finally has a Row Check
+    at2 = wb["Attendance"]
+    check(at2["T5"].value == "Row Check" and
+          "MINUTES ON A PT EVENT" in at2["T6"].value and
+          "SESSIONS ON A CLASSROOM EVENT" in at2["T6"].value and
+          "COUNTED EVENT WITH NO MINUTES" in at2["T6"].value and
+          "nrAT_RowCheck" in wb.defined_names and
+          at2.auto_filter.ref == "B5:T5",
+          "Attendance Row Check catches blank / mismatched units")
+
+    # A15 / A22 / A28: the Makeup ledger cannot be moved by a bad row
+    mk2 = wb["Makeup"]
+    check("NO MAKEUP DATE" in mk2["N6"].value and
+          "NEGATIVE CREDIT" in mk2["N6"].value and
+          "NO MINUTES CREDITED" in mk2["N6"].value,
+          "Makeup Row Check rejects a dateless, zero or negative credit")
+    check("CLEARED (makeup date missing)" in at2["S6"].value and
+          'IFERROR(_xlfn.MAXIFS' in at2["S6"].value,
+          "a dateless makeup can no longer stamp CLEARED 12/30")
+    import data_lists as _DL
+    check(_DL.LISTS["Makeup Type"] == ["Classroom", "PT"],
+          "Makeup Type offers only the two types the caps credit")
+
+    # A37: an unscored skills placeholder must not supersede a real result
+    sk2 = wb["Skills"]
+    check('nrSK_Res,"Pass")' in sk2["O6"].value and
+          'nrSK_Res,"Fail")' in sk2["O6"].value and
+          'nrSK_Res,"Pass")' in sk2["N6"].value,
+          "Skills status/attempts count only SCORED attempts")
+
+    # A13 / A14 / A38: no more 12/30/1899 from an unguarded MAXIFS/MINIFS
+    check("not yet taught" in str(wb["ChapterPacket"]["F8"].value or ""),
+          "ChapterPacket 'Last taught' cannot print a 1899 date")
+    check("nrELagency,$B6)=0" in wb["Agencies"]["I6"].value,
+          "Agencies 'Last Email Sent' is blank, not 1899, when never emailed")
+    check('cfgPreviewAgency),0)=0,"never"'
+          in str(wb["EmailPreview"]["E5"].value or ""),
+          "EmailPreview 'never' fallback is reachable")
+    check('IF(N(_xlpm.d)=0,"",_xlpm.d)' in wm["G6"].value,
+          "WritingMaster 'Computed Assigned' is zero-guarded like its sibling")
+
+    # A08: per-exam passing scores, not the global one
+    check("rngEPpass" in str(wb["ExamSheet"]["H11"].value or ""),
+          "ExamSheet Pass?/FAIL uses the exam's own passing score")
+    sg_cf = " ".join(str(rule.formula[0]) for rng in
+                     wb["ScoresGrid"].conditional_formatting
+                     for rule in rng.rules if rule.formula)
+    check("rngEPpass" in sg_cf,
+          "ScoresGrid red cells use each exam's own passing score")
+
+    # A31: a blank chapter picker must not match every blank row
+    check('cfgPacketChapter=""' in str(wb["ChapterPacket"]["B20"].value or "") or
+          any('cfgPacketChapter=""' in str(c.value)
+              for row in wb["ChapterPacket"].iter_rows(min_row=18, max_row=40)
+              for c in row if isinstance(c.value, str)),
+          "ChapterPacket spills refuse to run on a blank chapter picker")
+
+    # A36: chapters taught sort 1,2,10,20 - not 1,10,2,20
+    check("SORTBY" in wb["Instructors"]["M6"].value,
+          "'Chapters Taught' sorts numerically")
+
+    # A42: Cl % / PT % carry a percent format under a % header
+    check(wb["sysAttendance"]["I6"].number_format == "0.0%" and
+          wb["sysAttendance"]["Q6"].number_format == "0.0%",
+          "sysAttendance Cl % / PT % are percent-formatted")
+
+    # A16 / A40 / A41: protection gaps
+    for n in ("Audit", "Dashboard", "InputGuide"):
+        check(wb[n].protection.sheet, f"{n} protected")
+    audx = wb["Audit"]
+    docr = next(r for r in range(5, audx.max_row + 1)
+                if str(audx.cell(row=r, column=3).value or "") == "Enroll App")
+    check(not audx.cell(row=docr + 1, column=3).protection.locked,
+          "Audit enrollment-docs inputs stay editable through protection")
+    prgr = next(r for r in range(5, audx.max_row + 1)
+                if str(audx.cell(row=r, column=6).value or "") == "Met?")
+    check(not audx.cell(row=prgr + 1, column=6).protection.locked and
+          audx.cell(row=prgr + 1, column=2).protection.locked,
+          "Audit requirement answers unlocked, labels locked")
+    unlocked_b1 = [ws.title for ws in wb.worksheets
+                   if ws.protection.sheet and not ws["B1"].protection.locked]
+    check(not unlocked_b1,
+          f"B1 home links are LOCKED on protected sheets {unlocked_b1[:5]}")
+
+    # A19: print titles must start at the first row of the print area
+    for n in ("Addendum", "ExamSheet", "Audit", "Ranking", "WatchList",
+              "GradChecklist", "Schedule"):
+        wsx = wb[n]
+        tr2 = wsx.print_title_rows
+        if not tr2:
+            check(True, f"{n} has no repeated print title row")
+            continue
+        pa = wsx.print_area
+        pa = pa[0] if isinstance(pa, list) else str(pa)
+        first_body = int(re.sub(r"[^0-9]", "",
+                                pa.split("!")[-1].split(":")[0]))
+        first_title = int(re.sub(r"[^0-9]", "", tr2.split(":")[0]))
+        check(first_title == first_body,
+              f"{n} print titles start at the top of the print area "
+              f"({tr2} vs {pa})")
+
+    # A03 / A02: capped handout spill, date-formatted digest
+    check("_xlfn.TAKE(" in wb["WritingHandout"]["B11"].value,
+          "WritingHandout digest is capped to the rows the page styles")
+    check("cfgWritingDueTime" in str(wb["WritingHandout"]["E10"].value or ""),
+          "cfgWritingDueTime drives the WritingHandout Due column header")
+    epv = wb["EmailPreview"]
+    since_r = next(r for r in range(55, 90)
+                   if "nrIN_Report" in str(epv.cell(row=r, column=2).value or ""))
+    check(epv.cell(row=since_r, column=2).number_format != "General",
+          "EmailPreview digest dates render as dates, not serials")
+
+    # A43: ExamPlan agrees with the date the exam was actually given
+    check("nrES_Date" in wb["ExamPlan"]["I6"].value,
+          "ExamPlan 'Exam Date' prefers the actual exam date")
+
+    # A44 / A12 / A29: the new engine roll-ups reach the Audit sheet
+    import sheets_engine as _SE
+    names = [c[0] for c in _SE.AUDIT_CHECKS]
+    for want in ("Makeup rows failing Row Check",
+                 "Attendance rows failing Row Check",
+                 "Open dismissal reviews (active cadets)",
+                 "Extra closure dates that are not dates"):
+        check(want in names, f"sysAudit check present: {want}")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 

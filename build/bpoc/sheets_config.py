@@ -168,6 +168,44 @@ def build_settings(wb):
                 f'&TEXT($F${row}/60,"#,##0")&" hrs); cap would be "'
                 f'&TEXT(ROUND($F${row}*cfgClassroomCapPct,0),"#,##0")&" min")))'
             )).font = F_SMALL
+        # A blank / non-date Start Date empties the entire class-day
+        # calendar (Control), and with it every retest deadline, memo due
+        # date, writing date and sign-in sheet. Nothing used to say so here.
+        if nm == "cfgStartDate":
+            ws.cell(row=row, column=6, value=(
+                f'=IF(ISNUMBER($C${row}),TEXT($C${row},"ddd mm/dd/yyyy"),'
+                f'"(not a date)")')).font = F_CALC
+            ws.cell(row=row, column=7, value=(
+                f'=IF(NOT(ISNUMBER($C${row})),'
+                f'"FIX - Start Date is blank or is not a real date. The '
+                f'Control class-day calendar is EMPTY until it is set, so '
+                f'every Day #, retest deadline, memo due date, writing date '
+                f'and sign-in sheet is blank too.",'
+                f'IF(WEEKDAY($C${row},2)>5,'
+                f'"CHECK - Start Date falls on a weekend; Day 1 will be the '
+                f'next weekday","OK"))')).font = F_SMALL
+        if nm == "cfgEndDate":
+            ws.cell(row=row, column=6, value=(
+                f'=IF(ISNUMBER($C${row}),TEXT($C${row},"ddd mm/dd/yyyy"),'
+                f'"(not a date)")')).font = F_CALC
+            ws.cell(row=row, column=7, value=(
+                f'=IF(NOT(ISNUMBER($C${row})),'
+                f'"FIX - End Date is blank or is not a real date; the class-'
+                f'day calendar cannot mark days In Session.",'
+                f'IF(AND(ISNUMBER(cfgStartDate),$C${row}<=cfgStartDate),'
+                f'"FIX - End Date is on or before Start Date","OK"))'
+            )).font = F_SMALL
+        if nm == "cfgWritingDueTime":
+            ws.cell(row=row, column=6, value=(
+                '=IFERROR(TEXT(TIMEVALUE(LEFT(TEXT($C$%d,"0000"),2)&":"'
+                '&RIGHT(TEXT($C$%d,"0000"),2)),"h:mm AM/PM"),"(unreadable)")'
+                % (row, row))).font = F_CALC
+            ws.cell(row=row, column=7, value=(
+                f'=IF($F${row}="(unreadable)",'
+                f'"CHECK - enter a 24-hour time as 4 digits (e.g. 1700). '
+                f'This is the due time printed on the Writing handout.",'
+                f'"OK - shown on the WritingHandout Due column header")'
+            )).font = F_SMALL
         if nm == "cfgCurrentExamNum":
             ws.cell(row=row, column=6, value=(
                 "=IFERROR(MAX(FILTER(nrES_Seq,(nrES_Rec<>\"\")*(nrES_Seq<>\"\"))),0)"
@@ -274,7 +312,11 @@ def build_agencies(wb):
         "B": (None, "in"), "C": (None, "in"), "D": (None, "in"),
         "E": (None, "in"), "F": (None, "in"), "G": (None, "in"),
         "H": (None, "in"),
-        "I": ('IF($B{r}="","",IFERROR(MAXIFS(nrELdate,nrELagency,$B{r}),""))', "fx"),
+        # MAXIFS returns 0, not an error, so IFERROR never fired and every
+        # agency that has never been emailed showed 12/30/1899 here (and made
+        # EmailPreview's "never" fallback dead code).
+        "I": ('IF($B{r}="","",IFERROR(IF(MAXIFS(nrELdate,nrELagency,$B{r})=0,'
+              '"",MAXIFS(nrELdate,nrELagency,$B{r})),""))', "fx"),
     })
     for r in range(DATA_ROW, last + 1):
         ws[f"I{r}"].number_format = DATE
@@ -320,9 +362,14 @@ def build_instructors(wb):
               'OR($I{r}="On File",$I{r}="N/A")),"Yes","No")))', "fx"),
         "L": ('IF($B{r}="","",IF(SUMPRODUCT(--ISNUMBER(SEARCH($B{r},'
               'nrSCH_Instr)))>0,"Yes",""))', "fx"),
-        "M": ('IF($B{r}="","",IFERROR(TEXTJOIN(", ",TRUE,SORT(UNIQUE('
-              'FILTER(nrSCH_ChNum,ISNUMBER(SEARCH($B{r},nrSCH_Instr))*'
-              '(nrSCH_ChNum<>""))))),""))', "fx"),
+        # nrSCH_ChNum carries chapter numbers as TEXT (they are the
+        # workbook's join key), so a plain SORT put an instructor's chapters
+        # in dictionary order - "1, 10, 2, 20" - on this sheet and in the
+        # ChapterPacket instructor panel. SORTBY on the numeric value sorts
+        # them the way a human reads them while keeping the text keys.
+        "M": ('IF($B{r}="","",IFERROR(LET(v,UNIQUE(FILTER(nrSCH_ChNum,'
+              'ISNUMBER(SEARCH($B{r},nrSCH_Instr))*(nrSCH_ChNum<>""))),'
+              'TEXTJOIN(", ",TRUE,SORTBY(v,IFERROR(v+0,99999),1))),""))', "fx"),
     })
     for r in range(DATA_ROW, last + 1):
         ws[f"G{r}"].number_format = DATE
@@ -381,9 +428,13 @@ def build_instructorbanks(wb):
         ws.cell(row=r, column=2, value=t)
         r += 1
     last = r + 9        # spare rows
+    # with BANK_SLOTS = SEL_SLOTS = 10 these are Bank C..L, Teach M..V and
+    # "# Selected" W. (These comments said M..T / U while the constants
+    # already produced M..V / W - the same stale-column-letter mistake this
+    # workbook keeps regressing on. Derive, never hand-count.)
     bank_first_c, bank_last_c = 3, 2 + BANK_SLOTS               # C..L
-    sel_first_c, sel_last_c = 3 + BANK_SLOTS, 2 + BANK_SLOTS + SEL_SLOTS  # M..T
-    cnt_c = sel_last_c + 1                                       # U
+    sel_first_c, sel_last_c = 3 + BANK_SLOTS, 2 + BANK_SLOTS + SEL_SLOTS  # M..V
+    cnt_c = sel_last_c + 1                                       # W
     cols = {"B": (None, "in")}
     for c in range(bank_first_c, sel_last_c + 1):
         cols[gcl(c)] = (None, "in")
@@ -508,6 +559,32 @@ def build_chaptermaster(wb):
         "Report the BPOC at exactly 736; excess goes to Addendum course #101"
     )).font = F_SMALL
     define(wb, "nrCHtotalDelivered", "ChapterMaster", f"$G${tr}")
+    # The per-chapter TCOLE minimums seeded above total 734, printed directly
+    # above a cell asserting the course is exactly 736 - a 2-hour gap an
+    # auditor sees on one screen. The gap is real and is NOT silently papered
+    # over here: chapter A (Administrative/Departmental Overview) carries no
+    # TCOLE minimum in this table, and the two unassigned hours are called
+    # out in words so nobody has to reverse-engineer the subtraction.
+    ws.merge_cells(start_row=tr + 2, start_column=4, end_row=tr + 2,
+                   end_column=11)
+    M = f"SUM(E{first}:E{last})"
+    G = f"(N(cfgRequiredHours)-SUM(E{first}:E{last}))"
+    gap = ws.cell(row=tr + 2, column=4, value=(
+        f'=IF({G}=0,"Per-chapter TCOLE minimums total exactly "&'
+        f'TEXT({M},"0.##")&" hrs - the full reported course length.",'
+        f'"NOTE: the per-chapter TCOLE minimums above total "&'
+        f'TEXT({M},"0.##")&" hrs, not the "&N(cfgRequiredHours)&" hrs the '
+        f'BPOC is reported at. The "&TEXT({G},"0.##")&"-hr difference is not '
+        f'assigned to any numbered chapter in this table (chapter A, '
+        f'Administrative/Departmental Overview, carries no TCOLE minimum '
+        f'here). This is a gap in the MINIMUMS column only - it does not '
+        f'change delivered hours or the exactly-"&N(cfgRequiredHours)&'
+        f'"-hour report. Verify the per-chapter minimums against the current '
+        f'TCOLE BPOC course outline and record where those hours belong '
+        f'before submission.")'))
+    gap.font = F_SMALL
+    gap.alignment = A_LEFT_WRAP
+    ws.row_dimensions[tr + 2].height = 44
 
     # ---- TPD sub-classes (scheduled separately, roll up to a chapter) ----
     sr = tr + 3
@@ -632,8 +709,21 @@ def build_examplan(wb):
         "F": ('IF($C{r}="","",IFERROR(INDEX(rngEMpass,MATCH($C{r},rngEMcode,0)),cfgPassingScore))', "fx"),
         "G": ('IF($C{r}="","",IFERROR(INDEX(rngEMseq,MATCH($C{r},rngEMcode,0)),""))', "fx"),
         "H": (None, "in"),
-        "I": ('IF(OR($C{r}="",$H{r}=""),"",IFERROR(IF(MAXIFS(nrSCH_Date,'
-              'nrSCH_ChNum,$H{r})=0,"",MAXIFS(nrSCH_Date,nrSCH_ChNum,$H{r})),""))', "fx"),
+        # "Exam Date" used to be the LAST day the linked chapter was taught,
+        # which disagreed with the date the exam was actually given (for E09
+        # by three days) on an auditor-facing page. Now: the date the exam
+        # was actually taken (earliest dated first attempt) when scores
+        # exist, else the scheduled "Test n" / "Final Test" block, else the
+        # chapter's last taught day as the estimate it always was.
+        "I": ('IF($C{r}="","",'
+              'IF(IFERROR(MINIFS(nrES_Date,nrES_Code,$C{r},nrES_Att,1,'
+              'nrES_Date,">0"),0)>0,'
+              'MINIFS(nrES_Date,nrES_Code,$C{r},nrES_Att,1,nrES_Date,">0"),'
+              'IF(AND($G{r}<>"",IFERROR(MAXIFS(nrSCH_Date,nrSCH_Act,'
+              '"Test "&$G{r}),0)>0),'
+              'MAXIFS(nrSCH_Date,nrSCH_Act,"Test "&$G{r}),'
+              'IF(AND($H{r}<>"",IFERROR(MAXIFS(nrSCH_Date,nrSCH_ChNum,'
+              '$H{r}),0)>0),MAXIFS(nrSCH_Date,nrSCH_ChNum,$H{r}),""))))', "fx"),
     })
     for r2 in range(first, last + 1):
         ws[f"I{r2}"].number_format = DATE
@@ -651,10 +741,13 @@ def build_examplan(wb):
     define(wb, "rngEPdate", "ExamPlan", f"$I${first}:$I${last}")
     col_widths(ws, {"A": 3, "B": 7, "C": 11, "D": 52, "E": 10, "F": 10,
                     "G": 7, "H": 11, "I": 12})
-    sheet_note(ws, "Linked Ch # ties each exam to its chapter; 'Exam Date' "
-                   "estimates from the last scheduled day of that chapter "
-                   "(informational — retest deadlines run off actual score "
-                   "dates).")
+    sheet_note(ws, "Linked Ch # ties each exam to its chapter. 'Exam Date' "
+                   "is the date the exam was actually given (earliest dated "
+                   "first attempt on ExamScores); before any score is "
+                   "entered it falls back to the scheduled 'Test n' block, "
+                   "and failing that to the last scheduled day of the linked "
+                   "chapter. Retest deadlines always run off the actual "
+                   "score dates, never off this column.")
     return ws
 
 
@@ -735,9 +828,14 @@ def build_writingmaster(wb):
     fill_rows(ws, first, last, {
         "B": (None, "in"), "C": (None, "in"), "D": (None, "in"),
         "E": (None, "in"), "F": (None, "in"),
+        # MINIFS returns 0 (not an error) when the assign-week start falls
+        # past the last generated class day, so IFERROR never fired and G -
+        # and the Assigned column K that reads it - printed 12/30/1899 on the
+        # writing handout. Zero-guarded exactly like its sibling H below.
         "G": ('IF($D{r}="","",LET(f,IFERROR(XLOOKUP($D{r},nrCHnum,nrCHfirst),""),'
               'IF(OR(f="",f=0),"",LET(wkstart,f-WEEKDAY(f,2)+1+$E{r}*7,'
-              'IFERROR(MINIFS(nrCDdate,nrCDdate,">="&wkstart),"")))))', "fx"),
+              'd,IFERROR(MINIFS(nrCDdate,nrCDdate,">="&wkstart),0),'
+              'IF(N(d)=0,"",d)))))', "fx"),
         "H": ('IF($G{r}="","",LET(a,$G{r},ws2,a-WEEKDAY(a,2)+1+$F{r}*7,'
               'd,MAXIFS(nrCDdate,nrCDdate,">="&ws2,nrCDdate,"<"&(ws2+7)),'
               'IF(d=0,"",d)))', "fx"),
@@ -781,8 +879,8 @@ def build_control(wb):
     ws.sheet_view.showGridLines = False
     # holidays B:D
     header_row(ws, ["Holiday", "Observed (Yr 1)", "Observed (Yr 2)", None,
-                    "Extra Closure Dates", None, "Day #", "Class Date",
-                    "Week #", "In Session?"])
+                    "Extra Closure Dates", "Closure Check", "Day #",
+                    "Class Date", "Week #", "In Session?"])
     first = DATA_ROW
     # ---- Easter / Good Friday computus, computed in plain arithmetic ----
     # Good Friday was the workbook's only LET-dependent holiday. A single
@@ -795,6 +893,17 @@ def build_control(wb):
     # P6:AF7 shipped with no label and no warning on an unprotected sheet
     ws.cell(row=HDR_ROW - 1, column=16,
             value="Easter computus (helper - do not edit)").font = F_SMALL
+    # a blank / non-date Start Date is the one input that can silently empty
+    # this whole sheet; say so where the empty calendar is being looked at
+    warn = ws.cell(row=HDR_ROW - 2, column=8, value=(
+        '=IF(NOT(ISNUMBER(cfgStartDate)),'
+        '"START DATE on Settings is blank or is not a real date - no class '
+        'days can be generated, so every retest deadline, memo due date and '
+        'writing date is blank until it is fixed.",'
+        'IF(NOT(ISNUMBER(cfgEndDate)),'
+        '"END DATE on Settings is blank or is not a real date - the '
+        '\'In Session?\' column cannot be computed.",""))'))
+    warn.font = F_LABEL
     steps = [
         ("Y", "{Y}"),
         ("a", "MOD($P{r},19)"),
@@ -849,18 +958,55 @@ def build_control(wb):
     define(wb, "nrHolidays2", "Control", f"$D${first}:$D${hol_last}")
     # extra closures (manual)
     extra_last = first + 14
-    fill_rows(ws, first, extra_last, {"F": (None, "in")})
+    # column G is the Row Check the extra-closure block never had: a value
+    # that is not a real date is DISCARDED by the calendar (see the ISNUMBER
+    # guard on column M below), so it has to be visible here rather than
+    # silently changing the class calendar. The dropdown-free date validation
+    # blocks typing one; Row Check catches the pastes validation lets through.
+    fill_rows(ws, first, extra_last, {
+        "F": (None, "in"),
+        "G": ('IF($F{r}="","",IF(NOT(ISNUMBER($F{r})),'
+              '"NOT A DATE - this closure is IGNORED",'
+              'IF(COUNTIF($F$%d:$F$%d,$F{r})>1,"DUPLICATE closure date",'
+              'IF(NOT(ISNUMBER(cfgStartDate)),"OK",'
+              'IF(OR($F{r}<cfgStartDate,$F{r}>N(cfgEndDate)+90),'
+              '"OK (outside this academy - no effect)",'
+              'IF(WEEKDAY($F{r},2)>5,"OK (weekend - already closed)",'
+              '"OK"))))))' % (first, extra_last), "fx"),
+    })
     for r2 in range(first, extra_last + 1):
         ws[f"F{r2}"].number_format = DATE
+    from openpyxl.worksheet.datavalidation import DataValidation as _DV
+    _dvd = _DV(type="date", operator="between",
+               formula1="DATE(1900,1,1)", formula2="DATE(2199,12,31)",
+               allow_blank=True, showErrorMessage=True)
+    _dvd.errorTitle = "Extra Closure Date"
+    _dvd.error = ("Enter a real date (e.g. 12/23/2026). Text is ignored by "
+                  "the class-day calendar and the Closure Check column will "
+                  "say so.")
+    _dvd.add(f"F{first}:F{extra_last}")
+    ws.add_data_validation(_dvd)
+    cf_formula(ws, f"G{first}:G{extra_last}",
+               f'AND($G{first}<>"",LEFT($G{first},2)<>"OK")', FILL_WARNBG)
     define(wb, "nrExtraClosures", "Control", f"$F${first}:$F${extra_last}")
+    define(wb, "nrExtraClosureCheck", "Control", f"$G${first}:$G${extra_last}")
     # class-day calendar H:K
     cd_last = first + ROWS_CLASSDAYS - 1
     fill_rows(ws, first, cd_last, {
         "H": (('v', None), "fx"),
-        "I": ('IF($H{r}="","",WORKDAY.INTL(cfgStartDate-1,$H{r},"0000011",'
-              'nrAllClosures))', "fx"),
-        "J": ('IF($H{r}="","",INT(($I{r}-(cfgStartDate-WEEKDAY(cfgStartDate,2)+1))/7)+1)', "fx"),
-        "K": ('IF($H{r}="","",IF($I{r}<=cfgEndDate,"Yes","No"))', "fx"),
+        # the START argument is guarded too, not just the holidays list: a
+        # blank or non-date Start Date made cfgStartDate-1 evaluate to -1 (or
+        # #VALUE!) and turned all 170 class days into errors, poisoning every
+        # retest deadline, memo due date, writing date and sign-in sheet
+        # downstream with nothing on Settings to say why. A bad Start Date now
+        # leaves the calendar BLANK and says so in the banner on row 3 and in
+        # the Settings "Check" column beside Start Date.
+        "I": ('IF(OR($H{r}="",NOT(ISNUMBER(cfgStartDate))),"",'
+              'IFERROR(WORKDAY.INTL(cfgStartDate-1,$H{r},"0000011",'
+              'nrAllClosures),""))', "fx"),
+        "J": ('IF(OR($H{r}="",$I{r}=""),"",'
+              'INT(($I{r}-(cfgStartDate-WEEKDAY(cfgStartDate,2)+1))/7)+1)', "fx"),
+        "K": ('IF(OR($H{r}="",$I{r}=""),"",IF($I{r}<=cfgEndDate,"Yes","No"))', "fx"),
     })
     for i, r2 in enumerate(range(first, cd_last + 1)):
         ws[f"H{r2}"].value = i + 1
@@ -878,9 +1024,15 @@ def build_control(wb):
                 value=f"=IFERROR(N(C{first+i})+0,{SENT})").number_format = DATE
         ws.cell(row=first + n_h + i, column=13,
                 value=f"=IFERROR(N(D{first+i})+0,{SENT})").number_format = DATE
+    # N() coerces TEXT to 0 without raising, so a pasted "12/23/2026" or a
+    # label like "Thanksgiving week" used to be swallowed silently: the
+    # closure simply never happened, IFERROR never fired, and the coordinator
+    # got a wrong class calendar with no error, no flag and no audit line.
+    # ISNUMBER keeps the sentinel for anything that is not a real date, and
+    # the Check column beside the input says exactly what was rejected.
     for i in range(15):
         ws.cell(row=first + 2 * n_h + i, column=13,
-                value=f'=IFERROR(IF(F{first+i}="",{SENT},N(F{first+i})+0),{SENT})'
+                value=f'=IF(ISNUMBER(F{first+i}),F{first+i},{SENT})'
                 ).number_format = DATE
     all_last = first + 2 * n_h + 14
     define(wb, "nrAllClosures", "Control", f"$M${first}:$M${all_last}")
@@ -889,11 +1041,16 @@ def build_control(wb):
     define(wb, "nrCDweek", "Control", f"$J${first}:$J${cd_last}")
     define(wb, "nrCDinsession", "Control", f"$K${first}:$K${cd_last}")
     col_widths(ws, {"A": 3, "B": 26, "C": 15, "D": 15, "E": 2, "F": 16,
-                    "G": 2, "H": 8, "I": 13, "J": 8, "K": 11, "L": 2, "M": 12})
+                    "G": 34, "H": 8, "I": 13, "J": 8, "K": 11, "L": 2,
+                    "M": 12})
     sheet_note(ws, "Class days = Mon-Fri from Start Date, skipping observed "
                    "holidays and any Extra Closure Dates you add. Retest "
                    "deadlines, writing dates and sign-in sheets all key off "
-                   "this calendar.")
+                   "this calendar. An Extra Closure Date must be a REAL date "
+                   "- anything else is ignored by the calendar, and the "
+                   "Closure Check column beside it says so. If Start Date on "
+                   "Settings is blank or not a date, this whole table is "
+                   "blank on purpose (see the red line above).")
     return ws
 
 

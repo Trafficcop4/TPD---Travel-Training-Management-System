@@ -100,9 +100,17 @@ schedule.
 ## End of academy
 
 1. Enter final PT points and the Final Exam scores.
-2. GradChecklist: every gate column Yes and **Blocking Issues empty**; print
+2. GradChecklist: every gate column Yes and **Blocking Issues reading
+   "Eligible"** (the engine writes that word for a passing cadet — the cell is
+   never blank); print
    **Transcript** for every cadet (button).
-3. Confirm the **Audit** sheet is all OK / all Yes.
+3. Confirm the **Audit** sheet. Everything should read OK / Yes / N/A with
+   ONE expected exception: the delivered-hours check reads
+   **"OVER - report excess as #101"** for any academy that delivers more than
+   736 hours, which is what this academy does and what this guide tells you to
+   do — report the BPOC at exactly 736 and the excess under the course numbers
+   the **Addendum** sheet names. "OVER" is the correct, expected state, not a
+   defect; "SHORT" is the one that must never be left standing.
 4. Record awards (override cells on sysAwards).
 5. Save-As the finished file (e.g. `BPOC-2026-01 FINAL.xlsm`), then run
    **New Academy Reset** on a fresh copy for the next class.
@@ -119,22 +127,39 @@ powershell -File tools/Install-BPOC-VBA.ps1   # on Windows+Excel: builds the .xl
 
 - **DailyLog** is the digital daily report: one row per training day —
   present count, AM/PM notes, Issues flag, and whether the class leader's
-  signed report was scanned (scans are the legal originals per records
-  policy). The counters (incidents, early departures, memos received)
+  signed report was scanned. **Keep the paper original** — whether a scan
+  alone satisfies the IRG's "original, legibly written sign-in sheet
+  including the PID" is still unconfirmed with TCOLE (see
+  docs/BPOC-Audit-Prep.md), and the Audit sheet's "Scanned documents
+  established as legal originals" item is a question for you to answer, not a
+  settled fact. The counters (incidents, early departures, memos received)
   compute themselves.
 - **SignIn** is now the one-page Daily Report & Roster: AM roll call +
   sign-in grid + PM changes + signatures. Print on demand.
 - **Missed time clears by event**: every counting Attendance event stays
   OPEN until that same cadet's Makeup rows linked to its EventID cover the
-  balance — then it shows CLEARED with the date. Agency recalls get the
-  "Agency Recall" reason, count against the cap, and must be made up like
-  everything else. The Dashboard lists every OPEN event.
+  balance — then it shows CLEARED with the date. The Dashboard lists every
+  OPEN event.
+- **What counts against the cap is the `Excused?` column, not the Reason.**
+  The engine's `Counts?` formula reads `Excused?` (and the one documented
+  exception: a `PT Modified` event whose documentation is Received). It does
+  not look at the Reason column at all — Reason is reporting detail. So an
+  agency recall counts against the cap and must be made up **only if you log
+  it as `Counted`**. If a recall is genuinely excused, mark it `Excused` and
+  it neither counts nor needs makeup. Earlier wording here said agency
+  recalls always count as if the engine enforced it; it does not, and the
+  choice is deliberately yours on each row.
 - **Makeup "Row Check"** is the last column on the Makeup sheet. Credit only
   applies when it reads OK. It refuses another cadet's event (WRONG CADET),
   an EventID that no longer exists (NO SUCH EVENT), a Type the caps do not
-  credit (TYPE NOT CREDITED — only Classroom and PT do), and minutes booked
-  against a PT event, which is counted in sessions (UNIT MISMATCH). That
-  keeps the CLEARED banner and the `Cl Owed` / `PT Net` balances in step.
+  credit (TYPE NOT CREDITED — the dropdown now offers only Classroom and PT,
+  because those are the only two the caps credit), minutes booked
+  against a PT event, which is counted in sessions (UNIT MISMATCH), a row
+  with **no makeup Date** (a dateless credit used to stamp a fabricated
+  "CLEARED 12/30" on the attendance ledger) and a zero or **negative**
+  credit (which used to pass as OK and *increase* the cadet's owed time).
+  That keeps the CLEARED banner and the `Cl Owed` / `PT Net` balances in
+  step.
 - **Memos**: assigned for deficiencies, linked to the triggering Incident/
   Attendance/Counseling ID (or stand-alone), due N class days later
   (Settings), overdue memos flag the cadet on the WatchList.

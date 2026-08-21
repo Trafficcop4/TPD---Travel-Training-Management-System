@@ -102,7 +102,9 @@ End Sub
 ' ==========================================================================
 Public Sub AcademyStartupReview()
     Dim ws As Worksheet: Set ws = ThisWorkbook.Worksheets("AdvisoryBoard")
+    Dim abWasProt As Boolean
     On Error Resume Next
+    abWasProt = ws.ProtectContents
     ws.Unprotect PW
     On Error GoTo 0
 
@@ -180,6 +182,12 @@ Public Sub AcademyStartupReview()
                vbExclamation, "Academy Startup Review"
     End If
     ws.Range("D9").Value = Environ$("USERNAME") & " " & Format$(Date, "mm/dd/yyyy")
+    ' restore whatever protection state this sub found
+    If abWasProt Then
+        On Error Resume Next
+        ws.Protect PW
+        On Error GoTo 0
+    End If
     MsgBox "Startup review recorded on the AdvisoryBoard sheet.", _
            vbInformation, "Academy Startup Review"
 End Sub
@@ -187,9 +195,13 @@ End Sub
 Private Sub ClearAuditDocs()
     ' per-cadet enrollment docs grid + program checklist answers
     Dim ws As Worksheet, c As Range, firstDoc As Long, r As Long, rr As Long
+    Dim wasProt As Boolean
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets("Audit")
     If ws Is Nothing Then Exit Sub
+    ' Audit is a protected sheet with unlocked input cells - re-lock it when
+    ' we are done, or the reset ships an editable audit packet
+    wasProt = ws.ProtectContents
     ws.Unprotect PW
     ' find the docs header by its "Enroll App" label, clear the 50-row grid
     For r = 1 To 120
@@ -210,15 +222,24 @@ Private Sub ClearAuditDocs()
             Exit For
         End If
     Next r
+    If wasProt Then ws.Protect PW
     On Error GoTo 0
 End Sub
 
 Private Sub ClearRange(sheetName As String, addr As String)
+    ' The sheet's protection state must SURVIVE the reset. This used to
+    ' unprotect and never re-protect, so every New Academy Reset stripped
+    ' sysAwards permanently: the computed-winner and FINAL formulas that feed
+    ' the printed transcript were left freely editable, and that state was
+    ' saved with the file. (Audit, PrintCenter and every other protected
+    ' sheet this touches now come back locked too.)
     On Error Resume Next
     Dim ws As Worksheet: Set ws = ThisWorkbook.Worksheets(sheetName)
     If ws Is Nothing Then Exit Sub
+    Dim wasProt As Boolean: wasProt = ws.ProtectContents
     ws.Unprotect PW
     ws.Range(addr).ClearContents
+    If wasProt Then ws.Protect PW
     On Error GoTo 0
 End Sub
 

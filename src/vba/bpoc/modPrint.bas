@@ -34,15 +34,13 @@ Public Sub btnPrintSignInWeek()
     On Error GoTo Cleanup
     Dim r As Long, printed As Long, d As Variant
     For r = 6 To 175
-        d = wsC.Cells(r, "I").Value
-        If IsDate(d) Then
+        If IsClassDay(wsC, r) Then
+            d = wsC.Cells(r, "I").Value
             If CDate(d) >= startDate And printed < 5 Then
-                If wsC.Cells(r, "K").Value = "Yes" Then   ' in session
-                    wsS.Range("C5").Value = CDate(d)
-                    Application.Calculate
-                    wsS.PrintOut
-                    printed = printed + 1
-                End If
+                wsS.Range("C5").Value = CDate(d)
+                Application.Calculate
+                wsS.PrintOut
+                printed = printed + 1
             End If
         End If
         If printed >= 5 Then Exit For
@@ -153,9 +151,12 @@ Public Sub btnPrintSignInAcademy()
     Dim wsS As Worksheet: Set wsS = ThisWorkbook.Worksheets("SignIn")
     Dim wsC As Worksheet: Set wsC = ThisWorkbook.Worksheets("Control")
     Dim r As Long, total As Long, d As Variant
+    ' IsDate() on an ERROR value raises Type mismatch, and no handler was
+    ' armed here yet - so this loop crashed with a raw VBA error in exactly
+    ' the blank/bad-Start-Date case the friendly guard below was written for.
+    ' IsClassDay swallows the error and returns False instead.
     For r = 6 To 175
-        If IsDate(wsC.Cells(r, "I").Value) And _
-           wsC.Cells(r, "K").Value = "Yes" Then total = total + 1
+        If IsClassDay(wsC, r) Then total = total + 1
     Next r
     If total = 0 Then
         MsgBox "No class days found - set the Start/End dates on Settings " & _
@@ -173,8 +174,8 @@ Public Sub btnPrintSignInAcademy()
     Application.ScreenUpdating = False
     Dim printed As Long
     For r = 6 To 175
-        d = wsC.Cells(r, "I").Value
-        If IsDate(d) And wsC.Cells(r, "K").Value = "Yes" Then
+        If IsClassDay(wsC, r) Then
+            d = wsC.Cells(r, "I").Value
             wsS.Range("C5").Value = CDate(d)
             Application.Calculate
             wsS.PrintOut
@@ -194,6 +195,24 @@ Cleanup:
     MsgBox "Printing stopped after " & printed & " form(s): " & _
            Err.Description, vbExclamation, "Academy Book"
 End Sub
+
+' TRUE only when Control row r holds a real date in I and "Yes" in K.
+' Both cells can hold an ERROR value (a blank or non-date Start Date on
+' Settings), and touching an error with IsDate() or "=" raises Type
+' mismatch - which is why every caller goes through here.
+Private Function IsClassDay(wsC As Worksheet, r As Long) As Boolean
+    On Error GoTo NotADay
+    Dim d As Variant, k As Variant
+    d = wsC.Cells(r, "I").Value
+    k = wsC.Cells(r, "K").Value
+    If IsError(d) Or IsError(k) Then Exit Function
+    If Not IsDate(d) Then Exit Function
+    If StrComp(CStr(k), "Yes", vbTextCompare) <> 0 Then Exit Function
+    IsClassDay = True
+    Exit Function
+NotADay:
+    IsClassDay = False
+End Function
 
 Private Sub PrintSheet(nm As String)
     On Error GoTo Oops

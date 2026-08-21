@@ -181,6 +181,7 @@ def seed():
     ws = v6["Attendance"]
     at = v54["Attendance"]
     out = 6
+    src_kept = [0]
     for r54 in range(5, 805):
         if sval(at.cell(row=r54, column=4)) == "":
             continue
@@ -192,9 +193,23 @@ def seed():
             if c6 == 3 and isinstance(v, datetime):
                 v = v.replace(hour=0, minute=0, second=0, microsecond=0)
             ws.cell(row=out, column=c6).value = v
-        ws.cell(row=out, column=15).value = at.cell(row=r54, column=16).value  # notes
+        # V5.4 column O ("Source") used to be dropped on the floor. It is the
+        # only documentation reference in the whole log ("Dr. Note in file."
+        # on event A004 - the one row whose Doc Status is "Received"), so
+        # losing it left a counted, documented absence with no trace of WHERE
+        # the documentation is. V6 has no Source column; it is folded into
+        # Notes with its own label so the reference survives the migration.
+        note = at.cell(row=r54, column=16).value                  # V5.4 Notes
+        source = at.cell(row=r54, column=15).value                # V5.4 Source
+        parts = [str(x).strip() for x in (note, source) if str(x or "").strip()]
+        if source and str(source).strip():
+            parts = [p for p in (str(note or "").strip(),) if p]
+            parts.append("Source: " + str(source).strip())
+            src_kept[0] += 1
+        ws.cell(row=out, column=15).value = "  ".join(parts) or None
         out += 1
-    print(f"Attendance events: {out-6}")
+    print(f"Attendance events: {out-6} "
+          f"(V5.4 'Source' text preserved on {src_kept[0]} row(s))")
 
     # ---------------- Makeup ----------------
     ws = v6["Makeup"]

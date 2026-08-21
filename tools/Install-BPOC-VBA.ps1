@@ -45,7 +45,15 @@ function Add-Button($ws, $anchorCell, $widthCells, $caption, $macro) {
     for ($i = 0; $i -lt $widthCells; $i++) { $width += $anchor.Offset(0, $i).Width }
     # never narrower than the caption needs: anchors on default-width columns
     # produced ~44pt buttons whose text was clipped to a few characters
+    # NOTE: this minimum is why anchors must be spaced at least 130pt apart.
+    # Two buttons anchored closer than $w WILL overlap - see the StartHere
+    # anchors below. Warn rather than silently drawing one over the other.
     $w = [Math]::Max($width - 4, 130)
+    if ($width -gt 0 -and $width -lt 130) {
+        Write-Host ("    note    '{0}' widened to 130pt (anchor span {1:N0}pt) - " +
+                    'keep the next anchor at least 130pt to the right') `
+                   -f $caption, $width
+    }
     $shape = $ws.Shapes.AddFormControl($btnCtrl, $left, $top, $w, 22)
     $shape.Name = "btn_$macro"
     $shape.OnAction = $macro
@@ -109,14 +117,39 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
         Application.EnableEvents = False
         Application.Undo
         oldVal = Trim$(CStr(Target.Value))
-        If oldVal = "" Or oldVal = newVal Then
+        ' Rebuild the list token by token. The old code used
+        ' Replace(", " & oldVal, ", " & newVal, "") with NO occurrence count:
+        '   * it removed EVERY match, not the one that was re-picked, and
+        '   * because it matched on a prefix, re-picking "Smith" out of
+        '     "Smith, Smithson" deleted both and left the fragment "son".
+        ' It also could not remove the LAST remaining name - "oldVal = newVal"
+        ' rewrote the cell instead of clearing it, contradicting the
+        ' "pick again to remove" contract this same block advertises.
+        ' Instructor names never contain a comma (see DL.INSTRUCTORS /
+        ' GUEST_ENTITIES), so splitting on "," is safe.
+        Dim parts() As String, i As Long, rebuilt As String, removed As Boolean
+        Dim tok As String
+        parts = Split(oldVal, ",")
+        For i = LBound(parts) To UBound(parts)
+            tok = Trim$(parts(i))
+            If tok <> "" Then
+                If Not removed And StrComp(tok, newVal, vbTextCompare) = 0 Then
+                    removed = True          ' drop exactly one occurrence
+                ElseIf rebuilt = "" Then
+                    rebuilt = tok
+                Else
+                    rebuilt = rebuilt & ", " & tok
+                End If
+            End If
+        Next i
+        If oldVal = "" Then
             Target.Value = newVal
-        ElseIf InStr(", " & oldVal & ",", ", " & newVal & ",") > 0 Then
-            ' toggle off: remove the re-picked name
-            Dim s As String
-            s = Replace(", " & oldVal, ", " & newVal, "")
-            If Left$(s, 2) = ", " Then s = Mid$(s, 3)
-            Target.Value = s
+        ElseIf removed Then
+            If rebuilt = "" Then
+                Target.ClearContents        ' removing the last name clears it
+            Else
+                Target.Value = rebuilt
+            End If
         Else
             Target.Value = oldVal & ", " & newVal
         End If
@@ -156,20 +189,32 @@ End Sub
     Add-Button $pc 'G21' 2 'Addendum Report'   'modPrint.btnPrintAddendum'
     Add-Button $pc 'G22' 2 'Schedule'          'modPrint.btnPrintSchedule'
 
+    # Dashboard is now a protected pure-output sheet (zero input cells), so
+    # it has to be unprotected while its button is (re)placed, exactly like
+    # PrintCenter and EmailPreview.
     $dash = $wb.Worksheets.Item('Dashboard')
+    $dash.Unprotect($pw) 2>$null
     Remove-OldButtons $dash
     Add-Button $dash 'K5' 1 'Agency Email Drafts' 'modAgencyEmail.GenerateAgencyEmails'
+    $dash.Protect($pw) 2>$null
 
     $ep = $wb.Worksheets.Item('EmailPreview')
     $ep.Unprotect($pw) 2>$null
     Remove-OldButtons $ep
-    Add-Button $ep 'H5' 2 'Build Outlook Drafts' 'modAgencyEmail.GenerateAgencyEmails'
+    # L5, not H5: the E5 status line ("Exam # ... | Last emailed: <date>")
+    # spills across F:J, and a button anchored at H5 covered the cutoff date
+    # this whole preview sheet exists to show.
+    Add-Button $ep 'L5' 2 'Build Outlook Drafts' 'modAgencyEmail.GenerateAgencyEmails'
     $ep.Protect($pw) 2>$null
 
     $sh = $wb.Worksheets.Item('StartHere')
     Remove-OldButtons $sh
+    # D16 / H16, not D16 / F16. Add-Button forces a 130pt minimum width (the
+    # two-default-width span D:E is only ~96pt), so anchoring the second
+    # button two columns right drew 'Startup Review' over the right ~34pt of
+    # 'New Academy Reset'. Four columns (~192pt) clears it with room to spare.
     Add-Button $sh 'D16' 2 'New Academy Reset' 'modNewAcademy.NewAcademyReset'
-    Add-Button $sh 'F16' 2 'Startup Review'    'modNewAcademy.AcademyStartupReview'
+    Add-Button $sh 'H16' 2 'Startup Review'    'modNewAcademy.AcademyStartupReview'
 
     $out = Join-Path $workbooks 'BPOC_Academy_Management_V6.xlsm'
     $wb.SaveAs($out, $xlsmFmt)

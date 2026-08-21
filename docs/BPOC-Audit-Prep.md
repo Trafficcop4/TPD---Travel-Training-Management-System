@@ -22,6 +22,15 @@ the standard.
 
 ## The audit trail, piece by piece
 
+- **Per-chapter minimums vs 736** — the TCOLE minimums seeded on
+  ChapterMaster total **734**, not 736: chapter A (Administrative/
+  Departmental Overview) carries no TCOLE minimum in that table, so two of
+  the 736 reported hours are not assigned to a numbered chapter. The note
+  under the ChapterMaster totals row says so on the sheet. This is a gap in
+  the MINIMUMS column only — it does not change delivered hours or the
+  exactly-736 report. Verify the per-chapter minimums against the current
+  TCOLE BPOC course outline and record where those two hours belong before
+  submission.
 - **Hours** — Audit sheet checks delivered hours vs **exactly 736** (over =
   report the excess under the course the Addendum sheet names — #2040,
   #2046, #2055 or #101; under = Rule 218.1(C)(4) denial risk)
@@ -89,7 +98,12 @@ whether scans alone satisfy that before discarding anything.
 
 ## Sixty seconds before the auditor arrives
 
-Open the **Audit** sheet: the top block is live engine checks (all should
-read OK), the middle is the program checklist (all Yes/N/A), the bottom is
-the per-cadet document grid (all Yes). Anything red tells you exactly what
-to fix and where.
+Open the **Audit** sheet: the top block is live engine checks, the middle is
+the program checklist (all Yes/N/A), the bottom is the per-cadet document
+grid (all Yes). Anything red tells you exactly what to fix and where.
+
+One engine check is *expected* not to read OK: **delivered hours vs 736**
+reads `OVER - report excess as #101` for any academy that delivers more than
+736 hours, which is the normal state here and exactly what the Addendum
+sheet is for. `SHORT` is the reading that must never be left standing
+(Rule 218.1(C)(4)). Everything else should be OK.
