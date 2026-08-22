@@ -327,7 +327,7 @@ button**. Print areas are pre-set, so `Ctrl+P` on the sheet works too.
 
 | Printable | Set first | What it is | Where it goes |
 |---|---|---|---|
-| **Daily Report & Roster** (SignIn) | `cfgSignInDate` | One page: schedule for the day, AM roll-call block, sign-in grid (name + PID + AM/PM signature), PM changes block, class-leader and coordinator signature lines | Class leader fills and signs; **scan it** into that day's folder — the scan is the legal original |
+| **Daily Report & Roster** (SignIn) | `cfgSignInDate` | One page: schedule for the day, AM roll-call block, sign-in grid (name + PID + AM/PM signature), PM changes block, class-leader and coordinator signature lines | Class leader fills and signs; **scan it** into that day's folder — the scan is the legal original, confirmed by TPD records management (recorded on the Audit sheet item 'Scanned documents established as legal originals') |
 | **…week** | — | Next 5 class days, each pre-filled with its own date, day # and schedule | Hand the leader a week at a time |
 | **…academy book** | — | Every class day in the academy, one run | Bind at the start of the academy |
 
@@ -349,7 +349,7 @@ BPOC-2026-01/Ch23 - Intoxicated Driver (SFST)/
   00 ChapterPacket.pdf      ← cover: what this folder must contain
   01 Lesson Plan.pdf        ← SME-developed (a PowerPoint alone does not count)
   02 Instructor Bios+certs.pdf
-  03 Sign-ins/              ← scans
+  03 Sign-ins/              ← scans = the legal originals
   04 Assessment.pdf         ← LMS test printed to PDF
   05 Grade Sheet.pdf        ← ExamSheet print
   06 Evaluations/           ← scanned critiques

@@ -175,6 +175,21 @@ def test_workbook():
     check(all('nrES_Rec,">=0"' in sg[f"{cl}6"].value for cl in "EFHIJL") and
           all("IFERROR" in sg[f"{cl}6"].value for cl in "IJL"),
           "sysGrades counts/averages both require a recorded score")
+    # ...and a BOUNDED one: ExamScores has no upper-bound validation on Raw
+    # Score, so a mis-keyed 180 used to produce a >100 transcript average
+    check(all('nrES_Rec,"<=100"' in sg[f"{cl}6"].value for cl in "EFHIJL"),
+          "sysGrades excludes an out-of-range score from counts and averages")
+    # the same population must drive every class aggregate, or the value the
+    # transcript now refuses merely moves to the printed/emailed class average
+    sgrid = wb["ScoresGrid"]
+    avg_row = next(r for r in range(56, 60)
+                   if str(sgrid.cell(row=r, column=3).value or "")
+                   .startswith("Class average"))
+    check('nrES_Rec,">=0"' in str(sgrid.cell(row=avg_row, column=4).value)
+          and 'nrES_Rec,"<=100"' in str(sgrid.cell(row=avg_row, column=4).value),
+          "ScoresGrid class average reads the same population as sysGrades")
+    check('nrES_Rec,">=0"' in str(wb["EmailPreview"]["D9"].value),
+          "the emailed class average reads the same population as sysGrades")
     ck = wb["sysChecks"]
     check("PT!$AB" in ck["L6"].value and 'PT!$AB6="Yes"' in ck["L6"].value and
           '"Not taken"' in ck["L6"].value,
@@ -194,6 +209,46 @@ def test_workbook():
           and '$S6="Yes"' in ck["N6"].value and
           "Skills not all assessed; " in ck["O6"].value,
           "graduation requires every skills category actually qualified")
+    # ch.41: nrSKbothCoF used to feed ONE audit line that counted only the
+    # outright "No", so a cadet who never fired one course of fire read
+    # "Eligible" on the graduation checklist
+    check(ck["T5"].value == "Firearms CoF" and
+          'sysSkills!$P6="Yes"' in ck["T6"].value and
+          '$T6="Yes"' in ck["N6"].value and
+          "Firearms courses of fire; " in ck["O6"].value,
+          "graduation requires BOTH firearms courses of fire passed")
+    # A45: an engine-raised dismissal review must be CLOSABLE, per trigger,
+    # and there must be exactly one gate the rest of the workbook reads
+    check(ck["U5"].value == "Open Reviews" and
+          "nrDIS_PID" in ck["U6"].value and "nrDIS_Closes" in ck["U6"].value
+          and "nrDIS_Outcome" in ck["U6"].value
+          and "nrDIS_Approval" in ck["U6"].value
+          and 'nrDIS_Closes,"Failed retest (exam)"' in ck["U6"].value
+          and 'nrDIS_Closes,"Skills failed out"' in ck["U6"].value
+          and 'nrDIS_Closes,"Chain-of-command incident review"' in ck["U6"].value
+          and '"Retained w/ Plan"' in ck["U6"].value
+          and "*" not in ck["U6"].value        # no wildcard criteria
+          and '$U6=""' in ck["M6"].value,
+          "sysChecks DismissReview clears from the DismissalLog, per trigger")
+    # the WatchList reason must come from the same per-trigger arithmetic, or
+    # it can name a trigger whose review has already been closed
+    check("sysChecks!$U6" in wb["sysFlags"]["T6"].value and
+          "sysGrades!$P6>0" not in wb["sysFlags"]["T6"].value,
+          "the dismissal-review flag reason names only UNCLOSED triggers")
+    check("sysChecks!$M6" in sg["T6"].value and
+          "sysGrades!$P6" not in sg["T6"].value and
+          "sysChecks!$M6" in wb["sysFlags"]["R6"].value,
+          "rank eligibility and the flag read the ONE dismissal-review gate")
+    dl = wb["DismissalLog"]
+    check(dl["P5"].value == "Closes Trigger" and
+          str(wb.defined_names["nrDIS_Closes"].value).endswith("$P$6:$P$105")
+          and dl.auto_filter.ref == "B5:P5",
+          "DismissalLog carries the trigger the review closes")
+    import data_lists as _DL0
+    check(_DL0.LISTS["Dismissal Trigger"][:3] ==
+          ["Failed retest (exam)", "Skills failed out",
+           "Chain-of-command incident review"],
+          "the Closes Trigger list matches the strings the engine matches")
     check(wb["Control"]["I6"].value.startswith("=IF")
           and "WORKDAY.INTL(" in wb["Control"]["I6"].value
           and "_xlfn.WORKDAY" not in wb["Control"]["I6"].value,
@@ -217,6 +272,12 @@ def test_workbook():
     check("UNRECOGNIZED" in wb["Schedule"]["N6"].value and
           '(nrInstrNames<>"")' in wb["Schedule"]["N6"].value,
           "schedule flags unrecognized instructor entries (blank-safe)")
+    # one roster match is not enough — the multi-select macro builds
+    # comma-separated cells and an off-roster co-teacher used to ride along
+    check('SUBSTITUTE(_xlpm.b,",","")' in wb["Schedule"]["N6"].value and
+          'SEARCH("(",_xlpm.a)' in wb["Schedule"]["N6"].value,
+          "every comma-separated instructor token must resolve "
+          "(parentheticals stripped)")
     sa = wb["sysAudit"]
     # located by check NAME, never by row: hard-coded rows broke every time a
     # check was inserted above them, which is exactly what column shifts do
@@ -608,6 +669,12 @@ def test_workbook():
           'nrSK_Res,"Fail")' in sk2["O6"].value and
           'nrSK_Res,"Pass")' in sk2["N6"].value,
           "Skills status/attempts count only SCORED attempts")
+    # ...and it must count ATTEMPT NUMBERS, not rows: one firearms attempt is
+    # TWO rows (Course of Fire 1 and 2), which failed a cadet out an attempt
+    # (or two) early and opened a 300.7 separation review on him
+    check("COUNTIFS(" not in sk2["N6"].value and
+          "_xlfn.MAXIFS(nrSK_Att" in sk2["N6"].value,
+          "Skills 'Attempts Used' counts attempt numbers, not log rows")
 
     # A13 / A14 / A38: no more 12/30/1899 from an unguarded MAXIFS/MINIFS
     check("not yet taught" in str(wb["ChapterPacket"]["F8"].value or ""),
@@ -617,6 +684,24 @@ def test_workbook():
     check('cfgPreviewAgency),0)=0,"never"'
           in str(wb["EmailPreview"]["E5"].value or ""),
           "EmailPreview 'never' fallback is reachable")
+    # A46: a retest badge is a claim about a retest that HAPPENED. An
+    # attempt-2 row is logged when the retest is SCHEDULED, before it is
+    # scored; and a FAILED retest records the raw attempt-1 score, not the cap
+    check('nrES_Raw,">=0"' in str(wb["ExamSheet"]["I11"].value),
+          "ExamSheet 'Retested' needs a SCORED retest")
+    check('nrES_AttPass,"Yes"' in str(wb["EmailPreview"]["E9"].value) and
+          'nrES_Raw,">=0"' in str(wb["EmailPreview"]["E9"].value) and
+          "RETEST FAILED" in str(wb["EmailPreview"]["E9"].value),
+          "EmailPreview 'cap 70' badge needs a retest that was scored AND "
+          "passed")
+    import io as _io
+    _vba = _io.open(os.path.join(os.path.dirname(os.path.dirname(HERE)),
+                                 "src", "vba", "bpoc",
+                                 "modAgencyEmail.bas"), encoding="utf-8").read()
+    check('wsES.Range("L6:L1505"), ">=0"' in _vba and
+          'wsES.Range("N6:N1505"), "Yes"' in _vba and
+          "retest failed - first-attempt score shown" in _vba,
+          "modAgencyEmail RetakeNote stays in lockstep with EmailPreview")
     check('IF(N(_xlpm.d)=0,"",_xlpm.d)' in wm["G6"].value,
           "WritingMaster 'Computed Assigned' is zero-guarded like its sibling")
 
@@ -688,8 +773,16 @@ def test_workbook():
     epv = wb["EmailPreview"]
     since_r = next(r for r in range(55, 90)
                    if "nrIN_Report" in str(epv.cell(row=r, column=2).value or ""))
-    check(epv.cell(row=since_r, column=2).number_format != "General",
-          "EmailPreview digest dates render as dates, not serials")
+    # the whole spill, not just the first screenful: the digest is uncapped
+    # by design (the VBA draft emits every matching row), so the date format
+    # has to cover the worst case or item 17 onward prints as a serial
+    fmt_rows = 0
+    while epv.cell(row=since_r + fmt_rows, column=2).number_format != "General":
+        fmt_rows += 1
+    check(fmt_rows >= 300 and "_xlfn.TAKE(" not in
+          str(epv.cell(row=since_r, column=2).value or ""),
+          f"EmailPreview digest dates render as dates for the whole "
+          f"uncapped spill ({fmt_rows} rows)")
 
     # A43: ExamPlan agrees with the date the exam was actually given
     check("nrES_Date" in wb["ExamPlan"]["I6"].value,
@@ -703,6 +796,106 @@ def test_workbook():
                  "Open dismissal reviews (active cadets)",
                  "Extra closure dates that are not dates"):
         check(want in names, f"sysAudit check present: {want}")
+
+    # A47: records management has CONFIRMED scans are the legal originals,
+    # so no artifact may still describe that as unconfirmed / demand paper
+    stale = [ws.title for ws in wb.worksheets
+             if "unconfirmed" in str(ws["B4"].value or "").lower()
+             or "keep the paper original" in str(ws["B4"].value or "").lower()]
+    check(not stale,
+          f"no sheet note calls the scans-are-originals question open {stale}")
+    prg = [r for r in range(1, 200)
+           if "CONFIRMED by TPD records management"
+           in str(wb["Audit"].cell(row=r, column=2).value or "")]
+    check(bool(prg),
+          "Audit checklist records the confirmed scans-are-originals position")
+
+    # ------------------------------------------------------------------
+    # regressions for the stress-test round
+    # ------------------------------------------------------------------
+    # sysSkills "Failed Out Cats" must count CATEGORIES: firearms records one
+    # attempt as TWO Course-of-Fire rows, so a bare row COUNTIFS made a
+    # single board decision unable to close the review it raised.
+    _ski = str(wb["sysSkills"]["I6"].value or "")
+    check("rngSM_cat" in _ski and "SUMPRODUCT" in _ski,
+          "sysSkills 'Failed Out Cats' counts categories, not log rows")
+
+    # the emailed spelling figure and the previewed one must be the same
+    # number: modAgencyEmail sends Spelling column D+cfgCurrentSpellingNum.
+    _epf = str(wb["EmailPreview"]["F9"].value or "")
+    _epg = str(wb["EmailPreview"]["G9"].value or "")
+    check("INDEX(Spelling!$D6:$O6,cfgCurrentSpellingNum)" in _epf and
+          "cfgCurrentSpellingNum>12" in _epf and
+          "cfgCurrentSpellingNum>12" in _epg,
+          "EmailPreview previews the spelling score the draft sends, and "
+          "omits the flag whenever the draft omits the column")
+
+    # a retest keyed against a first attempt that already passed silently
+    # replaces the passing score with the cap
+    check("RETEST AFTER A PASSING FIRST ATTEMPT" in
+          str(wb["ExamScores"]["X6"].value or ""),
+          "ExamScores Row Check flags a retest after a passing attempt 1")
+
+    # one today-schedule panel on the Dashboard, capped like SignIn's
+    _today = [c.value for row in wb["Dashboard"].iter_rows(min_row=1,
+              max_row=40) for c in row
+              if isinstance(c.value, str) and "nrSCH_Date=TODAY()" in c.value]
+    _sign = [c.value for row in wb["SignIn"].iter_rows(min_row=1, max_row=30)
+             for c in row if isinstance(c.value, str)
+             and "cfgSignInDate" in c.value and "FILTER" in c.value]
+    _cap = re.compile(r'\),(\d+)\),"')
+    check(len(_today) == 1 and len(_sign) == 1 and
+          _cap.search(_today[0]).group(1) == _cap.search(_sign[0]).group(1) and
+          'nrSCH_Date<>""' in _today[0],
+          "one Dashboard today-panel, same cap and blank-date guard as SignIn")
+
+    # the SignIn strip inherits the ROSTER's column widths, so it may not be
+    # a multi-column spill - nothing inside one can overflow
+    check("HSTACK" not in _sign[0] and "IFERROR" in _sign[0],
+          "SignIn schedule strip is a single overflowable column")
+
+    # the instructor token check must count roster matches in the SAME
+    # stripped text it counts tokens in, and must split on & and / too
+    _sn = str(wb["Schedule"]["N6"].value or "")
+    check("SEARCH(nrInstrNames,_xlpm.b)" in _sn and
+          'SUBSTITUTE(_xlpm.b0,"&",",")' in _sn,
+          "Schedule 'Instructor OK?' counts matches in the stripped, "
+          "separator-normalised text")
+
+    # cfgThresholdAfterExam ("Category avg enforced after this many exams")
+    # used to live only on sysGrades Q/R, which nothing read: the setting was
+    # inert and the academic gate enforced 70-in-each-category from exam #1.
+    # V must consume Q/R, and the grace must lapse once every PLANNED exam of
+    # that type is on file, or it becomes a permanent academic waiver.
+    check('$Q6="No"' in str(wb["sysGrades"]["V6"].value or "") and
+          "rngEPuse" in str(wb["sysChecks"]["R6"].value or ""),
+          "the category-average grace period is live and cannot outlive the "
+          "academy (graduation needs every PLANNED exam recorded)")
+
+    # a memo with a cadet but no Assigned date must be reportable
+    check('"(enter date)"' in str(wb["Memos"]["H6"].value or ""),
+          "Memos with no Assigned date read CHECK DATE, not Pending forever")
+
+    # per-academy inputs living on master/config sheets must be in the
+    # New Academy Reset's clear list
+    _reset = _io.open(os.path.join(os.path.dirname(os.path.dirname(HERE)),
+                                   "src", "vba", "bpoc",
+                                   "modNewAcademy.bas"),
+                      encoding="utf-8").read()
+    for _sheet, _rng in (("WritingMaster", "I6:J45"), ("Control", "F6:F20")):
+        check(f'ClearRange "{_sheet}", "{_rng}"' in _reset,
+              f"New Academy Reset clears {_sheet}!{_rng}")
+
+    # the button-width warning must not put -f in command-argument position:
+    # PowerShell binds it to Write-Host -ForegroundColor and, under
+    # $ErrorActionPreference='Stop', kills the install before SaveAs
+    _ps1 = _io.open(os.path.join(os.path.dirname(os.path.dirname(HERE)),
+                                 "tools", "Install-BPOC-VBA.ps1"),
+                    encoding="utf-8").read()
+    check(not re.search(r"^\s*-f\s", _ps1, re.M) and
+          '(anchor span {1:N0}pt)' in _ps1 and
+          'right" -f $caption, $width)' in _ps1,
+          "installer's width warning formats inside the parentheses")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 

@@ -65,7 +65,22 @@ Public Sub NewAcademyReset()
     ' formulas. Rows 6..49 = the 44 TCOLE chapters (nrCHfileOK's span).
     ClearRange "ChapterMaster", "L6:R49"
     ClearRange "ChapterMaster", "T6:T49"
-    ClearRange "DismissalLog", "C6:C105": ClearRange "DismissalLog", "E6:O105"
+    ' WritingMaster I/J are LAST academy's hand-entered handout dates, and
+    ' K = IF(I<>"",I,G) / L = IF(J<>"",J,H) means a surviving override
+    ' permanently beats the new class's computed dates on rngWMassigned /
+    ' rngWMdue - every cadet would read 40 overdue writing assignments from
+    ' day one and every agency email would say so. Rows 6..45 = the 40
+    ' assignments (rngWMnum's span); G/H/K/L are formulas - never clear
+    ' G6:L45 as one block.
+    ClearRange "WritingMaster", "I6:J45"
+    ' Control F = this academy's Extra Closure Dates. A stale one silently
+    ' deletes a class day from the NEXT academy's generated calendar whenever
+    ' the two date ranges overlap. F6:F20 = the 15-row input block; G is the
+    ' Closure Check formula.
+    ClearRange "Control", "F6:F20"
+    ' E:P - P is "Closes Trigger", added when the DismissalLog became the
+    ' authoritative way to CLOSE an engine-raised dismissal review
+    ClearRange "DismissalLog", "C6:C105": ClearRange "DismissalLog", "E6:P105"
     ClearRange "EmailLog", "B6:I505"
     ' award overrides + notes are LAST academy's decisions, and F = IF(E<>"",
     ' E, C) means a surviving override permanently beats the new class's

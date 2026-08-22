@@ -39,14 +39,21 @@ def build_sysgrades(wb):
         # counts and averages must use the SAME criteria or the count=0 guard
         # on I/J/L is defeated: a pending retest row is the final attempt but
         # carries no Recorded score, so it must not be counted either.
-        "E": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Major",nrES_Final,"Yes",nrES_Rec,">=0"))', "fx"),
-        "F": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Minor",nrES_Final,"Yes",nrES_Rec,">=0"))', "fx"),
+        # The range is BOTH-ended: ExamScores has no upper-bound validation on
+        # Raw Score (it deliberately accepts text such as "absent"), so a
+        # mis-keyed 180 satisfied ">=0" and flowed into the transcript, the
+        # class rank and sysAwards as a >100 category average. It is excluded
+        # from the counts and the averages exactly as a non-numeric raw is;
+        # the ExamScores Row Check ("RAW SCORE OUT OF RANGE") is what reports
+        # the row itself.
+        "E": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Major",nrES_Final,"Yes",nrES_Rec,">=0",nrES_Rec,"<=100"))', "fx"),
+        "F": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Minor",nrES_Final,"Yes",nrES_Rec,">=0",nrES_Rec,"<=100"))', "fx"),
         "G": ('IF($B{r}="","",Spelling!Q{r})', "fx"),
-        "H": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Final",nrES_Final,"Yes",nrES_Rec,">=0"))', "fx"),
-        "I": ('IF(OR($B{r}="",$E{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Major",nrES_Final,"Yes",nrES_Rec,">=0"),2),""))', "fx"),
-        "J": ('IF(OR($B{r}="",$F{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Minor",nrES_Final,"Yes",nrES_Rec,">=0"),2),""))', "fx"),
+        "H": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Type,"Final",nrES_Final,"Yes",nrES_Rec,">=0",nrES_Rec,"<=100"))', "fx"),
+        "I": ('IF(OR($B{r}="",$E{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Major",nrES_Final,"Yes",nrES_Rec,">=0",nrES_Rec,"<=100"),2),""))', "fx"),
+        "J": ('IF(OR($B{r}="",$F{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Minor",nrES_Final,"Yes",nrES_Rec,">=0",nrES_Rec,"<=100"),2),""))', "fx"),
         "K": ('IF($B{r}="","",Spelling!P{r})', "fx"),
-        "L": ('IF(OR($B{r}="",$H{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Final",nrES_Final,"Yes",nrES_Rec,">=0"),2),""))', "fx"),
+        "L": ('IF(OR($B{r}="",$H{r}=0),"",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_PID,$B{r},nrES_Type,"Final",nrES_Final,"Yes",nrES_Rec,">=0",nrES_Rec,"<=100"),2),""))', "fx"),
         "M": ('IF($B{r}="","",LET(w,($E{r}>0)*cfgWeightMajor+($F{r}>0)*cfgWeightMinor'
               '+(N($G{r})>0)*cfgWeightSpelling+($H{r}>0)*cfgWeightFinal,'
               'IF(w=0,"",ROUND((($E{r}>0)*cfgWeightMajor*N($I{r})'
@@ -56,18 +63,40 @@ def build_sysgrades(wb):
         "N": ('IF(OR($B{r}="",$H{r}=0),"",$M{r})', "fx"),
         "O": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Att,2))', "fx"),
         "P": ('IF($B{r}="","",COUNTIFS(nrES_PID,$B{r},nrES_Dis,"Yes"))', "fx"),
-        "Q": ('IF($B{r}="","",IF(AND($E{r}>=cfgThresholdAfterExam,$I{r}<>"",'
-              '$I{r}<cfgThresholdScore),"Yes","No"))', "fx"),
-        "R": ('IF($B{r}="","",IF(AND($F{r}>=cfgThresholdAfterExam,$J{r}<>"",'
-              '$J{r}<cfgThresholdScore),"Yes","No"))', "fx"),
+        # "enforced yet?" for a category average. cfgThresholdAfterExam is
+        # the documented grace period ("Category avg enforced after this many
+        # exams"), and it used to live ONLY here - Q and R were read by
+        # nothing at all, so the setting changed nothing and V below enforced
+        # 70-in-each-category from the very first recorded exam. V now reads
+        # these two cells, so the Settings row is live.
+        # The grace can only ever apply MID-academy: it lapses as soon as the
+        # cadet has every planned exam of that type on file, so a coordinator
+        # who plans fewer than cfgThresholdAfterExam exams of a type cannot
+        # turn the grace into a permanent waiver. ($I / $J are blank when the
+        # count is 0, which is the "no records yet" waiver.)
+        "Q": ('IF($B{r}="","",IF(AND($I{r}<>"",$I{r}<cfgThresholdScore,'
+              'OR($E{r}>=cfgThresholdAfterExam,'
+              '$E{r}>=COUNTIFS(rngEPuse,"Yes",rngEPtype,"Major"))),'
+              '"Yes","No"))', "fx"),
+        "R": ('IF($B{r}="","",IF(AND($J{r}<>"",$J{r}<cfgThresholdScore,'
+              'OR($F{r}>=cfgThresholdAfterExam,'
+              '$F{r}>=COUNTIFS(rngEPuse,"Yes",rngEPtype,"Minor"))),'
+              '"Yes","No"))', "fx"),
         "S": ('IF($B{r}="","",IF($M{r}="",-1,$M{r}))', "fx"),
-        "T": ('IF($B{r}="","",IF(AND($D{r}="Active",$P{r}=0,'
-              'sysSkills!$J{r}<>"Yes",sysIncidents!$J{r}=0,$M{r}<>""),"Yes","No"))', "fx"),
+        # one source of truth for "is a dismissal review OPEN": sysChecks M.
+        # Repeating the three raw triggers here meant a review CLOSED on the
+        # DismissalLog still left the cadet permanently unranked.
+        "T": ('IF($B{r}="","",IF(AND($D{r}="Active",sysChecks!$M{r}<>"Yes",'
+              '$M{r}<>""),"Yes","No"))', "fx"),
         "U": ('IF($T{r}<>"Yes","",SUMPRODUCT(($T$%d:$T$%d="Yes")*'
               '(($S$%d:$S$%d>$S{r})+($S$%d:$S$%d=$S{r})*(ROW($S$%d:$S$%d)<ROW())))+1)'
               % (FIRST, LAST, FIRST, LAST, FIRST, LAST, FIRST, LAST), "fx"),
-        "V": ('IF($B{r}="","",IF(AND(OR($E{r}=0,$I{r}>=cfgThresholdScore),'
-              'OR($F{r}=0,$J{r}>=cfgThresholdScore),'
+        # major/minor come from Q/R (which carry the cfgThresholdAfterExam
+        # grace); spelling and the final exam have no grace period and are
+        # tested here directly. Graduation stays safe because sysChecks R
+        # requires every PLANNED exam of each type to be recorded, by which
+        # point Q/R are enforcing.
+        "V": ('IF($B{r}="","",IF(AND($Q{r}="No",$R{r}="No",'
               'OR(N($G{r})=0,$K{r}>=cfgThresholdScore),'
               'OR($H{r}=0,$L{r}>=cfgThresholdScore)),"Yes","No"))', "fx"),
         # projections: average needed on remaining exams to reach 70 in category
@@ -209,7 +238,14 @@ def build_sysskills(wb):
               '(COUNTIFS(nrSK_PID,$B{r},nrSK_Cat,rngSM_cat,nrSK_Status,"Needs Remediation")>0)))', "fx"),
         "H": ('IF($B{r}="","",SUMPRODUCT((rngSM_cat<>"")*'
               '(COUNTIFS(nrSK_PID,$B{r},nrSK_Cat,rngSM_cat,nrSK_Status,"Pending")>0)))', "fx"),
-        "I": ('IF($B{r}="","",COUNTIFS(nrSK_PID,$B{r},nrSK_Dis,"Yes"))', "fx"),
+        # count failed-out CATEGORIES, not failed-out ROWS. Firearms records
+        # ONE attempt as TWO rows (Course of Fire 1 and 2), so a firearms
+        # fail-out with both courses failed produced 2 here while the board's
+        # single DismissalLog closure counts 1 - sysChecks U's os>cs then
+        # stayed TRUE forever and the cadet was permanently blocked and
+        # unranked. Same SUMPRODUCT-over-rngSM_cat shape as E/F/G/H above.
+        "I": ('IF($B{r}="","",SUMPRODUCT((rngSM_cat<>"")*'
+              '(COUNTIFS(nrSK_PID,$B{r},nrSK_Cat,rngSM_cat,nrSK_Dis,"Yes")>0)))', "fx"),
         "J": ('IF($B{r}="","",IF($I{r}>0,"Yes","No"))', "fx"),
         "K": ('IF($B{r}="","",IF($J{r}="Yes","No",IF($G{r}>0,"No","Yes")))', "fx"),
         "L": ('IF($B{r}="","",IFERROR(ROUND(AVERAGEIFS(nrSK_Score,nrSK_PID,$B{r},'
@@ -326,9 +362,10 @@ def build_sysflags(wb):
         # chain-of-command incident review) blocked graduation but raised no
         # flag at all: the cadet's Flag Count never moved, they never
         # appeared on WatchList and the Dashboard "Flagged cadets" tile
-        # never counted them. Same source as the sysChecks M gate.
-        "R": ('IF($B{r}="","",IF(OR(sysGrades!$P{r}>0,'
-              'sysSkills!$J{r}="Yes",sysIncidents!$J{r}>0),1,0))', "fx"),
+        # never counted them. Read the ONE gate (sysChecks M) rather than
+        # re-deriving the triggers, so a review closed on the DismissalLog
+        # clears the flag too.
+        "R": ('IF($B{r}="","",IF(sysChecks!$M{r}="Yes",1,0))', "fx"),
         "S": ('IF($B{r}="","",SUM($E{r}:$R{r}))', "fx"),
         "T": ('IF($B{r}="","",IF($S{r}=0,"",TEXTJOIN("; ",TRUE,'
               'IF($E{r}=1,"consecutive exam fails",""),'
@@ -346,10 +383,8 @@ def build_sysflags(wb):
               'IF($P{r}=1,"OVERDUE MEMO",""),'
               'IF($Q{r}=1,SUMPRODUCT((nrAT_PID=$B{r})*(nrAT_Cleared="OPEN"))'
               '&" uncleared missed-time event(s)",""),'
-              'IF($R{r}=1,"DISMISSAL REVIEW OPEN"&'
-              'IF(sysGrades!$P{r}>0," (failed retest)",'
-              'IF(sysSkills!$J{r}="Yes"," (skills failed out)",'
-              '" (chain-of-command incident review)")),""))))', "fx"),
+              'IF($R{r}=1,"DISMISSAL REVIEW OPEN ("&'
+              'sysChecks!$U{r}&")",""))))', "fx"),
     })
     # E needs the row-scoped reference, not the whole named range
     cols["E"] = ('IF($B{r}="","",IF(N(sysGrades!$AC{r})>=cfgFlagConsecFails,1,0))', "fx")
@@ -371,7 +406,8 @@ def build_syschecks(wb):
                     "PT Sessions", "Skills", "Incidents", "Writing",
                     "Makeup Complete", "Final PT Pass", "DismissReview",
                     "GraduationElig", "Blocking Issues", "Final Exam Elig",
-                    "Certs", "Exams Recorded", "Skills Assessed"])
+                    "Certs", "Exams Recorded", "Skills Assessed",
+                    "Firearms CoF", "Open Reviews"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",sysGrades!$V{r})', "fx"),
@@ -386,11 +422,19 @@ def build_syschecks(wb):
         # still 0) are distinct blocking states, not passes.
         "L": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
               'IF(PT!$AB{r}="(rubric pending)","Pending","Not taken"))))', "fx"),
-        "M": ('IF($B{r}="","",IF(OR(sysGrades!$P{r}>0,sysSkills!$J{r}="Yes",'
-              'sysIncidents!$J{r}>0),"Yes","No"))', "fx"),
+        # THE dismissal-review gate for the whole workbook (sysGrades T and
+        # sysFlags R read this cell, they no longer re-derive it).
+        # A raised review used to be unclosable: nothing consumed the
+        # DismissalLog, so a failed retest blocked graduation and dropped the
+        # cadet off the ranking permanently, even after a formal board
+        # retained them. Closure is now counted PER TRIGGER against the
+        # reviews actually recorded, approved and tagged on the DismissalLog,
+        # so one closed review cannot pre-clear a future one.
+        "M": ('IF($B{r}="","",IF($U{r}="","No","Yes"))', "fx"),
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
-              '$Q{r}="Yes",$R{r}="Yes",$S{r}="Yes",$M{r}="No"),"Yes","No"))', "fx"),
+              '$Q{r}="Yes",$R{r}="Yes",$S{r}="Yes",$T{r}="Yes",'
+              '$M{r}="No"),"Yes","No"))', "fx"),
         "O": ('IF($B{r}="","",IF($N{r}="Yes","Eligible",TRIM('
               'IF($E{r}<>"Yes","Academic; ","")&'
               'IF($R{r}<>"Yes","Exams not all recorded; ","")&'
@@ -398,6 +442,7 @@ def build_syschecks(wb):
               'IF($G{r}<>"Yes","PT sessions; ","")&'
               'IF($H{r}<>"Yes","Skills; ","")&'
               'IF($S{r}<>"Yes","Skills not all assessed; ","")&'
+              'IF($T{r}<>"Yes","Firearms courses of fire; ","")&'
               'IF($I{r}<>"Yes","Incidents; ","")&'
               'IF($J{r}<>"Yes","Writing; ","")&'
               'IF($K{r}<>"Yes","Makeup owed; ","")&'
@@ -409,11 +454,22 @@ def build_syschecks(wb):
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
               'IF(PT!$AB{r}="(rubric pending)","Pending","Not taken"))))', "fx"),
         "Q": ('IF($B{r}="","",IF(Certifications!$T{r}="Yes","Yes","No"))', "fx"),
-        # completeness: sysGrades V waives a category whose count is 0 so
-        # mid-academy cadets don't read Academic="No". Graduation must not
-        # inherit that waiver — every category needs at least one record.
-        "R": ('IF($B{r}="","",IF(AND(N(sysGrades!$E{r})>0,N(sysGrades!$F{r})>0,'
-              'N(sysGrades!$G{r})>0,N(sysGrades!$H{r})>0),"Yes","No"))', "fx"),
+        # completeness: sysGrades V waives a category whose count is 0 (and,
+        # under cfgThresholdAfterExam, a category with only a handful of
+        # exams on file) so mid-academy cadets don't read Academic="No".
+        # Graduation must not inherit either waiver: "at least one record"
+        # let a cadet with 1 of 10 major exams recorded read Exams
+        # Recorded = "Yes", which is also what would have turned the
+        # mid-academy grace period into a permanent academic waiver. Every
+        # exam the ExamPlan marks Use? = Yes must actually be on file.
+        "R": ('IF($B{r}="","",LET('
+              'mj,COUNTIFS(rngEPuse,"Yes",rngEPtype,"Major"),'
+              'mn,COUNTIFS(rngEPuse,"Yes",rngEPtype,"Minor"),'
+              'fnl,COUNTIFS(rngEPuse,"Yes",rngEPtype,"Final"),'
+              'IF(AND(N(sysGrades!$E{r})>0,N(sysGrades!$F{r})>0,'
+              'N(sysGrades!$G{r})>0,N(sysGrades!$H{r})>0,'
+              'N(sysGrades!$E{r})>=mj,N(sysGrades!$F{r})>=mn,'
+              'N(sysGrades!$H{r})>=fnl),"Yes","No")))', "fx"),
         # same shape as R, for skills: sysSkills K only asks "not failed out
         # and nothing currently in remediation", so a cadet with ZERO skills
         # records scored as a pass. Graduation additionally requires every
@@ -422,6 +478,28 @@ def build_syschecks(wb):
         # which stays the mid-academy "on track" label on CadetProfile.
         "S": ('IF($B{r}="","",IF(N(sysSkills!$F{r})>='
               'SUMPRODUCT((rngSM_cat<>"")*1),"Yes","No"))', "fx"),
+        # ch.41 requires 70%+ on BOTH firearms courses of fire. sysSkills P
+        # computed that and was consumed by NOTHING except one audit line
+        # that only counted the outright "No", so a cadet who never fired
+        # one course of fire (P = "(one pending)") — or whose firearms rows
+        # carry no Course of Fire tag at all (P = "") — printed "Eligible"
+        # on the graduation checklist. Only an affirmative "Yes" passes.
+        "T": ('IF($B{r}="","",IF(sysSkills!$P{r}="Yes","Yes","No"))', "fx"),
+        # WHICH engine-raised reviews are still open, counted per trigger
+        # against the reviews recorded, approved and tagged on the
+        # DismissalLog. This is the single source of truth: M is derived from
+        # it, sysGrades T and sysFlags R read M, and sysFlags prints this
+        # string verbatim on WatchList, so a trigger that has been closed can
+        # never be named as the reason a cadet is still flagged.
+        "U": ('IF($B{r}="","",LET('
+              'oe,N(sysGrades!$P{r}),os,N(sysSkills!$I{r}),'
+              'oi,N(sysIncidents!$J{r}),'
+              'ce,COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Failed retest (exam)",nrDIS_Outcome,"Retained",nrDIS_Approval,"Yes")+COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Failed retest (exam)",nrDIS_Outcome,"Retained w/ Plan",nrDIS_Approval,"Yes"),'
+              'cs,COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Skills failed out",nrDIS_Outcome,"Retained",nrDIS_Approval,"Yes")+COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Skills failed out",nrDIS_Outcome,"Retained w/ Plan",nrDIS_Approval,"Yes"),'
+              'ci,COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Chain-of-command incident review",nrDIS_Outcome,"Retained",nrDIS_Approval,"Yes")+COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Chain-of-command incident review",nrDIS_Outcome,"Retained w/ Plan",nrDIS_Approval,"Yes"),'
+              'TRIM(IF(oe>ce,"failed retest; ","")'
+              '&IF(os>cs,"skills failed out; ","")'
+              '&IF(oi>ci,"chain-of-command incident review; ",""))))', "fx"),
     })
     fill_rows(ws, FIRST, LAST, cols)
     cf_yes_no(ws, f"N{FIRST}:N{LAST}")
@@ -431,12 +509,16 @@ def build_syschecks(wb):
     define(wb, "nrCKfinalExamElig", "sysChecks", f"$P${FIRST}:$P${LAST}")
     define(wb, "nrCKexamsRecorded", "sysChecks", f"$R${FIRST}:$R${LAST}")
     define(wb, "nrCKskillsAssessed", "sysChecks", f"$S${FIRST}:$S${LAST}")
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "O": 50})
+    define(wb, "nrCKfirearmsCoF", "sysChecks", f"$T${FIRST}:$T${LAST}")
+    define(wb, "nrCKopenReviews", "sysChecks", f"$U${FIRST}:$U${LAST}")
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "O": 50, "U": 44})
     sheet_note(ws, "Graduation gate per policy: 70 in each category, every "
                    "category actually recorded (Exams Recorded), under "
                    "attendance caps, makeup complete, EVERY skills category "
                    "actually qualified (Skills Assessed — no records is not "
-                   "a pass), "
+                   "a pass), BOTH firearms courses of fire passed (Firearms "
+                   "CoF — 'one pending' and an untagged Course of Fire are "
+                   "blocks, not passes), "
                    "writing current, no open chain-of-command incident "
                    "review, final PT PASSED (a blank or '(rubric pending)' "
                    "final PT blocks — it is not a pass), all cert copies on "
@@ -602,10 +684,16 @@ AUDIT_CHECKS = [
          'SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))=0,"OK","CHECK")',
          '"TIM, SFST, TCIC, CPR/AED, ALERRT, ICS copies - see Certifications sheet"'),
+        # "(one pending)" — one course of fire never fired — is a fail of
+        # this check too. Counting only the outright "No" let a half-fired
+        # qualification read OK.
         ("Firearms: both courses of fire not passed",
-         'SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF="No"))', "0",
-         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF="No"))=0,"OK","CHECK")',
-         '"IRG requires 70%+ on BOTH firearms courses of fire (ch 41)"'),
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF<>"")*'
+         '(nrSKbothCoF<>"Yes"))', "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrSKbothCoF<>"")*'
+         '(nrSKbothCoF<>"Yes"))=0,"OK","CHECK")',
+         '"IRG requires 70%+ on BOTH firearms courses of fire (ch 41). '
+         '\'(one pending)\' — only one course of fire on record — counts here"'),
         ("Advisory board met within last 12 months",
          'IF(COUNT(nrAB_Date)=0,"none",TEXT(MAX(nrAB_Date),"mm/dd/yyyy"))', "recent",
          'IF(COUNT(nrAB_Date)=0,"CHECK",IF(MAX(nrAB_Date)>=TODAY()-366,'
@@ -682,7 +770,9 @@ AUDIT_CHECKS = [
          '"OK","CHECK")',
          '"Failed retest, skills failed out, or an open chain-of-command '
          'incident review. Policy 600.2.E: open a formal review on the '
-         'DismissalLog, record the decision and the Assistant-Chief approval"'),
+         'DismissalLog, then close it there — Closes Trigger set to the '
+         'trigger, Outcome Retained or Retained w/ Plan, Asst. Chief '
+         'Approval Yes. Closure is per trigger, so a later one re-opens"'),
         # A29: a closure date that is not a real date is DISCARDED by the
         # class-day calendar, which moves every later class day silently
         ("Extra closure dates that are not dates",
@@ -703,8 +793,9 @@ AUDIT_CHECKS = [
         ("Memos with an unusable due date",
          'COUNTIF(nrME_Status,"CHECK DATE")', "0",
          'IF(COUNTIF(nrME_Status,"CHECK DATE")=0,"OK","CHECK")',
-         '"The Assigned date resolves past the last class day, so no due date '
-         'could be computed and the memo can never read OVERDUE"'),
+         '"The Assigned date is missing, or resolves past the last class day, '
+         'so no due date could be computed and the memo can never read '
+         'OVERDUE"'),
         # NOTE: no audit row for "skills not all assessed". That condition is
         # true for every cadet for most of the academy, so an audit row would
         # sit red from day one and train the coordinator to ignore the block.

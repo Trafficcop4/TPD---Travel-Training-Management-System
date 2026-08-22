@@ -127,13 +127,11 @@ powershell -File tools/Install-BPOC-VBA.ps1   # on Windows+Excel: builds the .xl
 
 - **DailyLog** is the digital daily report: one row per training day —
   present count, AM/PM notes, Issues flag, and whether the class leader's
-  signed report was scanned. **Keep the paper original** — whether a scan
-  alone satisfies the IRG's "original, legibly written sign-in sheet
-  including the PID" is still unconfirmed with TCOLE (see
-  docs/BPOC-Audit-Prep.md), and the Audit sheet's "Scanned documents
-  established as legal originals" item is a question for you to answer, not a
-  settled fact. The counters (incidents, early departures, memos received)
-  compute themselves.
+  signed report was scanned — **the scan is the legal original**, confirmed
+  by TPD records management for training documents (and department documents
+  generally). Keep that determination on file; the Audit sheet's "Scanned
+  documents established as legal originals" item is where you record it. The
+  counters (incidents, early departures, memos received) compute themselves.
 - **SignIn** is now the one-page Daily Report & Roster: AM roll call +
   sign-in grid + PM changes + signatures. Print on demand.
 - **Missed time clears by event**: every counting Attendance event stays

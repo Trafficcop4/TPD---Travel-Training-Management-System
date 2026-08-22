@@ -198,7 +198,20 @@ def build_examscores(wb):
               'IF(AND($H{r}="Final",$L{r}<>"",'
               'IFERROR(INDEX(nrCKfinalExamElig,MATCH($D{r},rngCadetPIDs,0)),'
               '"")="No"),"FINAL EXAM AFTER FAILED FINAL PT (500.1.H)",'
-              '"OK")))))))', "fx"),
+              # a retest keyed against an attempt 1 that already PASSED is
+              # silent corruption: column M blanks the passing attempt-1
+              # score and records the retake cap (70) instead, so the
+              # transcript, ScoresGrid, the category average, the rank and
+              # the agency email all drop to 70 with nothing anywhere saying
+              # why. Every other branch here exists for exactly this class of
+              # mis-key. SUMIFS ignores a text raw score; a MISSING attempt 1
+              # is already reported by the ATTEMPT 2 WITHOUT ATTEMPT 1 branch
+              # above, and duplicate attempt-1 rows by DUPLICATE RECORD.
+              'IF(AND($K{r}=2,ISNUMBER($L{r}),'
+              'COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)>0,'
+              'SUMIFS(nrES_Raw,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)'
+              '>=$J{r}),"RETEST AFTER A PASSING FIRST ATTEMPT",'
+              '"OK"))))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"S{r}"].number_format = DATE
@@ -208,8 +221,10 @@ def build_examscores(wb):
     dv_list(ws, "=lstAttemptNum", [f"K{first}:K{last}"])
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="OVERDUE"', FILL_WARNBG)
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="CHECK DATE"', FILL_WARNBG)
+    # LEFT(...,12) never equalled the 11-character literal, so the rule was
+    # dead and a late retest carried no fill on the sheet it is entered on.
     cf_formula(ws, f"U{first}:U{last}",
-               f'LEFT($U{first},12)="LATE RETEST"', FILL_WARNBG)
+               f'LEFT($U{first},11)="LATE RETEST"', FILL_WARNBG)
     cf_formula(ws, f"U{first}:U{last}",
                f'LEFT($U{first},7)="RETEST "', FILL_WARNBG)
     cf_formula(ws, f"X{first}:X{last}",
@@ -224,6 +239,7 @@ def build_examscores(wb):
     define(wb, "nrES_Att", "ExamScores", f"$K${first}:$K${last}")
     define(wb, "nrES_Raw", "ExamScores", f"$L${first}:$L${last}")
     define(wb, "nrES_Rec", "ExamScores", f"$M${first}:$M${last}")
+    define(wb, "nrES_AttPass", "ExamScores", f"$N${first}:$N${last}")
     define(wb, "nrES_Final", "ExamScores", f"$P${first}:$P${last}")
     define(wb, "nrES_RetReq", "ExamScores", f"$Q${first}:$Q${last}")
     define(wb, "nrES_Dis", "ExamScores", f"$R${first}:$R${last}")
@@ -239,8 +255,9 @@ def build_examscores(wb):
                    "= 5 class days after the failed attempt's date (a date "
                    "that is not a class day rolls to the next one). Watch "
                    "Row Check: a score that is not a number, a duplicate "
-                   "RecordID or an attempt 2 with no attempt 1 on file each "
-                   "distort the category average.")
+                   "RecordID, an attempt 2 with no attempt 1 on file, or an "
+                   "attempt 2 logged against a first attempt that already "
+                   "PASSED each distort the category average.")
     return ws
 
 
@@ -555,12 +572,18 @@ def build_skills(wb):
         "H": ('IF($E{r}="","",IFERROR(INDEX(rngSM_pass,MATCH($E{r},rngSM_cat,0)),""))', "fx"),
         "I": (None, "in"), "J": (None, "in"), "K": (None, "in"),
         "L": (None, "in"), "M": (None, "in"),
-        # "Attempts Used" counts SCORED attempts (Pass/Fail). A row logged
-        # when the next attempt is merely SCHEDULED is not an attempt used,
-        # and counting it pushed a cadet to FAILED OUT one attempt early.
-        "N": ('IF($C{r}="","",COUNTIFS(nrSK_PID,$D{r},nrSK_Cat,$E{r},'
-              'nrSK_Res,"Pass")+COUNTIFS(nrSK_PID,$D{r},nrSK_Cat,$E{r},'
-              'nrSK_Res,"Fail"))', "fx"),
+        # "Attempts Used" counts SCORED ATTEMPT NUMBERS, not scored ROWS.
+        # A row logged when the next attempt is merely SCHEDULED is not an
+        # attempt used, and counting it pushed a cadet to FAILED OUT one
+        # attempt early. Counting rows did the same thing to firearms, where
+        # ONE attempt is recorded as TWO rows (Course of Fire 1 and 2, each
+        # with its own Score) — a cadet with 3 permitted attempts read
+        # "4 used / FAILED OUT" after his second. Column O computes the same
+        # highest-scored-attempt expression for the supersede test.
+        "N": ('IF($C{r}="","",MAX('
+              'MAXIFS(nrSK_Att,nrSK_PID,$D{r},nrSK_Cat,$E{r},nrSK_Res,"Pass"),'
+              'MAXIFS(nrSK_Att,nrSK_PID,$D{r},nrSK_Cat,$E{r},nrSK_Res,"Fail")'
+              '))', "fx"),
         # same placeholder-row bug class as the exam retests: "latest" used
         # to be the highest attempt number of ANY row, so adding an unscored
         # next-attempt row made the real "Needs Remediation" / "FAILED OUT"
@@ -988,12 +1011,18 @@ def build_memos(wb):
         # ...and, like the retest clock, the due day must be one the academy
         # is IN SESSION for: the padded tail of the class-day table would
         # otherwise hand back a date days past graduation
-        "H": ('IF(OR($D{r}="",$C{r}=""),"",'
+        # ...and a memo with a cadet but NO Assigned date must not read
+        # "Pending" forever either: H returning "" sent L down the
+        # IF($H="","Pending",...) arm, so the row could never become OVERDUE
+        # or CHECK DATE and was invisible to sysFlags P, to the WatchList
+        # reason text and to the sysAudit "unusable due date" line. Text
+        # (never "") for a live row, exactly like ExamScores T.
+        "H": ('IF($D{r}="","",IF($C{r}="","(enter date)",'
               'LET(dn,XLOOKUP($C{r},nrCDdate,nrCDnum,"",1),'
               'IF(dn="","(after last class day)",'
               'LET(dd,XLOOKUP(dn+cfgMemoDueClassDays,nrCDnum,nrCDdate,""),'
               'ok,XLOOKUP(dn+cfgMemoDueClassDays,nrCDnum,nrCDinsession,"No"),'
-              'IF(OR(dd="",ok<>"Yes"),"(after last class day)",dd)))))', "fx"),
+              'IF(OR(dd="",ok<>"Yes"),"(after last class day)",dd))))))', "fx"),
         "I": (None, "in"),
         "J": ('IF($D{r}="","",IF($I{r}<>"",$I{r},IF(ISNUMBER($H{r}),$H{r},"")))', "fx"),
         "K": (None, "in"),

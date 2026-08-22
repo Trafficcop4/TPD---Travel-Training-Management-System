@@ -86,15 +86,17 @@ BPOC-2026-01/
     00 ChapterPacket.pdf          (cover: what this folder must contain)
     01 Lesson Plan.pdf            (SME-developed; PPT alone doesn't count)
     02 Instructor Bios + certs.pdf
-    03 Sign-ins/                  (scans; KEEP the paper originals)
+    03 Sign-ins/                  (scans = the legal originals)
     04 Assessment.pdf             (LMS test printed to PDF)
     05 Grade Sheet.pdf            (ExamSheet print or LMS gradebook export)
     06 Evaluations/               (scanned critiques)
 ```
 
-Sign-in caution: the IRG asks for the "original, legibly written sign-in
-sheet including the PID" — retain paper originals and confirm with TCOLE
-whether scans alone satisfy that before discarding anything.
+Sign-ins: the IRG asks for the "original, legibly written sign-in sheet
+including the PID". TPD records management has confirmed that the scanned
+copy IS the legal original for training documents, so the scan in each day's
+folder satisfies this. Keep that records-management determination on file —
+it is the basis you would show an auditor who asks.
 
 ## Sixty seconds before the auditor arrives
 

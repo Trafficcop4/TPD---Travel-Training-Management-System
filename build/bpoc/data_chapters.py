@@ -122,15 +122,14 @@ PROGRAM_REQS = [
     ("Digital evidence library organized per chapter",
      "LMS test PDFs, ExamSheet grade sheets, scanned spelling tests, "
      "sign-in scans, evals - one folder per chapter, ChapterPacket as cover"),
-    # This was written as settled fact while docs/BPOC-Audit-Prep.md told the
-    # coordinator the same question was still open and that paper originals
-    # must be retained. It is a CHECKLIST item the auditor reads - it must
-    # state the question, not answer it.
+    # SETTLED by the coordinator: TPD records management has confirmed that
+    # scanned training documents are the legal originals, for these and for
+    # department documents generally. The checklist item records WHERE that
+    # determination lives so an auditor can see the basis for it.
     ("Scanned documents established as legal originals",
-     "UNCONFIRMED until answered here: the IRG asks for the 'original, "
-     "legibly written sign-in sheet including the PID'. Mark Yes only when "
-     "records management AND TCOLE have confirmed in writing that scans "
-     "serve as originals; until then retain the paper originals"),
+     "CONFIRMED by TPD records management: scanned training documents - "
+     "including sign-in sheets with PID - are the legal originals. Keep "
+     "that determination on file so an auditor can see the basis"),
     ("Exam security maintained",
      "LMS access controlled; test banks/keys stored securely; spelling "
      "keys not accessible to cadets"),

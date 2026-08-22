@@ -74,7 +74,7 @@ SETTINGS = [
     ("Passing Score", 70, "Minimum passing score for exams", "cfgPassingScore", None),
     ("Pass Threshold Score", 70, "Category-average threshold", "cfgThresholdScore", None),
     ("Retake Recorded Cap", 70, "Recorded score after a passed retest", "cfgRetakeRecordedCap", None),
-    ("Threshold After Exam #", 4, "Category avg enforced after this many exams", "cfgThresholdAfterExam", None),
+    ("Threshold After Exam #", 4, "Category avg enforced once this many exams of that type are recorded (or all planned ones are)", "cfgThresholdAfterExam", None),
     ("Retest Within (class days)", 5, "Policy 300.5 retest window", "cfgRetestClassDays", None),
     ("Memo Due (class days)", 3, "Deficiency memo due this many class days after assignment", "cfgMemoDueClassDays", None),
     ("Weight: Major", 0.4, "Major exams weight", "cfgWeightMajor", "0%"),
@@ -1083,11 +1083,33 @@ def build_schedule(wb):
         "L": ('IF($B{r}="","",IFERROR(XLOOKUP($B{r},nrCDdate,nrCDnum),""))', "fx"),
         "M": (None, "in"),
         # (nrInstrNames<>"") guard: SEARCH("",text) returns 1, so blank
-        # roster rows would otherwise match everything and hide typos
+        # roster rows would otherwise match everything and hide typos.
+        # ONE roster match is not enough: the pick-to-append macro builds
+        # comma-separated co-instructor lists, so an any-match let an
+        # off-roster co-teacher ride along inside an otherwise valid cell —
+        # invisible to this check AND to the "instructors lacking
+        # documentation" audit line, which only walks the roster. Every
+        # comma-separated token must resolve. Parenthetical annotations
+        # ("Judson Moore (+ Cadre)", "(Ch 41, 42)") are stripped first so
+        # a comma inside one cannot false-flag the row.
+        # ...and the roster match must be counted against the SAME stripped
+        # text the token count is taken from. Counting matches in the raw
+        # cell while counting tokens in the stripped one let every roster
+        # name sitting inside a parenthetical ("Cadre" in the house-style
+        # "(+ Cadre)") buy one free off-roster name in the main list - and
+        # "(+ Cadre), <name>" is exactly what the pick-to-append macro
+        # writes. Separators other than the comma are normalised first: the
+        # schedule's own blocks join co-instructors with " & " and "/", and
+        # no roster name or guest entity contains either character, so a
+        # pair joined that way needed only ONE roster match to read OK.
         "N": ('IF(OR($B{r}="",$I{r}=""),"",'
-              'IF(SUMPRODUCT((nrInstrNames<>"")*'
-              'ISNUMBER(SEARCH(nrInstrNames,$I{r})))>0,"OK",'
-              '"UNRECOGNIZED"))', "fx"),
+              'LET(a,$I{r},'
+              'b0,IF(ISNUMBER(SEARCH("(",a)),TRIM(LEFT(a,SEARCH("(",a)-1)&'
+              'IF(ISNUMBER(SEARCH(")",a)),MID(a,SEARCH(")",a)+1,255),"")),a),'
+              'b,TRIM(SUBSTITUTE(SUBSTITUTE(b0,"&",","),"/",",")),'
+              'n,LEN(b)-LEN(SUBSTITUTE(b,",",""))+1,'
+              'm,SUMPRODUCT((nrInstrNames<>"")*ISNUMBER(SEARCH(nrInstrNames,b))),'
+              'IF(m>=n,"OK","UNRECOGNIZED")))', "fx"),
         # a legitimate block that crosses midnight is short under MOD; a
         # swapped start/end reads as most of a day. 12 hours separates them.
         "O": ('IF(OR($B{r}="",$D{r}="",$E{r}=""),"",'

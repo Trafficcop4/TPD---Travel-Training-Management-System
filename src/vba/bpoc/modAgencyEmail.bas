@@ -220,16 +220,33 @@ End Function
 
 Private Function RetakeNote(wb As Workbook, wsES As Worksheet, pid As String, _
                             examCol As Long) As String
-    ' the recorded grid score reflects the retake cap when attempt 2 exists
+    ' "recorded at cap" is a claim about the RECORDED score, so it may only be
+    ' stamped on a retest that was actually scored AND passed:
+    '   - an attempt-2 row logged when the retest is merely SCHEDULED (no Raw
+    '     Score yet) leaves the attempt-1 score in the grid untouched;
+    '   - a FAILED retest records the raw attempt-1 score, not the cap.
+    ' Counting bare attempt-2 rows annotated both of those as capped, under a
+    ' header that tells the agency passed retests record at 70.
+    ' L = Raw Score, N = AttemptPass. EmailPreview column E carries the
+    ' identical three states - keep them in lockstep.
     Dim code As String
     code = SafeStr(wb.Worksheets("ScoresGrid").Cells(5, examCol).Value)
-    Dim cnt As Double
+    Dim cntPass As Double, cntFail As Double
     On Error Resume Next
-    cnt = Application.WorksheetFunction.CountIfs( _
+    cntPass = Application.WorksheetFunction.CountIfs( _
         wsES.Range("D6:D1505"), pid, wsES.Range("F6:F1505"), code, _
-        wsES.Range("K6:K1505"), 2)
+        wsES.Range("K6:K1505"), 2, wsES.Range("L6:L1505"), ">=0", _
+        wsES.Range("N6:N1505"), "Yes")
+    cntFail = Application.WorksheetFunction.CountIfs( _
+        wsES.Range("D6:D1505"), pid, wsES.Range("F6:F1505"), code, _
+        wsES.Range("K6:K1505"), 2, wsES.Range("L6:L1505"), ">=0", _
+        wsES.Range("N6:N1505"), "No")
     On Error GoTo 0
-    If cnt > 0 Then RetakeNote = " <i>(retest - recorded at cap)</i>"
+    If cntPass > 0 Then
+        RetakeNote = " <i>(retest - recorded at cap)</i>"
+    ElseIf cntFail > 0 Then
+        RetakeNote = " <i>(retest failed - first-attempt score shown)</i>"
+    End If
 End Function
 
 ' ---------- since-last-email digest ----------

@@ -71,11 +71,10 @@ def build_dashboard(wb):
         '=IFERROR("Training Day #"&XLOOKUP(TODAY(),nrCDdate,nrCDnum)&'
         '"  (Week "&XLOOKUP(TODAY(),nrCDdate,nrCDweek)&")",'
         '"(not a class day)")')).font = F_LABEL
-    ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
-        'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
-        'nrSCH_Date=TODAY()),7),"— no schedule entered for today —")'))
-    r += 7
+    # ONE today-schedule panel, not two. This anchor used to carry a second
+    # copy of the identical FILTER capped at 7 rows, ten rows above the
+    # "TODAY —" bar's copy capped at 8, so the Dashboard printed the same
+    # table twice and the two disagreed the moment a day had 8+ blocks.
     ws.cell(row=r, column=2, value=(
         '=IF(COUNTIF(nrDL_Date,TODAY())=0,'
         '"DailyLog: no entry for today yet","DailyLog: entered ✓")'
@@ -90,11 +89,14 @@ def build_dashboard(wb):
         ws.cell(row=r, column=col).fill = FILL_STEEL
     ws.row_dimensions[r].height = 16
     r += 1
+    # same cap (9) and the same blank-date guard as SignIn!B10 - one
+    # question must not have two answers
     ws.cell(row=r, column=2, value=(
         '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
         'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
-        'nrSCH_Date=TODAY()),8),"No class scheduled today")'))
-    r += 8
+        '(nrSCH_Date<>"")*(nrSCH_Date=TODAY())),9),'
+        '"No class scheduled today")'))
+    r += 9
     _kpi(ws, r, 2, "Separated / total enrolled",
          'SUMPRODUCT((nrCadetStatus="Separated")*1)&" / "&'
          'SUMPRODUCT((nrCadetStatus<>"")*1)')
@@ -254,9 +256,13 @@ def build_scoresgrid(wb):
         cl = get_column_letter(4 + i)
         # average recorded final attempts straight from the log so untaken
         # exams / cadets with no attempt can never drag the average down
+        # same population as sysGrades: an out-of-range Recorded score is
+        # excluded from the cadet's own average, so it must not move the
+        # class average printed here and mailed to the agencies either.
         ws[f"{cl}{ar}"] = (f'=IF({cl}{HDR_ROW}="","",IFERROR(ROUND('
                            f'AVERAGEIFS(nrES_Rec,nrES_Code,{cl}{HDR_ROW},'
-                           f'nrES_Final,"Yes"),1),""))')
+                           f'nrES_Final,"Yes",nrES_Rec,">=0",'
+                           f'nrES_Rec,"<=100"),1),""))')
         ws[f"{cl}{ar}"].font = F_CALC
     define(wb, "nrSGclassavg", "ScoresGrid",
            f"$D${ar}:${get_column_letter(3+n_exams)}${ar}")
@@ -652,7 +658,8 @@ def build_dismissallog(wb):
     header_row(ws, ["ReviewID", "Cadet Name", "PID", "Review Type",
                     "Trigger", "Opened", "Board/Reviewer", "Decision Date",
                     "Outcome", "Asst. Chief Approval", "Approval Date",
-                    "Agency Notified", "Docs Ref", "Notes"])
+                    "Agency Notified", "Docs Ref", "Notes",
+                    "Closes Trigger"])
     first, last = DATA_ROW, DATA_ROW + 99
     fill_rows(ws, first, last, {
         "B": ('IF($C{r}="","","R"&TEXT(ROW()-%d,"000"))' % HDR_ROW, "fx"),
@@ -661,7 +668,7 @@ def build_dismissallog(wb):
         "E": (None, "in"), "F": (None, "in"), "G": (None, "in"),
         "H": (None, "in"), "I": (None, "in"), "J": (None, "in"),
         "K": (None, "in"), "L": (None, "in"), "M": (None, "in"),
-        "N": (None, "in"), "O": (None, "in"),
+        "N": (None, "in"), "O": (None, "in"), "P": (None, "in"),
     })
     for r in range(first, last + 1):
         for cl in ("G", "I", "L"):
@@ -670,13 +677,30 @@ def build_dismissallog(wb):
     dv_list(ws, "=lstReviewType", [f"E{first}:E{last}"])
     dv_list(ws, "=lstReviewOutcome", [f"J{first}:J{last}"])
     dv_list(ws, "=lstYesNo", [f"K{first}:K{last}", f"M{first}:M{last}"])
+    dv_list(ws, "=lstDismissalTrigger", [f"P{first}:P{last}"])
+    # the engine reads these back: recording "Retained"/"Retained w/ Plan"
+    # with the Assistant-Chief approval and the trigger this review closes
+    # is what actually clears sysChecks DismissReview. Before, the sheet fed
+    # nothing at all, so a failed retest blocked graduation and unranked the
+    # cadet FOREVER with no non-destructive remedy.
+    define(wb, "nrDIS_PID", "DismissalLog", f"$D${first}:$D${last}")
+    define(wb, "nrDIS_Outcome", "DismissalLog", f"$J${first}:$J${last}")
+    define(wb, "nrDIS_Approval", "DismissalLog", f"$K${first}:$K${last}")
+    define(wb, "nrDIS_Closes", "DismissalLog", f"$P${first}:$P${last}")
     col_widths(ws, {"A": 3, "B": 9, "C": 22, "D": 9, "E": 16, "F": 28,
                     "G": 11, "H": 20, "I": 12, "J": 15, "K": 16, "L": 12,
-                    "M": 13, "N": 14, "O": 30})
+                    "M": 13, "N": 14, "O": 30, "P": 30})
     sheet_note(ws, "Formal record of every dismissal/academic/conduct review: "
                    "trigger, decision, Assistant-Chief approval (policy "
                    "600.2.E) and agency notification. This is the file "
-                   "TCOLE/legal asks for.")
+                   "TCOLE/legal asks for. It is also the ONLY way to close a "
+                   "review the engine opened: set Closes Trigger to the "
+                   "trigger being reviewed, Outcome to Retained or Retained "
+                   "w/ Plan, and Asst. Chief Approval to Yes — sysChecks "
+                   "DismissReview then clears for THAT trigger only, so a "
+                   "later failed retest / skills fail-out / conduct review "
+                   "re-opens the block. Outcome 'Separated' closes nothing: "
+                   "set the cadet's Status on the Cadets sheet instead.")
     return ws
 
 
@@ -974,10 +998,12 @@ def build_chapterpacket(wb):
     _profile_label(ws, r + 4, 6, "Exam class avg / low / fails",
                    'LET(c,' + lex + ',IF(c="","—",'
                    'IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_Code,c,'
-                   'nrES_Final,"Yes"),1),"—")&" / "&'
-                   'IFERROR(MINIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),"—")'
+                   'nrES_Final,"Yes",nrES_Rec,">=0",nrES_Rec,"<=100"),1),"—")'
+                   '&" / "&'
+                   'IFERROR(MINIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes",'
+                   'nrES_Rec,">=0",nrES_Rec,"<=100"),"—")'
                    '&" / "&COUNTIFS(nrES_Code,c,nrES_Final,"Yes",'
-                   'nrES_Rec,"<"&cfgPassingScore)))', wide=4)
+                   'nrES_Rec,">=0",nrES_Rec,"<"&cfgPassingScore)))', wide=4)
     r += 8
     section_bar(ws, r, 2, 9, "Instructors who taught this chapter "
                              "(from the schedule)")
@@ -1094,9 +1120,13 @@ def build_examsheet(wb):
         ws.cell(row=rr, column=8, value=(
             f'=IF(OR($C{rr}="",$G{rr}=""),"",'
             f'IF($G{rr}>={passing},"Pass","FAIL"))')).font = F_CALC
+        # only a SCORED attempt-2 row is a retest: a row logged when the
+        # retest is scheduled printed "Retested" on the TCOLE grade sheet
+        # next to the untouched first-attempt score.
         ws.cell(row=rr, column=9, value=(
             f'=IF($C{rr}="","",LET(c,{code},IF(COUNTIFS(nrES_PID,'
-            f'Cadets!$B{src},nrES_Code,c,nrES_Att,2)>0,"Retested","")))'
+            f'Cadets!$B{src},nrES_Code,c,nrES_Att,2,nrES_Raw,">=0")>0,'
+            f'"Retested","")))'
         )).font = F_CALC
         for ccol in range(2, 10):
             ws.cell(row=rr, column=ccol).border = BOX
@@ -1107,10 +1137,13 @@ def build_examsheet(wb):
             ).font = F_LABEL
     ws.cell(row=r, column=6, value=(
         '=LET(c,' + code + ',IF(c="","",'
-        'IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),1),"—")'
-        '&" / "&IFERROR(MINIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),"—")'
-        '&" / "&IFERROR(MAXIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes"),"—")'
-        '&" / "&COUNTIFS(nrES_Code,c,nrES_Final,"Yes",'
+        'IFERROR(ROUND(AVERAGEIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes",'
+        'nrES_Rec,">=0",nrES_Rec,"<=100"),1),"—")'
+        '&" / "&IFERROR(MINIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes",'
+        'nrES_Rec,">=0",nrES_Rec,"<=100"),"—")'
+        '&" / "&IFERROR(MAXIFS(nrES_Rec,nrES_Code,c,nrES_Final,"Yes",'
+        'nrES_Rec,">=0",nrES_Rec,"<=100"),"—")'
+        '&" / "&COUNTIFS(nrES_Code,c,nrES_Final,"Yes",nrES_Rec,">=0",'
         'nrES_Rec,"<"&' + passing + ')))')).font = F_CALC
     r += 2
     ws.cell(row=r, column=2, value="Proctor / Instructor: ____________________"
@@ -1156,9 +1189,20 @@ def build_signin(wb):
     r += 2
     section_bar(ws, r, 2, 9, "Instruction scheduled this date")
     r += 1
+    # ONE spilled column, not a five-column HSTACK. The strip sits above the
+    # roster grid and therefore inherits the ROSTER's column widths (B=6 for
+    # '#', D=10 for PID, E=18 for Agency), which clipped an 8-character start
+    # time, every activity name over 10 characters (210 of the 313 blocks in
+    # the seeded academy) and every instructor list over 18. Nothing can be
+    # widened without wrecking the roster below, and no cell inside a
+    # five-column spill can overflow because its neighbour is also part of
+    # the spill. A single column overflows freely across the empty C..H of
+    # these rows - the full print width - so the block reads on paper.
     ws.cell(row=r, column=2, value=(
-        '=IFERROR(TAKE(FILTER(HSTACK(TEXT(nrSCH_Start,"h:mm AM/PM"),'
-        'TEXT(nrSCH_End,"h:mm AM/PM"),nrSCH_Act,nrSCH_Instr,nrSCH_Loc),'
+        '=IFERROR(TAKE(FILTER(TEXT(nrSCH_Start,"h:mm AM/PM")&" – "&'
+        'TEXT(nrSCH_End,"h:mm AM/PM")&"   "&nrSCH_Act&'
+        'IF(nrSCH_Instr="",""," ("&nrSCH_Instr&")")&'
+        'IF(nrSCH_Loc="",""," — "&nrSCH_Loc),'
         '(nrSCH_Date<>"")*(nrSCH_Date=cfgSignInDate)),9),'
         '"— no schedule entered for this date —")'))
     r += 9
@@ -1238,8 +1282,10 @@ def build_signin(wb):
     unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
     sheet_note(ws, "The one-page daily report & roster: AM roll call, "
                    "sign-in, PM changes, signatures. Print on demand; the "
-                   "signed original is scanned into the file (scans = "
-                   "originals per records policy) and the day is logged as "
+                   "signed sheet is scanned into that day's folder and the "
+                   "scan is the legal original (confirmed by TPD records "
+                   "management - see the Audit sheet item 'Scanned documents "
+                   "established as legal originals'). The day is logged as "
                    "one DailyLog row. Exceptions still go on Attendance.")
     return ws
 
@@ -1460,9 +1506,9 @@ def build_emailpreview(wb):
     r += 2
     section_bar(ws, r, 2, 12, "Cadet results (as the email will report them)")
     r += 1
-    header_row(ws, ["Cadet", "Score", "Class Avg", "Retake?", "Spelling Avg",
-                    "Spelling Flag", "Attendance", "Writing Current",
-                    "Open Flags"], row=r)
+    header_row(ws, ["Cadet", "Score", "Class Avg", "Retake?",
+                    "Spelling (test #)", "Spelling Flag", "Attendance",
+                    "Writing Current", "Open Flags"], row=r)
     r += 1
     grid_first = r
     for i in range(CADETS):
@@ -1480,17 +1526,46 @@ def build_emailpreview(wb):
             f'nrES_Seq,cfgCurrentExamNum,nrES_Final,"Yes")))')).font = F_CALC
         ws.cell(row=rr, column=4, value=(
             f'=IF($B{rr}="","",IFERROR(ROUND(AVERAGEIFS(nrES_Rec,'
-            f'nrES_Seq,cfgCurrentExamNum,nrES_Final,"Yes"),1),""))')).font = F_CALC
+            f'nrES_Seq,cfgCurrentExamNum,nrES_Final,"Yes",nrES_Rec,">=0",'
+            f'nrES_Rec,"<=100"),1),""))')).font = F_CALC
+        # "(cap 70)" is a claim about the RECORDED score, so it may only
+        # appear for a retest that was actually scored AND passed: an
+        # attempt-2 row logged when the retest is merely SCHEDULED left the
+        # attempt-1 score in place, and a FAILED retest records the raw
+        # attempt-1 score, not the cap. Both used to be badged as capped.
+        # modAgencyEmail.RetakeNote carries the identical three states.
         ws.cell(row=rr, column=5, value=(
             f'=IF($B{rr}="","",IF(COUNTIFS(nrES_PID,Cadets!$B{src},'
-            f'nrES_Seq,cfgCurrentExamNum,nrES_Att,2)>0,"RETEST (cap 70)",""))'
+            f'nrES_Seq,cfgCurrentExamNum,nrES_Att,2,nrES_Raw,">=0",'
+            f'nrES_AttPass,"Yes")>0,"RETEST (cap 70)",'
+            f'IF(COUNTIFS(nrES_PID,Cadets!$B{src},nrES_Seq,cfgCurrentExamNum,'
+            f'nrES_Att,2,nrES_Raw,">=0",nrES_AttPass,"No")>0,'
+            f'"RETEST FAILED (first-attempt score shown)","")))'
         )).font = F_CALC
+        # the draft sends the score for THIS spelling test (modAgencyEmail
+        # spellCol = 3 + spellNum, i.e. Spelling column D+spellNum), with the
+        # running average appended only when it is below the intervention
+        # threshold. The preview used to show Spelling!$P - the running
+        # average - so the coordinator reviewed a different number from the
+        # one the agency received on every single row. Same three omit tests
+        # as modAgencyEmail's omitSpelling, including spellNum > 12, which
+        # the preview had no counterpart for.
+        omit = ('OR(cfgCurrentSpellingNum<cfgCurrentExamNum,'
+                'cfgCurrentSpellingNum<=0,cfgCurrentSpellingNum>12)')
         ws.cell(row=rr, column=6, value=(
-            f'=IF($B{rr}="","",IF(cfgCurrentSpellingNum<cfgCurrentExamNum,'
-            f'"(omitted)",Spelling!$P{src}))')).font = F_CALC
+            f'=IF($B{rr}="","",IF({omit},"(omitted)",'
+            f'LET(sc,IF(INDEX(Spelling!$D{src}:$O{src},cfgCurrentSpellingNum)'
+            f'="","",INDEX(Spelling!$D{src}:$O{src},cfgCurrentSpellingNum)),'
+            f'av,Spelling!$P{src},'
+            f'IF(AND(ISNUMBER(av),av<cfgSpellInterventionAvg),'
+            f'sc&" (avg "&av&")",sc))))')).font = F_CALC
+        # gated on the same omit test: the preview must never carry an
+        # intervention note for a column the draft drops entirely
         ws.cell(row=rr, column=7, value=(
-            f'=IF($B{rr}="","",IF(Spelling!$R{src}="INTERVENTION",'
-            f'"BELOW 75 — intervention",""))')).font = F_CALC
+            f'=IF($B{rr}="","",IF({omit},"",'
+            f'IF(Spelling!$R{src}="INTERVENTION",'
+            f'"BELOW "&cfgSpellInterventionAvg&" — intervention","")))'
+        )).font = F_CALC
         ws.cell(row=rr, column=8, value=(
             f'=IF($B{rr}="","",sysAttendance!$J{src}&" / PT "&'
             f'sysAttendance!$R{src})')).font = F_CALC
@@ -1556,11 +1631,16 @@ def build_emailpreview(wb):
     # preview the coordinator reads before approving the draft. Formatting
     # the landing column as a date fixes the display without breaking the
     # sort; the fallback string still prints as text.
-    for rr in range(since_first, since_first + 16):
+    # ...and the zone must cover the WHOLE spill, which is uncapped by
+    # design (the VBA draft emits every matching row, so a TAKE() here would
+    # make the preview under-report the email it previews). 16 formatted rows
+    # meant item 17 onward re-rendered as five-digit serials. Nothing else
+    # occupies EmailPreview below this anchor.
+    for rr in range(since_first, since_first + 300):
         ws.cell(row=rr, column=2).number_format = DATE
     r += 16
-    col_widths(ws, {"A": 3, "B": 12, "C": 24, "D": 11, "E": 11, "F": 16,
-                    "G": 12, "H": 20, "I": 18, "J": 60})
+    col_widths(ws, {"A": 3, "B": 12, "C": 24, "D": 11, "E": 11, "F": 18,
+                    "G": 22, "H": 20, "I": 18, "J": 60})
     sheet_note(ws, "Preview of what the Outlook draft will contain — the "
                    "same day-granular 'since last email' cutoff the sender "
                    "uses. The buttons on THIS sheet and on the Dashboard "

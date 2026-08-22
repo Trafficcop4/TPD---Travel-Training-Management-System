@@ -50,9 +50,7 @@ function Add-Button($ws, $anchorCell, $widthCells, $caption, $macro) {
     # anchors below. Warn rather than silently drawing one over the other.
     $w = [Math]::Max($width - 4, 130)
     if ($width -gt 0 -and $width -lt 130) {
-        Write-Host ("    note    '{0}' widened to 130pt (anchor span {1:N0}pt) - " +
-                    'keep the next anchor at least 130pt to the right') `
-                   -f $caption, $width
+        Write-Host ("    note    '{0}' widened to 130pt (anchor span {1:N0}pt) - keep the next anchor at least 130pt to the right" -f $caption, $width)
     }
     $shape = $ws.Shapes.AddFormControl($btnCtrl, $left, $top, $w, 22)
     $shape.Name = "btn_$macro"

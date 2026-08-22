@@ -51,6 +51,12 @@ LISTS = {
     "Requirement Source": ["TCOLE Rule", "Academy Policy"],
     "Review Type": ["Dismissal Review", "Academic Review", "Conduct Review"],
     "Review Outcome": ["Pending", "Retained", "Separated", "Retained w/ Plan"],
+    # which engine trigger this review closes. The engine matches these
+    # strings EXACTLY (sysChecks DismissReview), so they must not be
+    # reworded without updating sheets_engine.build_syschecks.
+    "Dismissal Trigger": ["Failed retest (exam)", "Skills failed out",
+                          "Chain-of-command incident review",
+                          "Other (not engine-tracked)"],
 }
 
 # ------------------------------------------------------------------ holidays
