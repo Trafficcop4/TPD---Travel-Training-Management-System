@@ -105,6 +105,7 @@ workbooks/BPOC_Academy_Management_V6.xlsx   built workbook (macros added by inst
 build/bpoc/                                 builder + seed data + verifier
 src/vba/bpoc/                               macro source (emails, print center, reset)
 tools/Install-BPOC-VBA.ps1                  one-time .xlsx + VBA -> .xlsm
+docs/BPOC-System-Reference.md               how it works: naming, interactions, printables
 docs/BPOC-Coordinator-Guide.md              day-to-day manual
 docs/BPOC-Audit-Prep.md                     TCOLE audit mapping
 ```
