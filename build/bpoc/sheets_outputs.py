@@ -5,12 +5,14 @@ NamedRanges registry.
 """
 from openpyxl.utils import get_column_letter
 from openpyxl.chart import LineChart, BarChart, Reference
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from xlb import (
     HDR_ROW, DATA_ROW, CADETS, CADET_LAST, F_HDR, FILL_HDR, F_CALC, FILL_CALC,
     F_LABEL, F_SMALL, F_BODY, F_INPUT, FILL_INPUT, FILL_BAND, FILL_YELLOW,
     F_KPI, F_TITLE, F_SECTION, FILL_NAVY, FILL_STEEL, A_LEFT, A_LEFT_WRAP,
     A_RIGHT, A_CENTER, BOX, UNDER, DATE, header_row, fill_rows, dv_list,
+    dv_whole,
     sheet_note, cf_yes_no, cf_formula, FILL_WARNBG, FILL_OKBG, FILL_AMBER,
     col_widths, define, section_bar, label, protect, unlock_range,
     page_setup_portrait, page_setup_landscape,
@@ -610,7 +612,7 @@ def build_gradchecklist(wb):
     header_row(ws, ["PID", "Cadet", "Agency", "Academic", "Classroom",
                     "PT Sessions", "Skills", "Incidents", "Writing",
                     "Makeup", "Final PT", "No Dismiss Rev", "Certs",
-                    "ELIGIBLE", "Blocking Issues"])
+                    "Enroll Docs", "ELIGIBLE", "Blocking Issues"])
     cols = {
         "B": ('IF(Cadets!$B{r}="","",Cadets!$B{r})', "fx"),
         "C": ('IF($B{r}="","",Cadets!$F{r})', "fx"),
@@ -625,23 +627,26 @@ def build_gradchecklist(wb):
         "L": ('IF($B{r}="","",sysChecks!$L{r})', "fx"),
         "M": ('IF($B{r}="","",IF(sysChecks!$M{r}="Yes","No","Yes"))', "fx"),
         "N": ('IF($B{r}="","",sysChecks!$Q{r})', "fx"),
-        "O": ('IF($B{r}="","",sysChecks!$N{r})', "fx"),
-        "P": ('IF($B{r}="","",sysChecks!$O{r})', "fx"),
+        # Enroll Docs (sysChecks W) sits BEFORE the verdict columns so
+        # ELIGIBLE and Blocking Issues stay last on the printed page.
+        "O": ('IF($B{r}="","",sysChecks!$W{r})', "fx"),
+        "P": ('IF($B{r}="","",sysChecks!$N{r})', "fx"),
+        "Q": ('IF($B{r}="","",sysChecks!$O{r})', "fx"),
     }
     fill_rows(ws, FIRST, LAST, cols)
-    cf_yes_no(ws, f"E{FIRST}:O{LAST}")
+    cf_yes_no(ws, f"E{FIRST}:P{LAST}")
     # anything that is not a plain "Yes" is a block — "Pending" / "Not taken"
     # (final PT never assessed, rubric never configured) must read as red,
     # not as an uncoloured neutral value on the graduation gate
-    cf_formula(ws, f"E{FIRST}:O{LAST}",
+    cf_formula(ws, f"E{FIRST}:P{LAST}",
                f'AND(E{FIRST}<>"",E{FIRST}<>"Yes")', FILL_WARNBG)
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 18, "P": 54})
-    for cl in "EFGHIJKLMNO":
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 18, "Q": 54})
+    for cl in "EFGHIJKLMNOP":
         ws.column_dimensions[cl].width = 10
-    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:P{LAST}",
+    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:Q{LAST}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "The final gate before the ceremony — columns Academic "
-                   "through Certs must ALL read Yes and Blocking Issues must "
+                   "through Enroll Docs must ALL read Yes and Blocking Issues must "
                    "read 'Eligible' — it is never blank for a passing cadet. "
                    "Anything else blocks and is spelled out in "
                    "Blocking Issues: 'No', 'Pending' (Final PT points rubric "
@@ -816,6 +821,11 @@ def build_audit(wb):
         )).font = F_CALC
     dv_list(ws, "=lstYesNo", [f"C{doc_first}:I{doc_last}"])
     cf_yes_no(ws, f"J{doc_first}:J{doc_last}")
+    # the roll-up was read by NOTHING: no named range, no sysAudit line, no
+    # graduation gate — so a cadet with an empty enrollment file still read
+    # ELIGIBLE and the Audit sheet's own live-check block said OK. Never
+    # hard-code 67/116 here: adding an audit check shifts the whole grid.
+    define(wb, "nrENRall", "Audit", f"$J${doc_first}:$J${doc_last}")
     col_widths(ws, {"A": 3, "B": 30, "C": 11, "D": 11, "E": 12, "F": 11,
                     "G": 12, "H": 12, "I": 10})
     # NO repeat_rows: Excel repeats print titles on EVERY page including
@@ -1112,7 +1122,7 @@ def build_examsheet(wb):
     r += 2
     hdr = r
     header_row(ws, ["#", "Cadet", "PID", "Agency", "Raw Score",
-                    "Recorded", "Pass?", "Retest"], row=r)
+                    "Recorded", "Pass?", "Retest", "Absence"], row=r)
     r += 1
     first = r
     code = ('IFERROR(INDEX(rngEPcode,MATCH(' + E +
@@ -1128,14 +1138,22 @@ def build_examsheet(wb):
             f'=IF($C{rr}="","",Cadets!$B{src})')).font = F_CALC
         ws.cell(row=rr, column=5, value=(
             f'=IF($C{rr}="","",Cadets!$H{src})')).font = F_CALC
+        # both score columns must ask whether a score was RECORDED, not
+        # merely whether a row exists. An excused first attempt is logged
+        # with a blank Raw Score (see the ExamScores sheet note), and the
+        # bare existence test used to print Raw 0 / Recorded 0 / FAIL for a
+        # cadet who was lawfully excused - on the grade sheet that is filed
+        # for the IRG. nrES_Rec,"<>" counted the Recorded FORMULA cell,
+        # which returns "" and is therefore not an empty CELL; every other
+        # exam consumer in the workbook uses the numeric nrES_Rec,">=0".
         ws.cell(row=rr, column=6, value=(
             f'=IF($C{rr}="","",LET(c,{code},IF(COUNTIFS(nrES_PID,'
-            f'Cadets!$B{src},nrES_Code,c,nrES_Att,1)=0,"",'
+            f'Cadets!$B{src},nrES_Code,c,nrES_Att,1,nrES_Raw,">=0")=0,"",'
             f'SUMIFS(nrES_Raw,nrES_PID,Cadets!$B{src},nrES_Code,c,'
             f'nrES_Att,1))))')).font = F_CALC
         ws.cell(row=rr, column=7, value=(
             f'=IF($C{rr}="","",LET(c,{code},IF(COUNTIFS(nrES_PID,'
-            f'Cadets!$B{src},nrES_Code,c,nrES_Final,"Yes",nrES_Rec,"<>")=0,'
+            f'Cadets!$B{src},nrES_Code,c,nrES_Final,"Yes",nrES_Rec,">=0")=0,'
             f'"",SUMIFS(nrES_Rec,nrES_PID,Cadets!$B{src},nrES_Code,c,'
             f'nrES_Final,"Yes"))))')).font = F_CALC
         ws.cell(row=rr, column=8, value=(
@@ -1149,10 +1167,28 @@ def build_examsheet(wb):
             f'Cadets!$B{src},nrES_Code,c,nrES_Att,2,nrES_Raw,">=0")>0,'
             f'"Retested","")))'
         )).font = F_CALC
-        for ccol in range(2, 10):
+        # without this column a blank Raw/Recorded pair is indistinguishable
+        # from "never sat the exam" on the filed grade sheet.
+        ws.cell(row=rr, column=10, value=(
+            f'=IF($C{rr}="","",LET(c,{code},'
+            f'n,COUNTIFS(nrES_PID,Cadets!$B{src},nrES_Code,c,nrES_Att,1),'
+            f's,COUNTIFS(nrES_PID,Cadets!$B{src},nrES_Code,c,nrES_Att,1,'
+            f'nrES_Raw,">=0"),'
+            f'x,COUNTIFS(nrES_PID,Cadets!$B{src},nrES_Code,c,nrES_Att,1,'
+            f'nrES_Absence,"Excused"),'
+            f'u,COUNTIFS(nrES_PID,Cadets!$B{src},nrES_Code,c,nrES_Att,1,'
+            f'nrES_Absence,"Unexcused"),'
+            f'IF(u>0,"Unexcused",IF(x>0,IF(s>0,"Excused - taken later",'
+            f'"Excused - pending"),IF(OR(n=0,s>0),"","No score recorded")))))'
+        )).font = F_CALC
+        for ccol in range(2, 11):
             ws.cell(row=rr, column=ccol).border = BOX
     last = first + CADETS - 1
     cf_formula(ws, f"H{first}:H{last}", f'$H{first}="FAIL"', FILL_WARNBG)
+    cf_formula(ws, f"J{first}:J{last}",
+               f'OR($J{first}="Excused - pending",$J{first}='
+               f'"No score recorded")', FILL_AMBER)
+    cf_formula(ws, f"J{first}:J{last}", f'$J{first}="Unexcused"', FILL_WARNBG)
     r = last + 1
     ws.cell(row=r, column=3, value="Class average / low / high / fails:"
             ).font = F_LABEL
@@ -1172,11 +1208,14 @@ def build_examsheet(wb):
             ).font = F_BODY
     r += 1
     ws.cell(row=r, column=2, value=DL.ACADEMY_ADDRESS).font = F_SMALL
-    col_widths(ws, {"A": 3, "B": 5, "C": 28, "D": 10, "E": 18, "F": 11,
-                    "G": 11, "H": 9, "I": 10})
+    col_widths(ws, {"A": 3, "B": 5, "C": 28, "D": 10, "E": 16, "F": 11,
+                    "G": 11, "H": 9, "I": 10, "J": 20})
     # print titles must start at the FIRST row of the print area (row 7)
-    page_setup_portrait(ws, print_area=f"B{HDR_ROW+2}:I{r}",
+    page_setup_portrait(ws, print_area=f"B{HDR_ROW+2}:J{r}",
                         repeat_rows=f"{HDR_ROW+2}:{hdr}")
+    # the picker is the only cell a user can type in on a protected sheet,
+    # so it carries a validation like every other one
+    dv_list(ws, "=rngEPseq", [f"C{HDR_ROW}"])
     protect(ws)
     unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
     sheet_note(ws, "The IRG requires a grade sheet for each assessment in "
@@ -1299,6 +1338,16 @@ def build_signin(wb):
     col_widths(ws, {"A": 3, "B": 6, "C": 28, "D": 10, "E": 18, "F": 21,
                     "G": 21, "H": 22, "I": 12})
     page_setup_portrait(ws, print_area=f"B{HDR_ROW}:H{r}")
+    # the date picker is the only cell a user can type in on this protected
+    # sheet, so it carries a validation like every other printable picker
+    _dvd = DataValidation(type="date", operator="between",
+                          formula1="cfgStartDate", formula2="cfgEndDate",
+                          allow_blank=True, showErrorMessage=True)
+    _dvd.errorTitle = "Not an academy date"
+    _dvd.error = ("Pick a date between the academy's Start Date and End "
+                  "Date (Settings).")
+    _dvd.add(f"C{HDR_ROW}")
+    ws.add_data_validation(_dvd)
     protect(ws)
     unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
     sheet_note(ws, "The one-page daily report & roster: AM roll call, "
@@ -1491,6 +1540,14 @@ def build_writinghandout(wb):
     dh.alignment = A_CENTER
     dh.border = BOX
     r += 1
+    # the week is resolved with match_mode 1 (next larger), NOT an exact
+    # match. An assignment dated on a CLOSURE day - BPOC 7 ships two dated
+    # Labor Day - found no calendar row, fell to 0 and appeared on no
+    # weekly handout at all, while the week it belonged to printed the
+    # affirmatively false "no assignments start this week". The same
+    # closure-day bracketing idiom already guards retest deadlines and memo
+    # due dates. ISNUMBER keeps blank/text rows out; a date past the last
+    # class day lands on the last week instead of disappearing.
     # TAKE(...,8): the only printable digest left without a cap. The sheet
     # styles exactly 8 rows and the print area stops at row 19, so a longer
     # week silently lost its wrap formatting and everything past row 19
@@ -1498,7 +1555,8 @@ def build_writinghandout(wb):
     ws.cell(row=r, column=2, value=(
         '=IFERROR(TAKE(FILTER(HSTACK(rngWMnum,rngWMtitle,TEXT(rngWMassigned,'
         '"mm/dd"),TEXT(rngWMdue,"mm/dd"),rngWMprompt),'
-        'IFERROR(XLOOKUP(rngWMassigned,nrCDdate,nrCDweek),0)=cfgHandoutWeek),'
+        'IF(ISNUMBER(rngWMassigned),IFERROR(XLOOKUP(rngWMassigned,nrCDdate,'
+        'nrCDweek,MAX(nrCDweek),1),0),0)=cfgHandoutWeek),'
         '8),"— no assignments start this week —")'))
     for rr in range(r, r + 8):
         ws.row_dimensions[rr].height = 60
@@ -1506,6 +1564,10 @@ def build_writinghandout(wb):
             ws.cell(row=rr, column=ccol).alignment = A_LEFT_WRAP
     col_widths(ws, {"A": 3, "B": 5, "C": 32, "D": 10, "E": 10, "F": 80})
     page_setup_portrait(ws, print_area=f"B{HDR_ROW+2}:F{r+8}")
+    # an unlocked picker on a protected sheet is the only cell a user can
+    # type in, so it carries a validation like every other one.
+    dv_whole(ws, [f"C{HDR_ROW}"], 1, 52,
+             "Pick an academy week number (1 = the first week of class).")
     protect(ws)
     unlock_range(ws, f"C{HDR_ROW}:C{HDR_ROW}")
     sheet_note(ws, "Pick an academy week; assignments whose computed assigned "
@@ -1913,7 +1975,7 @@ def gray_separated_rows(wb):
         # cadet's row was struck through for 28 columns and then printed in
         # normal black for the Rank cell.
         "Certifications": "B6:U55", "ScoresGrid": "B6:AD55",
-        "GradChecklist": "B6:P55", "StateExam": "B6:L55",
+        "GradChecklist": "B6:Q55", "StateExam": "B6:L55",
         "Cadets": "B6:M55",
     }
     for name, rng in targets.items():

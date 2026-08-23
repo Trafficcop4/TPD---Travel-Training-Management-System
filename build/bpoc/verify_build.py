@@ -358,9 +358,18 @@ def test_workbook():
           '$V{}="Yes"'.format(6) in str(ck2["N6"].value),
           "a pending excused exam blocks graduation")
     fl2 = wb["sysFlags"]
+    # the flag used to SAY "REMOVAL TRIGGER" and be wired to nothing: no
+    # review opened, no graduation block, and no Closes Trigger value it
+    # could be closed with. It is now one of the engine triggers, so the
+    # assertion is that it reaches sysChecks and the DismissalLog.
+    import data_lists as _DLm
     check(fl2["U5"].value == "F:MissedExam" and
-          "REMOVAL TRIGGER" in str(fl2["T6"].value),
-          "second unexcused missed exam is a removal trigger")
+          "unexcused missed exams (removal review)" in str(fl2["T6"].value),
+          "second unexcused missed exam is named on the flag reasons")
+    check('nrES_Absence' in str(ck2["U6"].value) and
+          '"unexcused missed exams; "' in str(ck2["U6"].value) and
+          "Unexcused missed exams" in _DLm.LISTS["Dismissal Trigger"],
+          "second unexcused missed exam opens a closable removal review")
     check(any("nrSCH_Date=TODAY()" in str(c.value) for row in
               wb["Dashboard"].iter_rows(min_row=5, max_row=25) for c in row
               if isinstance(c.value, str)),
@@ -962,6 +971,28 @@ def test_workbook():
     check(len(words) == 25 and all(guard in w for w in words)
           and guard in str(sp["B8"].value or ""),
           "SpellingPrint words + heading refuse an out-of-range test number")
+    # ...and the rule is enforced for EVERY unlocked cfg* picker, not just
+    # SpellingPrint: ExamSheet, SignIn and WritingHandout each shipped an
+    # unlocked, unvalidated cell as the only typeable cell on the sheet.
+    _pickers = {}
+    for _n, _dn in wb.defined_names.items():
+        if not _n.startswith("cfg"):
+            continue
+        for _sh, _ref in _dn.destinations:
+            if _sh in wb.sheetnames and wb[_sh].protection.sheet:
+                _pickers.setdefault(_sh, set()).add(_ref.replace("$", ""))
+    _unvalidated = []
+    for _sh, _cells in _pickers.items():
+        _ws = wb[_sh]
+        _covered = set()
+        for _dv in _ws.data_validations.dataValidation:
+            for _rng in str(_dv.sqref).split():
+                _covered.add(_rng.split(":")[0])
+        for _c in _cells:
+            if _ws[_c].protection.locked is False and _c not in _covered:
+                _unvalidated.append(f"{_sh}!{_c}")
+    check(not _unvalidated,
+          f"every unlocked cfg* picker carries a validation: {_unvalidated}")
 
     # the exam Attempt # list must not offer 3-5 (Skills still may)
     check(_DL.LISTS["Exam Attempt #"] == ["1", "2"] and
@@ -1016,6 +1047,123 @@ def test_workbook():
                    encoding="utf-8").read()
     check('ws.PageSetup.PrintArea = "$B$5:$O$" & lastRow' in _pr,
           "the Schedule button prints the used rows, not all 900")
+
+    # ---- fixes from the V6 stress pass, round 10 --------------------------
+    # #0: ExamSheet is a filed TCOLE grade sheet. Every exam-score consumer
+    # in the workbook must ask whether a score was RECORDED, never whether a
+    # row merely exists: an excused first attempt is logged with a blank Raw
+    # Score, and the bare existence test printed Raw 0 / Recorded 0 / FAIL.
+    _ex = wb["ExamSheet"]
+    check('nrES_Raw,">=0"' in str(_ex["F11"].value) and
+          'nrES_Rec,">=0"' in str(_ex["G11"].value),
+          "ExamSheet Raw/Recorded need a RECORDED score, not just a row")
+    check(_ex["J10"].value == "Absence" and
+          "nrES_Absence" in str(_ex["J11"].value) and
+          "Excused - pending" in str(_ex["J11"].value),
+          "ExamSheet says WHY a printed grade row is blank")
+    # the COUNTIFS text criterion "<>" means "not an EMPTY CELL", so it
+    # counts a formula cell returning "". It must appear nowhere.
+    _badguard = [(ws.title, c.coordinate) for ws in wb.worksheets
+                 for row in ws.iter_rows() for c in row
+                 if isinstance(c.value, str) and 'nrES_Rec,"<>"' in c.value]
+    check(not _badguard,
+          'no exam consumer guards on nrES_Rec,"<>" (it counts "")')
+
+    # #4: the PREVIOUS scored attempt must carry the same filter as the
+    # latest one, or an unscored attempt-1 row reads as a recorded 0 and
+    # both fabricates a consecutive-fail flag and erases a real grade drop
+    for _c in ("AA6", "AC6"):
+        _v = str(wb["sysGrades"][_c].value)
+        check(_v.count('nrES_Raw,">=0"') == 2,
+              f"sysGrades {_c[:2]} filters BOTH the latest and previous "
+              "attempt on a recorded score")
+
+    # #6/#9: Skills was the only graded number with no Row Check and no
+    # range guard - 68 keyed as 680 satisfied the ch.41 firearms gate
+    _sk = wb["Skills"]
+    check(_sk["S5"].value == "Row Check" and
+          "SCORE OUT OF RANGE" in str(_sk["S6"].value) and
+          "nrSK_RowCheck" in wb.defined_names,
+          "Skills carries a Row Check on its Score column")
+    for _c in ("L6", "M6", "N6", "O6"):
+        _v = str(wb["sysSkills"][_c].value)
+        check('nrSK_Score,">=0"' in _v and 'nrSK_Score,"<=100"' in _v,
+              f"sysSkills {_c[:1]} excludes an out-of-range firearms score")
+
+    # #7: the same guard on spelling, whose average feeds the weighted
+    # grade, the rank and the printed valedictorian pick
+    _spl = wb["Spelling"]
+    check('">=0"' in str(_spl["P6"].value) and '"<=100"' in str(_spl["Q6"].value)
+          and '">=0"' in str(_spl["D58"].value),
+          "spelling average, count and class average exclude 0-100 outliers")
+
+    # #5: the Audit enrollment-documents grid was consumed by NOTHING
+    check("nrENRall" in wb.defined_names and
+          any("nrENRall" in str(c.value) for row in wb["sysAudit"].iter_rows()
+              for c in row if isinstance(c.value, str)) and
+          "nrENRall" in str(wb["sysChecks"]["W6"].value) and
+          '$W6="Yes"' in str(wb["sysChecks"]["N6"].value) and
+          wb["GradChecklist"]["O5"].value == "Enroll Docs",
+          "enrollment documents reach the audit engine and the grad gate")
+
+    # #1: a dynamic-array panel must never answer "nothing to report"
+    # because something inside it broke. The all-clear lives in FILTER's
+    # own if_empty; the outer IFERROR keeps a diagnostic.
+    def _iferror_masks(v):
+        """True when an IFERROR wrapping a dynamic array falls back to a
+        MESSAGE - i.e. an error inside the array is rendered as a claim
+        about the data instead of as an error."""
+        i = 0
+        while True:
+            j = v.find("IFERROR(", i)
+            if j == -1:
+                return False
+            op = j + len("IFERROR")
+            cp = postprocess._find_matching(v, op)
+            if cp == -1:
+                return False
+            args = postprocess._split_top(v[op + 1:cp])
+            if len(args) == 2 and "FILTER(" in args[0]:
+                m = args[1].strip()
+                if (len(m) >= 3 and m[0] == '"' and m[-1] == '"' and
+                        m != postprocess.PANEL_DIAG):
+                    return True
+            i = j + len("IFERROR(")
+
+    _masked = [(ws.title, c.coordinate) for ws in wb.worksheets
+               for row in ws.iter_rows() for c in row
+               if isinstance(c.value, str) and "FILTER(" in c.value
+               and _iferror_masks(c.value)]
+    check(not _masked,
+          f"no panel hides an error behind an all-clear message: {_masked}")
+    _diag = [(ws.title, c.coordinate) for ws in wb.worksheets
+             for row in ws.iter_rows() for c in row
+             if isinstance(c.value, str)
+             and postprocess.PANEL_DIAG.strip('"') in c.value]
+    check(len(_diag) >= 18 and
+          {t for t, _ in _diag} >= {"Dashboard", "Ranking", "WatchList",
+                                    "CadetProfile", "Transcript",
+                                    "ChapterPacket", "SignIn",
+                                    "WritingHandout"},
+          "every safety panel keeps a DIAGNOSTIC outer fallback")
+
+    # #2: an assignment dated on a CLOSURE day resolved to week 0 and
+    # appeared on no weekly handout at all
+    _wh = str(wb["WritingHandout"]["B11"].value)
+    check("nrCDweek,MAX(nrCDweek),1)" in _wh,
+          "WritingHandout brackets a closure-day assigned date to the next "
+          "class day")
+    _whdv = [dv.formula1 for dv in
+             wb["WritingHandout"].data_validations.dataValidation]
+    check(_whdv, "WritingHandout week picker is validated")
+
+    # #3: the agency-email "reported to nobody" net counted only a BLANK
+    # AgencyID, and sat inside the home-agency block
+    check("is not on the Agencies sheet" in _vba and
+          "Application.Match(agOfCadet" in _vba and
+          _vba.index("Application.Match(agOfCadet") >
+          _vba.index("FlushPendingLog wb") - 4000,
+          "agency emails report a cadet whose AgencyID resolves to nothing")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 

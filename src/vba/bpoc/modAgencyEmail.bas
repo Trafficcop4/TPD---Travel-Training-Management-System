@@ -146,17 +146,6 @@ NextAg:
                 End If
             End If
         Next agRow
-        ' count active cadets whose agency produced no section at all
-        Dim wsCadX As Worksheet: Set wsCadX = wb.Worksheets("Cadets")
-        Dim rc As Long, orphan As Long, agOfCadet As String
-        For rc = ROW1 To ROWN
-            If SafeStr(wsCadX.Cells(rc, "B").Value) <> "" And _
-               StrComp(Trim$(SafeStr(wsCadX.Cells(rc, "I").Value)), "Active", _
-                       vbTextCompare) = 0 Then
-                agOfCadet = Trim$(SafeStr(wsCadX.Cells(rc, "G").Value))
-                If agOfCadet = "" Then orphan = orphan + 1
-            End If
-        Next rc
         allBody = allBody & SinceLastSection(wb, homeAgency, hCut, True)
         allBody = allBody & MailFoot()
         If total > 0 Then
@@ -168,13 +157,52 @@ NextAg:
         End If
     End If
 
+    ' ---- who was reported to NOBODY -------------------------------------
+    ' This used to count only a BLANK Cadets!G, and it sat inside the
+    ' "If homeRow > 0" block so a bogus cfgHomeAgency skipped it entirely.
+    ' Every draft above (including the one titled "All Cadets") selects
+    ' cadets by walking the AGENCIES sheet, so a cadet whose AgencyID
+    ' matches no Agencies!B row - a pasted value, or an ID renamed or
+    ' deleted on Agencies after the cadet was assigned - is selected by
+    ' nothing at all and the run still reported success. The check now runs
+    ' unconditionally and names the cadets and the unresolved IDs.
+    Dim wsCadX As Worksheet: Set wsCadX = wb.Worksheets("Cadets")
+    Dim rc As Long, orphan As Long, agOfCadet As String
+    Dim orphanList As String, mres As Variant
+    For rc = ROW1 To ROWN
+        If SafeStr(wsCadX.Cells(rc, "B").Value) <> "" And _
+           StrComp(Trim$(SafeStr(wsCadX.Cells(rc, "I").Value)), "Active", _
+                   vbTextCompare) = 0 Then
+            agOfCadet = Trim$(SafeStr(wsCadX.Cells(rc, "G").Value))
+            If agOfCadet = "" Then
+                orphan = orphan + 1
+                If orphan <= 10 Then orphanList = orphanList & vbCrLf & _
+                    "  - " & SafeStr(wsCadX.Cells(rc, "F").Value) & _
+                    " - no AgencyID on Cadets"
+            Else
+                mres = Application.Match(agOfCadet, _
+                       wsAg.Range("B" & ROW1 & ":B" & agLast), 0)
+                If IsError(mres) Then
+                    orphan = orphan + 1
+                    If orphan <= 10 Then orphanList = orphanList & vbCrLf & _
+                        "  - " & SafeStr(wsCadX.Cells(rc, "F").Value) & _
+                        " - AgencyID '" & agOfCadet & _
+                        "' is not on the Agencies sheet"
+                End If
+            End If
+        End If
+    Next rc
+
     FlushPendingLog wb
 
     MsgBox made & " draft email(s) opened in Outlook for review." & vbCrLf & _
            IIf(omitSpelling, "Spelling was OMITTED (spelling # < exam #).", _
                "Spelling #" & spellNum & " included.") & _
-           IIf(orphan > 0, vbCrLf & orphan & " active cadet(s) have no " & _
-               "AgencyID on Cadets and were reported to nobody.", ""), _
+           IIf(orphan > 0, vbCrLf & vbCrLf & orphan & " active cadet(s) were " & _
+               "reported to NOBODY - not even in the 'All Cadets' draft:" & _
+               orphanList & IIf(orphan > 10, vbCrLf & "  - ... and " & _
+               (orphan - 10) & " more", "") & vbCrLf & _
+               "Fix the AgencyID on Cadets (column G) and re-run.", ""), _
            vbInformation, "Agency Score Emails"
 End Sub
 

@@ -1,4 +1,12 @@
-"""LO-compat test harness: LibreOffice cannot evaluate LET, and the Good
+"""LO-compat test harness.
+
+STATUS: normally a NO-OP now. The Good Friday LET was decomposed into plain
+helper columns on Control (P..AF: Easter by the anonymous Gregorian
+algorithm), which LibreOffice evaluates natively, so "replaced 0" is the
+EXPECTED result and does not mean the substitution silently missed. Kept as a
+safety net in case a LET-based Easter is ever reintroduced.
+
+Original note: LibreOffice cannot evaluate LET, and the Good
 Friday holiday uses it, which poisons nrAllClosures -> WORKDAY.INTL -> all
 170 class days -> every date-derived value downstream. That hides real bugs
 from the recalc sweep. This substitutes Python-computed Easter dates into a
@@ -26,7 +34,9 @@ for r in range(6,20):
             ws.cell(row=r,column=col).value = easter(yr)-datetime.timedelta(days=2)
             n+=1
 wb.save(dst)
-print(f"LO-compat: replaced {n} LET-based Easter formulas; Good Friday {y1} = {easter(y1)-datetime.timedelta(days=2)}")
+print(f"LO-compat: replaced {n} LET-based Easter formulas "
+      f"({'expected - Control now uses helper columns' if n == 0 else 'substituted'}); "
+      f"Good Friday {y1} = {easter(y1)-datetime.timedelta(days=2)}")
 
 # Usage:
 #   python3 build/bpoc/lo_compat_for_test.py <seeded.xlsx> <test_copy.xlsx>

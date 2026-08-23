@@ -69,6 +69,7 @@ LISTS = {
     # reworded without updating sheets_engine.build_syschecks.
     "Dismissal Trigger": ["Failed retest (exam)", "Skills failed out",
                           "Chain-of-command incident review",
+                          "Unexcused missed exams",
                           "Other (not engine-tracked)"],
 }
 

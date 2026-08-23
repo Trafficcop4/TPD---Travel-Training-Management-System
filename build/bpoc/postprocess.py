@@ -156,3 +156,94 @@ def fix_workbook(wb):
                         c.value = nv
                         n += 1
     return n
+
+
+# ---------------------------------------------------------------------------
+# dynamic-array panel hardening
+#
+# Every safety-net panel in the workbook was written as
+#     =IFERROR(TAKE(FILTER(...)),"No flags — clear")
+# so ANY error inside the array — the #REF! a stale cross-sheet column letter
+# leaves behind, #VALUE!, #NAME?, a broken named range — rendered as an
+# affirmative ALL-CLEAR on the very panels a coordinator reads to find out
+# whether anything is wrong. FILTER has a native `if_empty` argument that
+# fires ONLY on a genuinely empty result; the message belongs there. The
+# outer IFERROR stays as a last-resort net, but its fallback must never
+# assert that everything is fine.
+PANEL_DIAG = ('"⚠ LIST UNAVAILABLE - a reference in this panel is '
+              'broken; do NOT read it as \'nothing to report\'"')
+
+
+def _outside_string(f, idx):
+    return f.count('"', 0, idx) % 2 == 0
+
+
+def _add_if_empty(expr, msg):
+    """Give every 2-argument FILTER in `expr` the panel's message as its
+    native if_empty. SORT/SORTBY wrappers take a second FILTER as the
+    by-array; that one needs the argument too, or a legitimately empty list
+    returns #CALC! from the by-array and the wrapper propagates it."""
+    out, i = expr, 0
+    while True:
+        j = out.find("FILTER(", i)
+        if j == -1:
+            return out
+        if (j > 0 and (out[j - 1].isalnum() or out[j - 1] in "._")) or \
+                not _outside_string(out, j):
+            i = j + 7
+            continue
+        open_p = j + len("FILTER")
+        close_p = _find_matching(out, open_p)
+        if close_p == -1:
+            return out
+        if len(_split_top(out[open_p + 1:close_p])) == 2:
+            out = out[:close_p] + "," + msg + out[close_p:]
+            i = close_p + len(msg) + 2
+        else:
+            i = close_p
+
+
+def harden_formula(f):
+    if not isinstance(f, str) or "FILTER(" not in f or "IFERROR(" not in f:
+        return f
+    i = 0
+    while True:
+        j = f.find("IFERROR(", i)
+        if j == -1:
+            return f
+        if not _outside_string(f, j):
+            i = j + 8
+            continue
+        open_p = j + len("IFERROR")
+        close_p = _find_matching(f, open_p)
+        if close_p == -1:
+            return f
+        args = _split_top(f[open_p + 1:close_p])
+        msg = args[-1].strip() if len(args) == 2 else ""
+        # only a NON-EMPTY message is a claim about the data. An IFERROR
+        # falling back to "" (a helper column, a picker source list) says
+        # nothing to the reader and must be left alone.
+        if (len(args) == 2 and "FILTER(" in args[0] and
+                len(msg) >= 3 and msg[0] == '"' and msg[-1] == '"'):
+            # a panel whose FILTERs ALREADY carry if_empty still needs its
+            # outer fallback demoted - that is where the false all-clear
+            # actually gets printed.
+            new = _add_if_empty(args[0], msg)
+            f = f[:open_p + 1] + new + "," + PANEL_DIAG + f[close_p:]
+            i = open_p + 1
+            continue
+        i = j + 8
+
+
+def harden_workbook(wb):
+    n = 0
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for c in row:
+                v = c.value
+                if isinstance(v, str) and v.startswith("="):
+                    nv = harden_formula(v)
+                    if nv != v:
+                        c.value = nv
+                        n += 1
+    return n

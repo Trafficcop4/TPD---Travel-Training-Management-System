@@ -8,7 +8,7 @@ This is the "how it works" document. For the day-to-day routine see
 
 - **Scope:** one workbook = one academy class. Save-As at the end, then
   **New Academy Reset** on the copy.
-- **Size:** 60 sheets, 303 named ranges, ~63,300 formulas (10,448 of them rewritten by the prefixer for Excel compatibility).
+- **Size:** 60 sheets, 309 named ranges, ~64,100 formulas (10,498 of them rewritten by the prefixer for Excel compatibility).
 - **Requires:** Microsoft 365 Excel (uses `LET`, `XLOOKUP`, `FILTER`,
   `TAKE`, `HSTACK`). Macros come from `tools/Install-BPOC-VBA.ps1`.
 
@@ -112,7 +112,7 @@ each. `lstCadetStatus`, `lstAttendanceEvent`, `lstReason`,
 `lstCounselingType`, `lstMaterialsStatus`… To add a choice, type it at
 the bottom of that column on Lists.
 
-**`nr*` — a data column in a table (200).** The workhorse. Format is
+**`nr*` — a data column in a table (~205).** The workhorse. Format is
 `nr` + a short sheet tag + the field:
 
 | Tag | Sheet | Examples |
@@ -158,9 +158,13 @@ These IDs are the glue: a Makeup row points at an `A###`, and a Memo
 points at an `I###`, `A###`, or `C###`.
 
 ### 3.4 Column conventions inside a sheet
-- **`Row Check`** — always the **last** column of a log. Reads `OK` or a
-  short reason. Anything other than OK means that row is being ignored
-  or is dangerous. Check it when a number looks wrong.
+- **`Row Check`** — a per-row verdict column near the end of every log
+  that carries one: `ExamScores` **X** (Absence is the last column there),
+  `Attendance` **T**, `Makeup` **N**, `Spelling` **S**, `Skills` **S**.
+  Reads `OK` or a short reason. Anything other than OK means that row is
+  being ignored or is dangerous. Check it when a number looks wrong —
+  a Skills score outside 0-100, for instance, counts toward neither the
+  transcript firearms average nor the both-courses-of-fire gate.
 - **`… ?`** (question mark) — a Yes/No judgement (`Is PT?`, `Counts?`,
   `Cleared?`, `All Certs?`).
 - **`Computed …` / `… Override` / plain name** — three-column pattern:
@@ -231,7 +235,7 @@ deliberately different:
 
 | Absence | Raw Score | Effect |
 |---|---|---|
-| **Unexcused** | must be `0` (Row Check enforces it) | the 0 is the record and starts the ordinary 5-class-day retest clock; a **2nd** occurrence raises `REMOVAL TRIGGER` on `sysFlags` and the Audit sheet |
+| **Unexcused** | must be `0` (Row Check enforces it) | the 0 is the record and starts the ordinary 5-class-day retest clock; `sysFlags` names it (*unexcused missed exam (0 recorded)*), and a **2nd** occurrence opens a **removal review** — reason *N unexcused missed exams (removal review)*, `sysChecks` open-review text, graduation blocked, closable only on `DismissalLog` (trigger *Unexcused missed exams*) |
 | **Excused** | left blank | no zero, no clock — the *first* attempt is merely delayed. `Retest Status` reads *EXCUSED - 1st attempt pending*, `sysChecks` "Exams Pending" turns **No**, and graduation is blocked until the score is keyed on that same row |
 
 `sysGrades` then averages by category and weights them
@@ -290,7 +294,7 @@ a topic offers exactly that topic's picks; pick a second name and it
 appends, pick an existing one and it is removed.
 
 ### 4.7 Flags vs gates — two different things
-- **`sysFlags` (warnings)** — 14 threshold tests, every threshold a
+- **`sysFlags` (warnings)** — 15 threshold tests, every threshold a
   `cfg*` cell on Settings. Produces a **Flag Count** and a plain-English
   **Reasons** string. Surfaces on **WatchList** and the Dashboard.
   Flags never block anything.
@@ -304,6 +308,13 @@ Certifications are a **gate**, not just a flag: `sysChecks` column Q reads
 `Certifications!T` and feeds the `GradChecklist` **Certs** column, so a
 missing certificate copy adds `Certs;` to Blocking Issues and holds
 GraduationElig at **No**.
+
+The per-cadet **enrollment documents** grid on the Audit sheet (enrollment
+app, TCLEDDS L1, medical L2, psych L3, background, photo ID/DL, Rules Ack)
+works the same way: its `All Docs?` roll-up is published as `nrENRall`,
+counted by the sysAudit check *"Cadets missing enrollment documents"*, and
+mirrored into `sysChecks` **W** → the `GradChecklist` **Enroll Docs**
+column, adding `Enrollment documents;` to Blocking Issues.
 
 ### 4.8 Agency email
 `EmailPreview` shows exactly what will go out for the exam set in
@@ -319,7 +330,7 @@ Counseling, or Memos appear. Everything else stays an academy matter.
 The cutoff comes from that agency's last EmailLog date.
 
 ### 4.9 The audit engine
-`sysAudit` runs **27 live checks** — hours vs 736, chapter files
+`sysAudit` runs **32 live checks** (`len(AUDIT_CHECKS)` in `build/bpoc/sheets_engine.py` is the source of truth) — hours vs 736, chapter files
 complete, special TCOLE requirements, instructor documentation, overdue
 retests, makeup owed, certifications, governance alignment, plus the
 data-integrity checks (`Row Check` failures, duplicate PIDs, unrecognized
@@ -376,7 +387,7 @@ BPOC-2026-01/Ch23 - Intoxicated Driver (SFST)/
 | **Transcript** | `cfgTranscriptCadet` | End-of-academy record per cadet — categories, exam list, attendance, skills, PT, certifications, state exam, awards, signature line. Button can run the whole class |
 | **Class Ranking** | — | Live ranking, unranked cadets excluded |
 | **Graduation Checklist** | — | Every gate column per cadet plus Blocking Issues — the pre-ceremony sign-off |
-| **Audit Packet** | — | The 27 live checks, program checklist, per-cadet enrollment documents |
+| **Audit Packet** | — | The 32 live checks, program checklist, per-cadet enrollment documents (an incomplete enrollment file now fails a check AND blocks graduation) |
 | **Addendum** | — | Excess hours per class with the course number to report each under |
 | **Schedule** | — | Full schedule listing, landscape, repeating headers |
 
@@ -413,7 +424,7 @@ and the Audit sheet stays red until you confirm the workbook was aligned.
 
 1. **Check the `Row Check` column** on that log — a rejected row is
    being ignored on purpose, and it tells you why.
-2. **Check the Audit sheet** — 27 checks including data integrity.
+2. **Check the Audit sheet** — 32 checks including data integrity.
 3. **Red PID or red cadet name** = duplicate. Two cadets are being
    merged. Fix first, ask questions later.
 4. **A number that will not move** — the row's cadet name probably does
@@ -443,7 +454,7 @@ powershell -File tools/Install-BPOC-VBA.ps1                    # Windows+Excel: 
 | `build/bpoc/sheets_outputs.py` | Dashboard, printables, email sheets |
 | `build/bpoc/data_*.py` | Seed data: chapters/hours, spelling words, writing prompts, lists |
 | `build/bpoc/postprocess.py` | Stores modern functions with the `_xlfn.`/`_xlpm.` prefixes Excel needs |
-| `build/bpoc/verify_build.py` | 232 structural checks; run after every change |
+| `build/bpoc/verify_build.py` | 204 structural assertions; run after every change |
 | `build/bpoc/lo_compat_for_test.py` | Test-only: lets LibreOffice evaluate the class-day chain |
 | `src/vba/bpoc/*.bas` | Email, print, reset, buttons |
 

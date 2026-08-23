@@ -111,15 +111,21 @@ def build_sysgrades(wb):
         "Z": ('IF($B{r}="","",LET(s,MAXIFS(nrES_Seq,nrES_PID,$B{r},nrES_Att,1,'
               'nrES_Raw,">=0"),IF(s=0,"",SUMIFS(nrES_Raw,nrES_PID,$B{r},'
               'nrES_Att,1,nrES_Seq,s))))', "fx"),
+        # the PREVIOUS attempt must carry the same nrES_Raw,">=0" filter as
+        # the latest one. Without it an unscored attempt-1 row (an EXCUSED
+        # absence leaves Raw Score blank by policy) wins the MAXIFS, reads
+        # as a recorded 0, and both fabricates a consecutive-fail flag (AC)
+        # and erases the real grade-drop flag (AB, which goes negative).
         "AA": ('IF($B{r}="","",LET(s,MAXIFS(nrES_Seq,nrES_PID,$B{r},nrES_Att,1,'
                'nrES_Raw,">=0"),IF(s=0,"",LET(p,MAXIFS(nrES_Seq,nrES_PID,$B{r},'
-               'nrES_Att,1,nrES_Seq,"<"&s),IF(p=0,"",SUMIFS(nrES_Raw,'
-               'nrES_PID,$B{r},nrES_Att,1,nrES_Seq,p))))))', "fx"),
+               'nrES_Att,1,nrES_Seq,"<"&s,nrES_Raw,">=0"),IF(p=0,"",'
+               'SUMIFS(nrES_Raw,nrES_PID,$B{r},nrES_Att,1,nrES_Seq,p))))))', "fx"),
         "AB": ('IF(OR($B{r}="",$Z{r}="",$AA{r}=""),"",ROUND($AA{r}-$Z{r},1))', "fx"),
         "AC": ('IF($B{r}="","",LET(s,MAXIFS(nrES_Seq,nrES_PID,$B{r},nrES_Att,1,'
                'nrES_Raw,">=0"),IF(s=0,0,LET(a,IF(SUMIFS(nrES_Raw,nrES_PID,$B{r},'
                'nrES_Att,1,nrES_Seq,s)<cfgPassingScore,1,0),'
-               'p,MAXIFS(nrES_Seq,nrES_PID,$B{r},nrES_Att,1,nrES_Seq,"<"&s),'
+               'p,MAXIFS(nrES_Seq,nrES_PID,$B{r},nrES_Att,1,nrES_Seq,"<"&s,'
+               'nrES_Raw,">=0"),'
                'IF(OR(a=0,p=0),a,a+IF(SUMIFS(nrES_Raw,nrES_PID,$B{r},'
                'nrES_Att,1,nrES_Seq,p)<cfgPassingScore,1,0))))))', "fx"),
     })
@@ -250,14 +256,22 @@ def build_sysskills(wb):
               '(COUNTIFS(nrSK_PID,$B{r},nrSK_Cat,rngSM_cat,nrSK_Dis,"Yes")>0)))', "fx"),
         "J": ('IF($B{r}="","",IF($I{r}>0,"Yes","No"))', "fx"),
         "K": ('IF($B{r}="","",IF($J{r}="Yes","No",IF($G{r}>0,"No","Yes")))', "fx"),
+        # every firearms aggregate carries the same 0-100 bound the exam
+        # aggregates carry (nrES_Rec ">=0"/"<=100"). Without it a slipped
+        # decimal (68 keyed as 680) printed as the transcript's firearms
+        # average, won Top Gun, and satisfied the ch.41 both-courses-of-fire
+        # gate that feeds sysChecks T and GraduationElig. Skills Row Check
+        # (column S) names the offending row.
         "L": ('IF($B{r}="","",IFERROR(ROUND(AVERAGEIFS(nrSK_Score,nrSK_PID,$B{r},'
-              'nrSK_Cat,"Firearms"),2),""))', "fx"),
+              'nrSK_Cat,"Firearms",nrSK_Score,">=0",nrSK_Score,"<=100"),2),""))', "fx"),
         "M": ('IF($B{r}="","",IFERROR(MAXIFS(nrSK_Score,nrSK_PID,$B{r},'
-              'nrSK_Cat,"Firearms"),""))', "fx"),
+              'nrSK_Cat,"Firearms",nrSK_Score,">=0",nrSK_Score,"<=100"),""))', "fx"),
         "N": ('IF($B{r}="","",LET(v,MAXIFS(nrSK_Score,nrSK_PID,$B{r},'
-              'nrSK_Cat,"Firearms",nrSK_CoF,1),IF(v=0,"",v)))', "fx"),
+              'nrSK_Cat,"Firearms",nrSK_CoF,1,nrSK_Score,">=0",'
+              'nrSK_Score,"<=100"),IF(v=0,"",v)))', "fx"),
         "O": ('IF($B{r}="","",LET(v,MAXIFS(nrSK_Score,nrSK_PID,$B{r},'
-              'nrSK_Cat,"Firearms",nrSK_CoF,2),IF(v=0,"",v)))', "fx"),
+              'nrSK_Cat,"Firearms",nrSK_CoF,2,nrSK_Score,">=0",'
+              'nrSK_Score,"<=100"),IF(v=0,"",v)))', "fx"),
         # the firearms threshold is SkillsMaster's editable "Passing Score",
         # not a literal: with 70 hard-coded here, raising the standard on
         # SkillsMaster left this graduation gate (sysChecks T) and the
@@ -399,7 +413,7 @@ def build_sysflags(wb):
               'IF($R{r}=1,"DISMISSAL REVIEW OPEN ("&'
               'sysChecks!$U{r}&")",""),'
               'IF($U{r}=1,LET(n,COUNTIFS(nrES_PID,$B{r},nrES_Absence,"Unexcused"),'
-              'IF(n>=2,"REMOVAL TRIGGER: "&n&" unexcused missed exams",'
+              'IF(n>=2,n&" unexcused missed exams (removal review)",'
               '"unexcused missed exam (0 recorded)")),""))))', "fx"),
     })
     # E needs the row-scoped reference, not the whole named range
@@ -424,7 +438,8 @@ def build_syschecks(wb):
                     "Makeup Complete", "Final PT Pass", "DismissReview",
                     "GraduationElig", "Blocking Issues", "Final Exam Elig",
                     "Certs", "Exams Recorded", "Skills Assessed",
-                    "Firearms CoF", "Open Reviews", "Exams Pending"])
+                    "Firearms CoF", "Open Reviews", "Exams Pending",
+                    "Enroll Docs"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",sysGrades!$V{r})', "fx"),
@@ -452,7 +467,7 @@ def build_syschecks(wb):
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
               '$Q{r}="Yes",$R{r}="Yes",$S{r}="Yes",$T{r}="Yes",'
-              '$M{r}="No",$V{r}="Yes"),"Yes","No"))', "fx"),
+              '$M{r}="No",$V{r}="Yes",$W{r}="Yes"),"Yes","No"))', "fx"),
         "O": ('IF($B{r}="","",IF($N{r}="Yes","Eligible",TRIM('
               'IF($E{r}<>"Yes","Academic; ","")&'
               'IF($R{r}<>"Yes","Exams not all recorded; ","")&'
@@ -470,6 +485,7 @@ def build_syschecks(wb):
               'IF($L{r}<>"Yes","Final PT not assessed; ",""))))&'
               'IF($Q{r}<>"Yes","Certs; ","")&'
               'IF($V{r}<>"Yes","Exam pending (excused absence); ","")&'
+              'IF($W{r}<>"Yes","Enrollment documents; ","")&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
               'IF(PT!$AB{r}="(rubric pending)","Pending",'
@@ -518,14 +534,35 @@ def build_syschecks(wb):
               'ce,COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Failed retest (exam)",nrDIS_Outcome,"Retained",nrDIS_Approval,"Yes")+COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Failed retest (exam)",nrDIS_Outcome,"Retained w/ Plan",nrDIS_Approval,"Yes"),'
               'cs,COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Skills failed out",nrDIS_Outcome,"Retained",nrDIS_Approval,"Yes")+COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Skills failed out",nrDIS_Outcome,"Retained w/ Plan",nrDIS_Approval,"Yes"),'
               'ci,COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Chain-of-command incident review",nrDIS_Outcome,"Retained",nrDIS_Approval,"Yes")+COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Chain-of-command incident review",nrDIS_Outcome,"Retained w/ Plan",nrDIS_Approval,"Yes"),'
+              # policy: the SECOND unexcused missed exam is a removal
+              # trigger. It used to raise a sysFlags line reading "REMOVAL
+              # TRIGGER" that was wired to nothing: no review opened, no
+              # graduation block, and no Closes Trigger value it could ever
+              # be closed with. It is now one of the four engine triggers.
+              # counted as "one review per unexcused absence AFTER the
+              # first", so ONE board decision closes it - the same
+              # count-what-the-board-decides lesson as sysSkills I, where an
+              # open count of 2 against 1 closure blocked a cadet forever.
+              'om,MAX(0,COUNTIFS(nrES_PID,$B{r},nrES_Absence,"Unexcused")-1),'
+              'cm,COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Unexcused missed exams",nrDIS_Outcome,"Retained",nrDIS_Approval,"Yes")+COUNTIFS(nrDIS_PID,$B{r},nrDIS_Closes,"Unexcused missed exams",nrDIS_Outcome,"Retained w/ Plan",nrDIS_Approval,"Yes"),'
               'TRIM(IF(oe>ce,"failed retest; ","")'
               '&IF(os>cs,"skills failed out; ","")'
+              '&IF(om>cm,"unexcused missed exams; ","")'
               '&IF(oi>ci,"chain-of-command incident review; ",""))))', "fx"),
         # policy: an EXCUSED absence DELAYS the first attempt - it is not a
         # zero and starts no clock, so nothing else on this sheet could see
         # that the cadet still owes the exam. Graduation waits for it.
         "V": ('IF($B{r}="","",IF(COUNTIFS(nrES_PID,$B{r},nrES_Absence,'
               '"Excused",nrES_Raw,"")=0,"Yes","No"))', "fx"),
+        # the Audit sheet's per-cadet enrollment-documents grid (Rule 217.1
+        # enrollment file: app, TCLEDDS L1, medical L2, psych L3,
+        # background, photo ID/DL, Rules Ack) was consumed by NOTHING - no
+        # named range, no audit line, no gate - so a cadet with an empty
+        # enrollment file printed "Eligible". Matched by PID, never by a
+        # hard-coded Audit row: the docs grid moves down every time an audit
+        # check is added.
+        "W": ('IF($B{r}="","",IF(IFERROR(INDEX(nrENRall,'
+              'MATCH($B{r},rngCadetPIDs,0)),"")="Yes","Yes","No"))', "fx"),
     })
     fill_rows(ws, FIRST, LAST, cols)
     cf_yes_no(ws, f"N{FIRST}:N{LAST}")
@@ -538,7 +575,8 @@ def build_syschecks(wb):
     define(wb, "nrCKfirearmsCoF", "sysChecks", f"$T${FIRST}:$T${LAST}")
     define(wb, "nrCKopenReviews", "sysChecks", f"$U${FIRST}:$U${LAST}")
     define(wb, "nrCKexamsPending", "sysChecks", f"$V${FIRST}:$V${LAST}")
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "O": 50, "U": 44})
+    define(wb, "nrCKenrollDocs", "sysChecks", f"$W${FIRST}:$W${LAST}")
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "O": 50, "U": 44, "W": 12})
     sheet_note(ws, "Graduation gate per policy: 70 in each category, every "
                    "category actually recorded (Exams Recorded), under "
                    "attendance caps, makeup complete, EVERY skills category "
@@ -549,7 +587,9 @@ def build_syschecks(wb):
                    "writing current, no open chain-of-command incident "
                    "review, final PT PASSED (a blank or '(rubric pending)' "
                    "final PT blocks — it is not a pass), all cert copies on "
-                   "file, no open dismissal review. 'Final Exam Elig' "
+                   "file, the Audit sheet's enrollment-document checklist "
+                   "complete for the cadet (Enroll Docs), "
+                   "no open dismissal review. 'Final Exam Elig' "
                    "enforces 500.1.H. Locked.")
     protect(ws)
     return ws
@@ -711,6 +751,14 @@ AUDIT_CHECKS = [
          'SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))=0,"OK","CHECK")',
          '"TIM, SFST, TCIC, CPR/AED, ALERRT, ICS copies - see Certifications sheet"'),
+        ("Cadets missing enrollment documents",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrENRall="No"))', "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrENRall="No"))=0,'
+         '"OK","CHECK")',
+         '"Rule 217.1 enrollment file: application, TCLEDDS L1, medical L2, '
+         'psych L3, background, photo ID/DL and the Rule 215.9 rules '
+         'acknowledgment - all seven on the Audit sheet grid. Also blocks '
+         'graduation (GradChecklist Enroll Docs)"'),
         # "(one pending)" — one course of fire never fired — is a fail of
         # this check too. Counting only the outright "No" let a half-fired
         # qualification read OK.
@@ -734,10 +782,18 @@ AUDIT_CHECKS = [
          '"Fewer than 7 of the 7 final PT events have rubric points on the PT '
          'sheet. The partial total is NOT a pass - it blocks graduation and '
          'the Final Exam (500.1.H) until every event is scored"'),
+        # the line used to fire on the FIRST unexcused absence, not the
+        # second its title names, and the "removal review" it promised was
+        # opened by nothing. It now counts the reviews sysChecks actually
+        # holds open, so a board that retains the cadet clears it.
         ("Unexcused missed exams (2nd = removal review)",
-         'SUMPRODUCT((nrCadetStatus="Active")*(nrFLmissedExam=1))', "0",
-         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrFLmissedExam=1))=0,"OK","CHECK")',
-         '"Policy: unexcused absence from an exam records a 0 and starts the retest clock; a SECOND occurrence is a removal trigger"'),
+         'SUMPRODUCT((nrCadetStatus="Active")*(LEN(nrCKopenReviews)-'
+         'LEN(SUBSTITUTE(nrCKopenReviews,"unexcused missed exams",""))>0))',
+         "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(LEN(nrCKopenReviews)-'
+         'LEN(SUBSTITUTE(nrCKopenReviews,"unexcused missed exams",""))>0))=0,'
+         '"OK","CHECK")',
+         '"Policy: unexcused absence from an exam records a 0 and starts the retest clock; a SECOND occurrence opens a removal review that blocks graduation until the board closes it on the DismissalLog (Closes Trigger = Unexcused missed exams)"'),
         ("Exams still owed on an excused absence",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrCKexamsPending="No"))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCKexamsPending="No"))=0,"OK","CHECK")',
@@ -832,6 +888,15 @@ AUDIT_CHECKS = [
          'ignored by the class-day calendar, so the academy silently runs a '
          'day long and every Day #, retest deadline, memo due date and '
          'writing date shifts"'),
+        ("Skills rows failing Row Check",
+         'SUMPRODUCT((nrSK_RowCheck<>"")*(nrSK_RowCheck<>"OK"))', "0",
+         'IF(SUMPRODUCT((nrSK_RowCheck<>"")*(nrSK_RowCheck<>"OK"))=0,'
+         '"OK","CHECK")',
+         '"Skills Row Check: a Score that is text or outside 0-100 counts '
+         'toward nothing - not the transcript firearms average, not Top Gun '
+         'and not the ch.41 both-courses-of-fire graduation gate. Also flags '
+         'a decided row with no score, a score on a Pass/Fail category and a '
+         'firearms result with no Course of Fire"'),
         ("Spelling rows failing Row Check",
          'SUMPRODUCT((nrSpellRowCheck<>"")*(nrSpellRowCheck<>"OK"))', "0",
          'IF(SUMPRODUCT((nrSpellRowCheck<>"")*(nrSpellRowCheck<>"OK"))=0,'

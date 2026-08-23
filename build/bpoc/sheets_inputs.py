@@ -321,8 +321,16 @@ def build_spelling(wb):
     cols = {
         "B": (f'IF(Cadets!$B{{r}}="","",Cadets!$B{{r}})', "fx"),
         "C": (f'IF(Cadets!$B{{r}}="","",Cadets!$F{{r}})', "fx"),
-        "P": ('IF($C{r}="","",IF($Q{r}=0,"",ROUND(SUM($D{r}:$O{r})/$Q{r},1)))', "fx"),
-        "Q": ('IF($C{r}="","",COUNT($D{r}:$O{r}))', "fx"),
+        # the average and the count must EXCLUDE an out-of-range score the
+        # same way every ExamScores aggregate excludes one (nrES_Rec
+        # ">=0"/"<=100"). A pasted 950 used to inflate this average, the
+        # cadet's Current Grade, his rank and the printed valedictorian
+        # pick, and it masked the policy-300.4.B INTERVENTION flag. Row
+        # Check (column S) reports the bad cell; the value no longer counts.
+        "P": ('IF($C{r}="","",IF($Q{r}=0,"",ROUND(SUMIFS($D{r}:$O{r},'
+              '$D{r}:$O{r},">=0",$D{r}:$O{r},"<=100")/$Q{r},1)))', "fx"),
+        "Q": ('IF($C{r}="","",COUNTIFS($D{r}:$O{r},">=0",'
+              '$D{r}:$O{r},"<=100"))', "fx"),
         "R": ('IF($C{r}="","",IF($P{r}="","",'
               'IF($P{r}<cfgSpellInterventionAvg,"INTERVENTION","OK")))', "fx"),
         # a mistyped score (950 for 95) used to sail through: it inflated the
@@ -353,10 +361,15 @@ def build_spelling(wb):
     ws.cell(row=sr + 2, column=3, value="Test #:").font = F_SMALL
     for i in range(12):
         cl = get_column_letter(4 + i)
-        ws[f"{cl}{sr}"] = f"=COUNT({cl}{first}:{cl}{last})"
+        # same 0-100 mask as the per-cadet average above: this row feeds the
+        # printed class average and the Dashboard spelling chart.
+        ws[f"{cl}{sr}"] = (f'=COUNTIFS({cl}{first}:{cl}{last},">=0",'
+                           f'{cl}{first}:{cl}{last},"<=100")')
         ws[f"{cl}{sr}"].font = F_CALC
         ws[f"{cl}{sr+1}"] = (f"=IF({cl}{sr}=0,\"\","
-                             f"ROUND(AVERAGE({cl}{first}:{cl}{last}),1))")
+                             f'ROUND(AVERAGEIFS({cl}{first}:{cl}{last},'
+                             f'{cl}{first}:{cl}{last},">=0",'
+                             f'{cl}{first}:{cl}{last},"<=100"),1))')
         ws[f"{cl}{sr+1}"].font = F_CALC
         ws[f"{cl}{sr+2}"] = i + 1
         ws[f"{cl}{sr+2}"].font = F_SMALL
@@ -613,7 +626,7 @@ def build_skills(wb):
     header_row(ws, ["RecordID", "Cadet Name", "PID", "Category", "Max",
                     "Mode", "Passing", "Attempt #", "Result", "Score",
                     "Date", "Assessed By", "Attempts Used", "Status",
-                    "DismissReview", "Notes", "Course of Fire"])
+                    "DismissReview", "Notes", "Course of Fire", "Row Check"])
     first, last = DATA_ROW, DATA_ROW + ROWS_SKILLS - 1
     fill_rows(ws, first, last, {
         "B": ('IF($C{r}="","",$D{r}&"-"&$E{r}&"-"&$I{r})', "fx"),
@@ -653,6 +666,23 @@ def build_skills(wb):
         "P": ('IF($C{r}="","",IF($O{r}="FAILED OUT","Yes","No"))', "fx"),
         "Q": (None, "in"),
         "R": (None, "in"),
+        # Skills was the only graded number in the workbook with neither a
+        # Row Check nor a range guard. 68 keyed as 680 satisfied the ch.41
+        # "both courses of fire >= passing" gate (sysSkills P -> sysChecks T
+        # -> GraduationElig) and won Top Gun, with nothing on the sheet
+        # complaining. The aggregates in sysSkills now exclude an
+        # out-of-range score; this column says why the row dropped out.
+        "S": ('IF($C{r}="","",'
+              'IF(AND($K{r}<>"",NOT(ISNUMBER($K{r}))),"SCORE NOT A NUMBER",'
+              'IF(AND(ISNUMBER($K{r}),OR($K{r}<0,$K{r}>100)),'
+              '"SCORE OUT OF RANGE - this score counts toward nothing",'
+              'IF(AND($G{r}="Score",$K{r}="",$J{r}<>"",$J{r}<>"Pending"),'
+              '"RESULT WITHOUT A SCORE",'
+              'IF(AND($G{r}="Pass/Fail",$K{r}<>""),'
+              '"SCORE ON A PASS-FAIL CATEGORY - it is ignored",'
+              'IF(AND($E{r}="Firearms",$J{r}<>"",$J{r}<>"Pending",$R{r}=""),'
+              '"FIREARMS ROW WITH NO COURSE OF FIRE",'
+              '"OK"))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"L{r}"].number_format = DATE
@@ -662,6 +692,9 @@ def build_skills(wb):
     dv_list(ws, "=lstSkillResult", [f"J{first}:J{last}"])
     dv_list(ws, '"1,2"', [f"R{first}:R{last}"])
     cf_formula(ws, f"O{first}:O{last}", f'$O{first}="FAILED OUT"', FILL_WARNBG)
+    cf_formula(ws, f"S{first}:S{last}",
+               f'AND($S{first}<>"",$S{first}<>"OK")', FILL_WARNBG)
+    define(wb, "nrSK_RowCheck", "Skills", f"$S${first}:$S${last}")
     define(wb, "nrSK_PID", "Skills", f"$D${first}:$D${last}")
     define(wb, "nrSK_Cat", "Skills", f"$E${first}:$E${last}")
     define(wb, "nrSK_Att", "Skills", f"$I${first}:$I${last}")
@@ -672,7 +705,8 @@ def build_skills(wb):
     define(wb, "nrSK_CoF", "Skills", f"$R${first}:$R${last}")
     col_widths(ws, {"A": 3, "B": 14, "C": 22, "D": 9, "E": 12, "F": 6,
                     "G": 10, "H": 9, "I": 9, "J": 9, "K": 8, "L": 11,
-                    "M": 16, "N": 12, "O": 16, "P": 12, "Q": 26, "R": 12})
+                    "M": 16, "N": 12, "O": 16, "P": 12, "Q": 26, "R": 12,
+                    "S": 30})
     sheet_note(ws, "One row per attempt (firearms scores recorded; Top Gun "
                    "uses the firearms Score column). Firearms rows: set "
                    "Course of Fire 1 or 2 — TCOLE requires 70%+ on BOTH. "
@@ -681,7 +715,10 @@ def build_skills(wb):
                    "supersede the previous result and does not consume an "
                    "attempt: Status stays 'Pending' on the new row and the "
                    "real result keeps driving Skills eligibility until a "
-                   "Pass or Fail is entered.")
+                   "Pass or Fail is entered. Watch Row Check (last column): "
+                   "a Score outside 0-100 counts toward NOTHING - not the "
+                   "firearms average, not Top Gun and not the both-courses-"
+                   "of-fire graduation gate - until it is corrected.")
     return ws
 
 

@@ -53,8 +53,11 @@ headers on every sheet. Tables start at row 5, data at row 6.
   - **Unexcused** — key **Raw Score 0** as well. The zero *is* the record,
     and it starts the ordinary 5-class-day retest clock, exactly like any
     other failing first attempt. Row Check refuses the row until the 0 is
-    keyed. A **second** unexcused missed exam raises
-    `REMOVAL TRIGGER` on the WatchList and on the Audit sheet.
+    keyed. The WatchList names it the first time
+    (*unexcused missed exam (0 recorded)*); a **second** one reads
+    *N unexcused missed exams (removal review)* and **opens a removal
+    review that blocks graduation** until you close it on **DismissalLog**
+    (Closes Trigger = *Unexcused missed exams*, with approval).
   - **Excused** — leave Raw Score **blank**. There is no zero and no clock;
     the first attempt is simply taken later. Retest Status reads
     *EXCUSED - 1st attempt pending* so the exam the cadet still owes cannot

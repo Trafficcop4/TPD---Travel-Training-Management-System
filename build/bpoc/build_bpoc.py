@@ -107,6 +107,12 @@ def build():
         if name in wb.sheetnames:
             wb[name].auto_filter.ref = ref
 
+    # a dynamic-array panel must never answer "nothing to report" because
+    # something inside it broke: the all-clear message moves into FILTER's
+    # own if_empty argument and the outer IFERROR keeps a diagnostic.
+    hardened = postprocess.harden_workbook(wb)
+    print(f"Hardened {hardened} dynamic-array safety panels")
+
     # store modern functions with _xlfn/_xlws/_xlpm prefixes so Excel
     # resolves them instead of showing #NAME?
     fixed = postprocess.fix_workbook(wb)
