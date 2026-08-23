@@ -338,9 +338,29 @@ def test_workbook():
           "ExamSheet per-assessment grade sheet")
     check(wb["ExamScores"].freeze_panes == "D6" and
           wb["Schedule"].freeze_panes == "B6" and
-          wb["ExamScores"].auto_filter.ref == "B5:X5" and
+          wb["ExamScores"].auto_filter.ref == "B5:Y5" and
           wb["Makeup"].auto_filter.ref == "B5:N5",
           "freeze panes + log filters (filters cover Row Check)")
+
+    # policy: absent+unexcused = a recorded 0 that starts the retest clock;
+    # absent+excused = the FIRST attempt is merely delayed (no zero, no clock)
+    es2 = wb["ExamScores"]
+    check(es2["Y5"].value == "Absence" and
+          "UNEXCUSED ABSENCE MUST RECORD 0" in str(es2["X6"].value),
+          "unexcused absence must record a 0 (Row Check)")
+    check("EXCUSED - 1st attempt pending" in str(es2["U6"].value),
+          "excused absence shows a pending first attempt, no retest clock")
+    check(str(es2["U6"].value).count("(") == str(es2["U6"].value).count(")"),
+          "ExamScores Retest Status parens balanced")
+    ck2 = wb["sysChecks"]
+    check(ck2["V5"].value == "Exams Pending" and
+          'nrES_Absence' in str(ck2["V6"].value) and
+          '$V{}="Yes"'.format(6) in str(ck2["N6"].value),
+          "a pending excused exam blocks graduation")
+    fl2 = wb["sysFlags"]
+    check(fl2["U5"].value == "F:MissedExam" and
+          "REMOVAL TRIGGER" in str(fl2["T6"].value),
+          "second unexcused missed exam is a removal trigger")
     check(any("nrSCH_Date=TODAY()" in str(c.value) for row in
               wb["Dashboard"].iter_rows(min_row=5, max_row=25) for c in row
               if isinstance(c.value, str)),

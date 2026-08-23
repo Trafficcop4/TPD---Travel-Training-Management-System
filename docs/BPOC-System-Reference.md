@@ -226,6 +226,14 @@ the *final* attempt and computes a **Recorded** score:
 - A failed attempt 1 with no attempt 2 yet → `Retest Due By` = 5 class
   days out; `Retest Status` goes **OVERDUE** in red when it passes.
 
+**Missed exams** are keyed in the `Absence` column and the two cases are
+deliberately different:
+
+| Absence | Raw Score | Effect |
+|---|---|---|
+| **Unexcused** | must be `0` (Row Check enforces it) | the 0 is the record and starts the ordinary 5-class-day retest clock; a **2nd** occurrence raises `REMOVAL TRIGGER` on `sysFlags` and the Audit sheet |
+| **Excused** | left blank | no zero, no clock — the *first* attempt is merely delayed. `Retest Status` reads *EXCUSED - 1st attempt pending*, `sysChecks` "Exams Pending" turns **No**, and graduation is blocked until the score is keyed on that same row |
+
 `sysGrades` then averages by category and weights them
 40 / 30 / 10 / 20. **Passing requires ≥70 in each category** — the
 weighted total alone is not enough. A category with no recorded scores

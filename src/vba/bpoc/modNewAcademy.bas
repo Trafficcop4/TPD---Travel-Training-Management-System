@@ -28,6 +28,7 @@ Public Sub NewAcademyReset()
     ClearRange "ExamScores", "C6:C1505": ClearRange "ExamScores", "F6:F1505"
     ClearRange "ExamScores", "K6:L1505": ClearRange "ExamScores", "S6:S1505"
     ClearRange "ExamScores", "V6:W1505"
+    ClearRange "ExamScores", "Y6:Y1505"
     ClearRange "Spelling", "D6:O55"
     ClearRange "Attendance", "C6:D805": ClearRange "Attendance", "G6:J805"
     ClearRange "Attendance", "L6:M805": ClearRange "Attendance", "O6:O805"

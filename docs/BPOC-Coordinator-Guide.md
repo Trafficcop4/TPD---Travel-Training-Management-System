@@ -49,6 +49,17 @@ headers on every sheet. Tables start at row 5, data at row 6.
   **Retest Due By** date (5 class days, policy 300.5) and goes red when
   overdue. A passed retest records at the 70 cap automatically; a failed
   retest flags a dismissal review.
+- **Missed an exam?** Use the **Absence** column (last column):
+  - **Unexcused** — key **Raw Score 0** as well. The zero *is* the record,
+    and it starts the ordinary 5-class-day retest clock, exactly like any
+    other failing first attempt. Row Check refuses the row until the 0 is
+    keyed. A **second** unexcused missed exam raises
+    `REMOVAL TRIGGER` on the WatchList and on the Audit sheet.
+  - **Excused** — leave Raw Score **blank**. There is no zero and no clock;
+    the first attempt is simply taken later. Retest Status reads
+    *EXCUSED - 1st attempt pending* so the exam the cadet still owes cannot
+    disappear, and **graduation is blocked** until it is taken. When they
+    sit it, key the score on that same row — the block clears itself.
 - **Spelling** — scores per test; class stats compute; an average under 75
   flags INTERVENTION (policy 300.4.B) — document your response on
   **Counseling**.

@@ -98,7 +98,7 @@ def build():
         if name in wb.sheetnames:
             wb[name].freeze_panes = cell
     FILTERS = {
-        "ExamScores": "B5:X5", "Attendance": "B5:T5", "Makeup": "B5:N5",
+        "ExamScores": "B5:Y5", "Attendance": "B5:T5", "Makeup": "B5:N5",
         "Skills": "B5:R5", "Incidents": "B5:O5", "Counseling": "B5:N5",
         "Medical": "B5:N5", "Schedule": "B5:O5", "DismissalLog": "B5:P5",
         "EmailLog": "B5:I5", "Memos": "B5:N5", "DailyLog": "B5:N5",

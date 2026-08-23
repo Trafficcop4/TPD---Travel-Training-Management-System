@@ -80,7 +80,7 @@ def build_examscores(wb):
                     "Raw Score", "Recorded", "AttemptPass", "Pass?",
                     "FinalAttempt?", "RetakeReq?", "DismissReview?", "Date",
                     "Retest Due By", "Retest Status", "Entered By", "Notes",
-                    "Row Check"])
+                    "Row Check", "Absence"])
     first, last = DATA_ROW, DATA_ROW + ROWS_EXAMSCORES - 1
     fill_rows(ws, first, last, {
         "B": ('IF($C{r}="","",$D{r}&"-"&$F{r}&"-"&$K{r})', "fx"),
@@ -181,7 +181,16 @@ def build_examscores(wb):
         # when it was taken, so a retest months past the policy 300.5 window
         # left no trace anywhere in the workbook. LATE RETEST is counted by
         # the sysFlags retest flag and by the sysAudit overdue-retest line.
-        "U": ('IF(OR($C{r}="",$L{r}="",$K{r}<>1,NOT(ISNUMBER($L{r})),'
+        # policy: ABSENT + EXCUSED = the first attempt is simply taken
+        # later - no zero, no retest clock. The row would otherwise be
+        # completely silent (blank score = blank everything), so the exam a
+        # cadet still owes could never be seen. ABSENT + UNEXCUSED is a
+        # recorded 0, which starts the ordinary 300.5 retest clock through
+        # the branches below with no special casing needed.
+        "U": ('IF($C{r}="","",'
+              'IF(AND($Y{r}="Excused",$L{r}="",N($K{r})<=1),'
+              '"EXCUSED - 1st attempt pending",'
+              'IF(OR($L{r}="",$K{r}<>1,NOT(ISNUMBER($L{r})),'
               '$L{r}>=$J{r}),"",'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
               'nrES_Att,2,nrES_Raw,">=0")>0,'
@@ -191,14 +200,20 @@ def build_examscores(wb):
               'MINIFS(nrES_Date,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2,nrES_Raw,">=0",nrES_Date,">0"),"mm/dd")&" (due "'
               '&TEXT($T{r},"mm/dd")&")","Retested"))),'
               'IF(NOT(ISNUMBER($T{r})),"CHECK DATE",'
-              'IF(TODAY()>$T{r},"OVERDUE","Due "&TEXT($T{r},"mm/dd")))))', "fx"),
-        "V": (None, "in"), "W": (None, "in"),
+              'IF(TODAY()>$T{r},"OVERDUE","Due "&TEXT($T{r},"mm/dd")))))))', "fx"),
+        "V": (None, "in"), "W": (None, "in"), "Y": (None, "in"),
         # row integrity: every one of these silently distorts a category
         # average or a policy deadline, and none of them was visible before
         "X": ('IF($C{r}="","",'
               'IF(AND($L{r}<>"",NOT(ISNUMBER($L{r}))),"RAW SCORE NOT A NUMBER",'
               'IF(AND(ISNUMBER($L{r}),OR($L{r}<0,$L{r}>100)),'
               '"RAW SCORE OUT OF RANGE",'
+              # policy: an UNEXCUSED absence is recorded as a zero, and that
+              # zero is what starts the 300.5 retest clock. Marking the row
+              # Unexcused without keying the 0 would leave the cadet with no
+              # score, no clock and no trace.
+              'IF(AND($Y{r}="Unexcused",OR($L{r}="",NOT(ISNUMBER($L{r})),'
+              '$L{r}<>0)),"UNEXCUSED ABSENCE MUST RECORD 0",'
               'IF(COUNTIF(nrES_RecID,$B{r})>1,"DUPLICATE RECORD",'
               # policy 300.5 allows ONE retest. Every rule on this sheet is
               # written for attempts 1 and 2; a third attempt used to be a
@@ -232,7 +247,7 @@ def build_examscores(wb):
               'COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)>0,'
               'SUMIFS(nrES_Raw,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)'
               '>=$J{r}),"RETEST AFTER A PASSING FIRST ATTEMPT",'
-              '"OK")))))))))', "fx"),
+              '"OK"))))))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"S{r}"].number_format = DATE
@@ -242,6 +257,11 @@ def build_examscores(wb):
     # policy 300.5 = ONE retest per exam. lstAttemptNum (1-5) stays on
     # Skills, which really does allow up to 5 attempts.
     dv_list(ws, "=lstExamAttemptNum", [f"K{first}:K{last}"])
+    dv_list(ws, '"Excused,Unexcused"', [f"Y{first}:Y{last}"])
+    cf_formula(ws, f"Y{first}:Y{last}", f'$Y{first}="Unexcused"', FILL_WARNBG)
+    cf_formula(ws, f"Y{first}:Y{last}", f'$Y{first}="Excused"', FILL_AMBER)
+    cf_formula(ws, f"U{first}:U{last}",
+               f'LEFT($U{first},7)="EXCUSED"', FILL_AMBER)
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="OVERDUE"', FILL_WARNBG)
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="CHECK DATE"', FILL_WARNBG)
     # LEFT(...,12) never equalled the 11-character literal, so the rule was
@@ -269,10 +289,11 @@ def build_examscores(wb):
     define(wb, "nrES_Date", "ExamScores", f"$S${first}:$S${last}")
     define(wb, "nrES_RetDue", "ExamScores", f"$T${first}:$T${last}")
     define(wb, "nrES_RetStat", "ExamScores", f"$U${first}:$U${last}")
+    define(wb, "nrES_Absence", "ExamScores", f"$Y${first}:$Y${last}")
     col_widths(ws, {"A": 3, "B": 16, "C": 22, "D": 9, "E": 18, "F": 10,
                     "G": 34, "H": 9, "I": 6, "J": 9, "K": 9, "L": 9, "M": 10,
                     "N": 11, "O": 8, "P": 12, "Q": 11, "R": 13, "S": 11,
-                    "T": 12, "U": 12, "V": 14, "W": 26, "X": 26})
+                    "T": 12, "U": 12, "V": 14, "W": 26, "X": 26, "Y": 12})
     sheet_note(ws, "One row per attempt. Attempt 2 of a failed exam records "
                    "at the 70 cap when passed (policy 300.5). Retest Due By "
                    "= 5 class days after the failed attempt's date (a date "
@@ -280,7 +301,12 @@ def build_examscores(wb):
                    "Row Check: a score that is not a number, a duplicate "
                    "RecordID, an attempt 2 with no attempt 1 on file, or an "
                    "attempt 2 logged against a first attempt that already "
-                   "PASSED each distort the category average.")
+                   "PASSED each distort the category average. ABSENCE (last "
+                   "column): Unexcused = key Raw Score 0 as well - the zero "
+                   "is the record and it starts the retest clock; Excused = "
+                   "leave Raw Score blank, the first attempt is simply taken "
+                   "later and Retest Status reads EXCUSED - 1st attempt "
+                   "pending until the score is keyed on this same row.")
     return ws
 
 

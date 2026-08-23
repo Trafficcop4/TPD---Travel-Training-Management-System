@@ -332,7 +332,7 @@ def build_sysflags(wb):
                     "F:Attendance", "F:Incidents", "F:Writing", "F:Retest",
                     "F:PT", "F:Medical", "F:Certs", "F:Memos", "F:OpenTime",
                     "F:DismissReview",
-                    "Flag Count", "Reasons"])
+                    "Flag Count", "Reasons", "F:MissedExam"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",IF(N(nrGRconsec %s)>=cfgFlagConsecFails,1,0))'
@@ -374,7 +374,12 @@ def build_sysflags(wb):
         # re-deriving the triggers, so a review closed on the DismissalLog
         # clears the flag too.
         "R": ('IF($B{r}="","",IF(sysChecks!$M{r}="Yes",1,0))', "fx"),
-        "S": ('IF($B{r}="","",SUM($E{r}:$R{r}))', "fx"),
+        # policy: an unexcused missed exam is a recorded 0; a SECOND
+        # occurrence is a removal trigger, so it must be visible well
+        # before anyone reaches the graduation checklist.
+        "U": ('IF($B{r}="","",IF(COUNTIFS(nrES_PID,$B{r},nrES_Absence,'
+              '"Unexcused")>0,1,0))', "fx"),
+        "S": ('IF($B{r}="","",SUM($E{r}:$R{r})+N($U{r}))', "fx"),
         "T": ('IF($B{r}="","",IF($S{r}=0,"",TEXTJOIN("; ",TRUE,'
               'IF($E{r}=1,"consecutive exam fails",""),'
               'IF($F{r}=1,"grade dropped "&sysGrades!$AB{r}&" pts",""),'
@@ -392,12 +397,16 @@ def build_sysflags(wb):
               'IF($Q{r}=1,SUMPRODUCT((nrAT_PID=$B{r})*(nrAT_Cleared="OPEN"))'
               '&" uncleared missed-time event(s)",""),'
               'IF($R{r}=1,"DISMISSAL REVIEW OPEN ("&'
-              'sysChecks!$U{r}&")",""))))', "fx"),
+              'sysChecks!$U{r}&")",""),'
+              'IF($U{r}=1,LET(n,COUNTIFS(nrES_PID,$B{r},nrES_Absence,"Unexcused"),'
+              'IF(n>=2,"REMOVAL TRIGGER: "&n&" unexcused missed exams",'
+              '"unexcused missed exam (0 recorded)")),""))))', "fx"),
     })
     # E needs the row-scoped reference, not the whole named range
     cols["E"] = ('IF($B{r}="","",IF(N(sysGrades!$AC{r})>=cfgFlagConsecFails,1,0))', "fx")
     fill_rows(ws, FIRST, LAST, cols)
     define(wb, "nrFLcount", "sysFlags", f"$S${FIRST}:$S${LAST}")
+    define(wb, "nrFLmissedExam", "sysFlags", f"$U${FIRST}:$U${LAST}")
     define(wb, "nrFLreasons", "sysFlags", f"$T${FIRST}:$T${LAST}")
     col_widths(ws, {"A": 3, "B": 10, "C": 24, "T": 70})
     sheet_note(ws, "Each flag threshold lives on Settings. WatchList sorts "
@@ -415,7 +424,7 @@ def build_syschecks(wb):
                     "Makeup Complete", "Final PT Pass", "DismissReview",
                     "GraduationElig", "Blocking Issues", "Final Exam Elig",
                     "Certs", "Exams Recorded", "Skills Assessed",
-                    "Firearms CoF", "Open Reviews"])
+                    "Firearms CoF", "Open Reviews", "Exams Pending"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",sysGrades!$V{r})', "fx"),
@@ -443,7 +452,7 @@ def build_syschecks(wb):
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
               '$Q{r}="Yes",$R{r}="Yes",$S{r}="Yes",$T{r}="Yes",'
-              '$M{r}="No"),"Yes","No"))', "fx"),
+              '$M{r}="No",$V{r}="Yes"),"Yes","No"))', "fx"),
         "O": ('IF($B{r}="","",IF($N{r}="Yes","Eligible",TRIM('
               'IF($E{r}<>"Yes","Academic; ","")&'
               'IF($R{r}<>"Yes","Exams not all recorded; ","")&'
@@ -460,6 +469,7 @@ def build_syschecks(wb):
               'IF($L{r}="Incomplete","Final PT partially scored; ",'
               'IF($L{r}<>"Yes","Final PT not assessed; ",""))))&'
               'IF($Q{r}<>"Yes","Certs; ","")&'
+              'IF($V{r}<>"Yes","Exam pending (excused absence); ","")&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
               'IF(PT!$AB{r}="(rubric pending)","Pending",'
@@ -511,6 +521,11 @@ def build_syschecks(wb):
               'TRIM(IF(oe>ce,"failed retest; ","")'
               '&IF(os>cs,"skills failed out; ","")'
               '&IF(oi>ci,"chain-of-command incident review; ",""))))', "fx"),
+        # policy: an EXCUSED absence DELAYS the first attempt - it is not a
+        # zero and starts no clock, so nothing else on this sheet could see
+        # that the cadet still owes the exam. Graduation waits for it.
+        "V": ('IF($B{r}="","",IF(COUNTIFS(nrES_PID,$B{r},nrES_Absence,'
+              '"Excused",nrES_Raw,"")=0,"Yes","No"))', "fx"),
     })
     fill_rows(ws, FIRST, LAST, cols)
     cf_yes_no(ws, f"N{FIRST}:N{LAST}")
@@ -522,6 +537,7 @@ def build_syschecks(wb):
     define(wb, "nrCKskillsAssessed", "sysChecks", f"$S${FIRST}:$S${LAST}")
     define(wb, "nrCKfirearmsCoF", "sysChecks", f"$T${FIRST}:$T${LAST}")
     define(wb, "nrCKopenReviews", "sysChecks", f"$U${FIRST}:$U${LAST}")
+    define(wb, "nrCKexamsPending", "sysChecks", f"$V${FIRST}:$V${LAST}")
     col_widths(ws, {"A": 3, "B": 10, "C": 24, "O": 50, "U": 44})
     sheet_note(ws, "Graduation gate per policy: 70 in each category, every "
                    "category actually recorded (Exams Recorded), under "
@@ -718,6 +734,14 @@ AUDIT_CHECKS = [
          '"Fewer than 7 of the 7 final PT events have rubric points on the PT '
          'sheet. The partial total is NOT a pass - it blocks graduation and '
          'the Final Exam (500.1.H) until every event is scored"'),
+        ("Unexcused missed exams (2nd = removal review)",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrFLmissedExam=1))', "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrFLmissedExam=1))=0,"OK","CHECK")',
+         '"Policy: unexcused absence from an exam records a 0 and starts the retest clock; a SECOND occurrence is a removal trigger"'),
+        ("Exams still owed on an excused absence",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrCKexamsPending="No"))', "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCKexamsPending="No"))=0,"OK","CHECK")',
+         '"Excused absence delays the FIRST attempt - the exam is still owed and blocks graduation until it is taken"'),
         ("Advisory board met within last 12 months",
          'IF(COUNT(nrAB_Date)=0,"none",TEXT(MAX(nrAB_Date),"mm/dd/yyyy"))', "recent",
          'IF(COUNT(nrAB_Date)=0,"CHECK",IF(MAX(nrAB_Date)>=TODAY()-366,'
