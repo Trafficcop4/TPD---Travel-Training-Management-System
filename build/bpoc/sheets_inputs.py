@@ -105,13 +105,19 @@ def build_examscores(wb):
         # Recorded score, drop the failed exam out of every category average
         # and flip AcademicElig from No to Yes while silently stopping the
         # policy-300.5 clock. Row Check reports the unscored row instead.
+        # $K>2 records NOTHING: the else-branch below is written for the
+        # single policy-300.5 retest, so an attempt-3 row used to record the
+        # cadet's FAILED attempt-1 raw score, replacing the passed retest on
+        # the grade sheet, the transcript and the agency email. Row Check
+        # (column X) reports the row instead.
         "M": ('IF($C{r}="","",IF($L{r}="","",IF(NOT(ISNUMBER($L{r})),$L{r},'
+              'IF(N($K{r})>2,"",'
               'IF($K{r}=1,'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2,'
               'nrES_Raw,">=0")>0,"",$L{r}),'
               'IF($L{r}>=$J{r},MAX($J{r},cfgRetakeRecordedCap),'
               'IF(COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)=0,$L{r},'
-              'SUMIFS(nrES_Raw,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)))))))', "fx"),
+              'SUMIFS(nrES_Raw,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1))))))))', "fx"),
         # ISNUMBER guards: without them 'absent' (or a CSV-pasted text "85")
         # reported Pass? = Yes in green while the printed grade sheet, whose
         # SUMIFS coerces text to 0, printed the same record as 0 / FAIL.
@@ -122,9 +128,15 @@ def build_examscores(wb):
         # a LATER attempt only supersedes this one once it has been scored,
         # otherwise the placeholder row became the "final" attempt and the
         # real (failed) score stopped counting anywhere
-        "P": ('IF($C{r}="","",IF($K{r}="","",IF(COUNTIFS(nrES_PID,$D{r},'
-              'nrES_Code,$F{r},nrES_Att,">"&$K{r},nrES_Raw,">=0")=0,'
-              '"Yes","No")))', "fx"),
+        # ...and it must not knock the real retest off either: the "is there
+        # a later attempt" test is bounded at attempt 2, so a stray
+        # attempt-3 row cannot flip the passed retest to FinalAttempt = No
+        # and erase the exam from every average and printable.
+        "P": ('IF($C{r}="","",IF($K{r}="","",IF(N($K{r})>2,"No",'
+              'IF(COUNTIFS(nrES_PID,$D{r},'
+              'nrES_Code,$F{r},nrES_Att,">"&$K{r},nrES_Att,"<=2",'
+              'nrES_Raw,">=0")=0,'
+              '"Yes","No"))))', "fx"),
         "Q": ('IF($C{r}="","",IF($L{r}="","",IF(AND($K{r}=1,ISNUMBER($L{r}),'
               '$L{r}<$J{r},'
               'COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,2,'
@@ -133,7 +145,10 @@ def build_examscores(wb):
         # an attempt-1 row to exist meant a missing attempt-1 flipped the
         # academic-eligibility gate from No to Yes for a cadet who failed the
         # retest; the missing attempt-1 is reported by Row Check instead.
-        "R": ('IF($C{r}="","",IF($L{r}="","",IF(AND($K{r}=2,ISNUMBER($L{r}),'
+        # >=2, not =2: a failed THIRD attempt is still a failed retest, and
+        # keying it as =2 meant the row opened no dismissal review at all.
+        "R": ('IF($C{r}="","",IF($L{r}="","",IF(AND(N($K{r})>=2,'
+              'ISNUMBER($L{r}),'
               '$L{r}<$J{r}),"Yes","No")))', "fx"),
         "S": (None, "in"),
         # match mode 1 = exact-or-next-larger, so an exam dated on a weekend,
@@ -185,6 +200,12 @@ def build_examscores(wb):
               'IF(AND(ISNUMBER($L{r}),OR($L{r}<0,$L{r}>100)),'
               '"RAW SCORE OUT OF RANGE",'
               'IF(COUNTIF(nrES_RecID,$B{r})>1,"DUPLICATE RECORD",'
+              # policy 300.5 allows ONE retest. Every rule on this sheet is
+              # written for attempts 1 and 2; a third attempt used to be a
+              # legal dropdown pick that recorded the FAILED first attempt
+              # over the passed retest with Row Check still reading OK.
+              'IF(N($K{r})>2,"ATTEMPT 3+ NOT ALLOWED - policy 300.5 permits '
+              'one retest per exam; this row records nothing",'
               'IF(AND($K{r}=2,COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},'
               'nrES_Att,1)=0),"ATTEMPT 2 WITHOUT ATTEMPT 1",'
               'IF(AND($K{r}=2,$L{r}=""),"RETEST ROW HAS NO SCORE",'
@@ -211,14 +232,16 @@ def build_examscores(wb):
               'COUNTIFS(nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)>0,'
               'SUMIFS(nrES_Raw,nrES_PID,$D{r},nrES_Code,$F{r},nrES_Att,1)'
               '>=$J{r}),"RETEST AFTER A PASSING FIRST ATTEMPT",'
-              '"OK"))))))))', "fx"),
+              '"OK")))))))))', "fx"),
     })
     for r in range(first, last + 1):
         ws[f"S{r}"].number_format = DATE
         ws[f"T{r}"].number_format = DATE
     dv_list(ws, "=rngCadetNames", [f"C{first}:C{last}"])
     dv_list(ws, "=rngEPcode", [f"F{first}:F{last}"])
-    dv_list(ws, "=lstAttemptNum", [f"K{first}:K{last}"])
+    # policy 300.5 = ONE retest per exam. lstAttemptNum (1-5) stays on
+    # Skills, which really does allow up to 5 attempts.
+    dv_list(ws, "=lstExamAttemptNum", [f"K{first}:K{last}"])
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="OVERDUE"', FILL_WARNBG)
     cf_formula(ws, f"U{first}:U{last}", f'$U{first}="CHECK DATE"', FILL_WARNBG)
     # LEFT(...,12) never equalled the 11-character literal, so the rule was
@@ -515,7 +538,11 @@ def build_makeup(wb):
     # actually credit are offered; a legacy row still carrying one of them
     # keeps reading TYPE NOT CREDITED, which is the truth.
     dv_list(ws, "=lstMakeupType", [f"F{first}:F{last}"])
-    dv_list(ws, "=nrAT_ID", [f"I{first}:I{last}"], enforce=False)
+    # nrAT_IDlist (a FILTERed helper), not nrAT_ID: the raw Attendance ID
+    # column is 800 formula cells, so pointing the dropdown at it listed one
+    # blank entry per unused row (~795 of 800 on the seeded workbook). Row
+    # Check (column N) still validates the pick against the raw nrAT_ID.
+    dv_list(ws, "=nrAT_IDlist", [f"I{first}:I{last}"], enforce=False)
     dv_list(ws, "=lstDocumentation", [f"J{first}:J{last}"])
     dv_list(ws, "=lstYesNo", [f"K{first}:K{last}"])
     define(wb, "nrMK_Date", "Makeup", f"$C${first}:$C${last}")
@@ -801,9 +828,16 @@ def build_pt(wb):
     for i in range(7):
         cols[get_column_letter(20 + i)] = (None, "in")
     cols["AA"] = ('IF($B{r}="","",IF(COUNT(T{r}:Z{r})=0,"",SUM(T{r}:Z{r})))', "fx")
+    # COUNT(T:Z)<7 -> "Incomplete": the pass test used to compare the SUM of
+    # whatever rubric points happened to be entered against the minimum, so
+    # ONE high event score with the other six blank read "Yes" and opened
+    # both the graduation gate (sysChecks L) and the final-exam gate
+    # (sysChecks P). AA stays numeric so CadetProfile still prints "20 pts"
+    # and the sysAwards MAX still works; the completeness rule lives here.
     cols["AB"] = ('IF($B{r}="","",IF($AA{r}="","",'
                   'IF(cfgPTFinalMinPoints=0,"(rubric pending)",'
-                  'IF($AA{r}>=cfgPTFinalMinPoints,"Yes","No"))))', "fx")
+                  'IF(COUNT(T{r}:Z{r})<7,"Incomplete",'
+                  'IF($AA{r}>=cfgPTFinalMinPoints,"Yes","No")))))', "fx")
     # improvement index: mean % gain on countable events (pushups, situps)
     # plus % time cut on runs (agility, 1.5mi, 300m); ignores blanks
     # each delta only counts when BOTH baseline and final are entered —

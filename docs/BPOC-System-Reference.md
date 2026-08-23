@@ -8,7 +8,7 @@ This is the "how it works" document. For the day-to-day routine see
 
 - **Scope:** one workbook = one academy class. Save-As at the end, then
   **New Academy Reset** on the copy.
-- **Size:** 60 sheets, 293 named ranges, ~63,000 formulas (7,250 of them rewritten by the prefixer for Excel compatibility).
+- **Size:** 60 sheets, 303 named ranges, ~63,300 formulas (10,448 of them rewritten by the prefixer for Excel compatibility).
 - **Requires:** Microsoft 365 Excel (uses `LET`, `XLOOKUP`, `FILTER`,
   `TAKE`, `HSTACK`). Macros come from `tools/Install-BPOC-VBA.ps1`.
 
@@ -107,12 +107,12 @@ that drive a printable, and they live on the sheet they steer:
 > **Rule:** if you want to change what a printable shows, you change a
 > `cfg*` cell — never the sheet body.
 
-**`lst*` — a dropdown list (26).** All on the Lists sheet, one column
+**`lst*` — a dropdown list (28).** All on the Lists sheet, one column
 each. `lstCadetStatus`, `lstAttendanceEvent`, `lstReason`,
 `lstCounselingType`, `lstMaterialsStatus`… To add a choice, type it at
 the bottom of that column on Lists.
 
-**`nr*` — a data column in a table (192).** The workhorse. Format is
+**`nr*` — a data column in a table (200).** The workhorse. Format is
 `nr` + a short sheet tag + the field:
 
 | Tag | Sheet | Examples |
@@ -288,11 +288,14 @@ appends, pick an existing one and it is removed.
   Flags never block anything.
 - **`sysChecks` (the gate)** — the graduation decision: academics,
   classroom, PT sessions, skills assessed *and* qualified, incidents,
-  writing, makeup complete, final PT passed, no open dismissal review.
+  writing, makeup complete, final PT passed, certificate copies on file,
+  every planned exam recorded, no open dismissal review.
   Produces **GraduationElig** and a **Blocking Issues** sentence.
 
-Certifications are deliberately a **flag, not a gate** — a missing
-certificate copy nags on the Dashboard rather than blocking the cadet.
+Certifications are a **gate**, not just a flag: `sysChecks` column Q reads
+`Certifications!T` and feeds the `GradChecklist` **Certs** column, so a
+missing certificate copy adds `Certs;` to Blocking Issues and holds
+GraduationElig at **No**.
 
 ### 4.8 Agency email
 `EmailPreview` shows exactly what will go out for the exam set in
@@ -387,7 +390,7 @@ columns, print the **Chapter Packet** as the folder cover.
 **Weekly** — WatchList; clear OPEN missed time and outstanding memos.
 
 **End of academy** — final PT and final exam; GradChecklist all-Yes with
-Blocking Issues empty; print transcripts; confirm the Audit sheet; record
+Blocking Issues reading `Eligible`; print transcripts; confirm the Audit sheet; record
 awards; Save-As `BPOC-2026-01 FINAL.xlsm`.
 
 **New academy** — on a *copy*: **New Academy Reset** clears cadet and
@@ -432,7 +435,7 @@ powershell -File tools/Install-BPOC-VBA.ps1                    # Windows+Excel: 
 | `build/bpoc/sheets_outputs.py` | Dashboard, printables, email sheets |
 | `build/bpoc/data_*.py` | Seed data: chapters/hours, spelling words, writing prompts, lists |
 | `build/bpoc/postprocess.py` | Stores modern functions with the `_xlfn.`/`_xlpm.` prefixes Excel needs |
-| `build/bpoc/verify_build.py` | 141 structural checks; run after every change |
+| `build/bpoc/verify_build.py` | 232 structural checks; run after every change |
 | `build/bpoc/lo_compat_for_test.py` | Test-only: lets LibreOffice evaluate the class-day chain |
 | `src/vba/bpoc/*.bas` | Email, print, reset, buttons |
 

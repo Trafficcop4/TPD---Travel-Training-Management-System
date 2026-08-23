@@ -227,7 +227,9 @@ def build_sysskills(wb):
                     "Qualified", "Needs Remediation", "Pending",
                     "Failed Out Cats", "FailedOut?", "Skills Elig",
                     "Firearms Avg", "Firearms Best", "CoF1 Best",
-                    "CoF2 Best", "Both CoF ≥70?"])
+                    "CoF2 Best",
+                    '="Both CoF ≥"&IFERROR(INDEX(rngSM_pass,'
+                    'MATCH("Firearms",rngSM_cat,0)),70)&"?"'])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",SUMPRODUCT((rngSM_cat<>"")*'
@@ -256,10 +258,15 @@ def build_sysskills(wb):
               'nrSK_Cat,"Firearms",nrSK_CoF,1),IF(v=0,"",v)))', "fx"),
         "O": ('IF($B{r}="","",LET(v,MAXIFS(nrSK_Score,nrSK_PID,$B{r},'
               'nrSK_Cat,"Firearms",nrSK_CoF,2),IF(v=0,"",v)))', "fx"),
+        # the firearms threshold is SkillsMaster's editable "Passing Score",
+        # not a literal: with 70 hard-coded here, raising the standard on
+        # SkillsMaster left this graduation gate (sysChecks T) and the
+        # sysAudit firearms line passing cadets below the new mark.
         "P": ('IF($B{r}="","",IF(AND($N{r}="",$O{r}=""),"",'
-              'IF(AND($N{r}<>"",$O{r}<>"",N($N{r})>=70,N($O{r})>=70),"Yes",'
-              'IF(OR(AND($N{r}<>"",N($N{r})<70),AND($O{r}<>"",N($O{r})<70)),'
-              '"No","(one pending)"))))', "fx"),
+              'LET(p,IFERROR(INDEX(rngSM_pass,MATCH("Firearms",rngSM_cat,0)),70),'
+              'IF(AND($N{r}<>"",$O{r}<>"",N($N{r})>=p,N($O{r})>=p),"Yes",'
+              'IF(OR(AND($N{r}<>"",N($N{r})<p),AND($O{r}<>"",N($O{r})<p)),'
+              '"No","(one pending)")))))', "fx"),
     })
     fill_rows(ws, FIRST, LAST, cols)
     define(wb, "nrSKfailedout", "sysSkills", f"$J${FIRST}:$J${LAST}")
@@ -349,7 +356,8 @@ def build_sysflags(wb):
               '+COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"RETEST UNDATED")'
               '+COUNTIFS(nrES_PID,$B{r},nrES_RetStat,"RETEST DATE UNCHECKED")'
               '>0,1,0))', "fx"),
-        "M": ('IF($B{r}="","",IF(OR(PT!$K{r}="No",PT!$AB{r}="No"),1,0))', "fx"),
+        "M": ('IF($B{r}="","",IF(OR(PT!$K{r}="No",PT!$AB{r}="No",'
+              'PT!$AB{r}="Incomplete"),1,0))', "fx"),
         "N": ('IF($B{r}="","",IF(COUNTIFS(nrMD_PID,$B{r},nrMD_Status,'
               '"RESTRICTION EXPIRED")>0,1,0))', "fx"),
         "O": ('IF($B{r}="","",IF(Certifications!$U{r}<>"",1,0))', "fx"),
@@ -421,7 +429,8 @@ def build_syschecks(wb):
         # (final PT never assessed) and "(rubric pending)" (cfgPTFinalMinPoints
         # still 0) are distinct blocking states, not passes.
         "L": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
-              'IF(PT!$AB{r}="(rubric pending)","Pending","Not taken"))))', "fx"),
+              'IF(PT!$AB{r}="(rubric pending)","Pending",'
+              'IF(PT!$AB{r}="Incomplete","Incomplete","Not taken")))))', "fx"),
         # THE dismissal-review gate for the whole workbook (sysGrades T and
         # sysFlags R read this cell, they no longer re-derive it).
         # A raised review used to be unclosable: nothing consumed the
@@ -448,11 +457,13 @@ def build_syschecks(wb):
               'IF($K{r}<>"Yes","Makeup owed; ","")&'
               'IF($L{r}="No","Final PT failed; ",'
               'IF($L{r}="Pending","Final PT rubric not set; ",'
-              'IF($L{r}<>"Yes","Final PT not assessed; ","")))&'
+              'IF($L{r}="Incomplete","Final PT partially scored; ",'
+              'IF($L{r}<>"Yes","Final PT not assessed; ",""))))&'
               'IF($Q{r}<>"Yes","Certs; ","")&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
-              'IF(PT!$AB{r}="(rubric pending)","Pending","Not taken"))))', "fx"),
+              'IF(PT!$AB{r}="(rubric pending)","Pending",'
+              'IF(PT!$AB{r}="Incomplete","Incomplete","Not taken")))))', "fx"),
         "Q": ('IF($B{r}="","",IF(Certifications!$T{r}="Yes","Yes","No"))', "fx"),
         # completeness: sysGrades V waives a category whose count is 0 (and,
         # under cfgThresholdAfterExam, a category with only a handful of
@@ -694,6 +705,19 @@ AUDIT_CHECKS = [
          '(nrSKbothCoF<>"Yes"))=0,"OK","CHECK")',
          '"IRG requires 70%+ on BOTH firearms courses of fire (ch 41). '
          '\'(one pending)\' — only one course of fire on record — counts here"'),
+        # the final-PT pass test used to compare the SUM of whatever rubric
+        # points were entered against the minimum, so ONE event scored high
+        # opened both the graduation gate and the final-exam gate. PT!AB now
+        # reads "Incomplete" until all seven events are scored; this is the
+        # line that says which cadets are sitting in that state.
+        ("Cadets with a partially scored final PT",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrPT_FinalPass="Incomplete"))',
+         "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*'
+         '(nrPT_FinalPass="Incomplete"))=0,"OK","CHECK")',
+         '"Fewer than 7 of the 7 final PT events have rubric points on the PT '
+         'sheet. The partial total is NOT a pass - it blocks graduation and '
+         'the Final Exam (500.1.H) until every event is scored"'),
         ("Advisory board met within last 12 months",
          'IF(COUNT(nrAB_Date)=0,"none",TEXT(MAX(nrAB_Date),"mm/dd/yyyy"))', "recent",
          'IF(COUNT(nrAB_Date)=0,"CHECK",IF(MAX(nrAB_Date)>=TODAY()-366,'

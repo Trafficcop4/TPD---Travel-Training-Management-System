@@ -1016,9 +1016,22 @@ def build_chapterpacket(wb):
         'IFERROR(TAKE(FILTER(HSTACK(nrInstrNames,nrInstrReady,'
         'nrInstrChTaught),'
         '(nrInstrNames<>"")*(nrInstrChTaught<>"")*'
-        'ISNUMBER(SEARCH(", "&' + C + '&",",", "&nrInstrChTaught&","))),12),'
+        'ISNUMBER(SEARCH(", "&' + C + '&",",", "&nrInstrChTaught&","))),20),'
         '"— none on the schedule yet —"))'))
-    r += 12
+    # the cap used to be 12 against exactly 12 free rows (the section bar
+    # below is a MERGED range, which always blocks a spill), and BPOC 7
+    # already puts 10 instructors on chapter 35 — an 11th and 12th would fit,
+    # a 13th vanished from a TCOLE chapter training file with no error, no
+    # count and no marker. The reservation is raised WITH the cap, and the
+    # row after it says out loud when the list was still truncated.
+    r += 20
+    _ni = ('SUMPRODUCT((nrInstrNames<>"")*(nrInstrChTaught<>"")*'
+           'ISNUMBER(SEARCH(", "&' + C + '&",",", "&nrInstrChTaught&",")))')
+    ws.cell(row=r, column=2, value=(
+        '=IF(' + C + '="","",IF(' + _ni + '>20,"+ "&(' + _ni + '-20)&'
+        '" more instructor(s) not shown — see the Instructors sheet",""))'
+    )).font = F_SMALL
+    r += 1
     section_bar(ws, r, 2, 9, "Schedule blocks delivered")
     r += 1
     ws.cell(row=r, column=2, value=(
@@ -1028,7 +1041,15 @@ def build_chapterpacket(wb):
         'nrSCH_Act,nrSCH_Instr),(nrSCH_ChNum<>"")*(nrSCH_ChNum='
         + C + ')),32),'
         '"— no blocks scheduled —"))'))
+    # same trap one section down: TAKE(...,32) against exactly 32 free rows,
+    # and chapter 22 already sits at 23 blocks.
     r += 32
+    _nb = 'COUNTIF(nrSCH_ChNum,' + C + ')'
+    ws.cell(row=r, column=2, value=(
+        '=IF(' + C + '="","",IF(' + _nb + '>32,"+ "&(' + _nb + '-32)&'
+        '" more block(s) not shown — see the Schedule sheet",""))'
+    )).font = F_SMALL
+    r += 1
     ws.cell(row=r, column=2, value="Training Coordinator:").font = F_LABEL
     ws.cell(row=r, column=4, value="_______________________").font = F_BODY
     ws.cell(row=r, column=6, value="Date:").font = F_LABEL
@@ -1374,6 +1395,12 @@ def build_spellingprint(wb):
     s1.fill = FILL_INPUT
     s1.font = F_INPUT
     s1.border = BOX
+    # the picker is the only cell a user can type in on this protected sheet,
+    # and nrSpellWords is only 12 columns wide: an out-of-range test number
+    # printed 25 #REF! cells (or, blank/0, a scrambled cross-test key) under a
+    # heading that read "Spelling Test #13 — KEY". Validate the pick against
+    # the same 1..12 list the Spelling sheet publishes...
+    dv_list(ws, "=nrSpellTestNums", [f"C{r}"])
     define(wb, "cfgSpellPrintNum", "SpellingPrint", f"$C${r}")
     ws.cell(row=r, column=4, value="Mode:").font = F_LABEL
     s2 = ws.cell(row=r, column=5, value="Test")
@@ -1385,9 +1412,15 @@ def build_spellingprint(wb):
     r += 2
     ws.cell(row=r, column=2, value="TYLER POLICE DEPARTMENT ACADEMY").font = F_KPI
     r += 1
+    # ...and guard the printed page itself, because a PASTE bypasses the
+    # validation (see dv_whole's note in xlb.py). N() makes the text "13" and
+    # a blank picker both read 0, so every bad state prints one instruction
+    # instead of a page of #REF!.
+    BAD = 'OR(N(cfgSpellPrintNum)<1,N(cfgSpellPrintNum)>12)'
     ws.cell(row=r, column=2, value=(
-        '="Spelling Test #"&cfgSpellPrintNum&IF(cfgSpellPrintMode="Key",'
-        '" — KEY","")')).font = F_LABEL
+        f'=IF({BAD},"Pick a spelling test number 1-12 in C5",'
+        '"Spelling Test #"&cfgSpellPrintNum&IF(cfgSpellPrintMode="Key",'
+        '" — KEY",""))')).font = F_LABEL
     r += 2
     ws.cell(row=r, column=2, value="Name: ______________________    "
             "Date: ____________    Score: ________").font = F_BODY
@@ -1397,14 +1430,16 @@ def build_spellingprint(wb):
         rr = first + i
         ws.cell(row=rr, column=2, value=f"{i+1}.").font = F_BODY
         w1 = ws.cell(row=rr, column=3, value=(
-            f'=IF(cfgSpellPrintMode="Key",INDEX(nrSpellWords,{i+1},'
-            f'cfgSpellPrintNum),"_______________________")'))
+            f'=IF({BAD},"",IF(cfgSpellPrintMode="Key",'
+            f'INDEX(nrSpellWords,{i+1},'
+            f'cfgSpellPrintNum),"_______________________"))'))
         w1.font = F_BODY
         if i + 14 <= 25:
             ws.cell(row=rr, column=5, value=f"{i+14}.").font = F_BODY
             w2 = ws.cell(row=rr, column=6, value=(
-                f'=IF(cfgSpellPrintMode="Key",INDEX(nrSpellWords,{i+14},'
-                f'cfgSpellPrintNum),"_______________________")'))
+                f'=IF({BAD},"",IF(cfgSpellPrintMode="Key",'
+                f'INDEX(nrSpellWords,{i+14},'
+                f'cfgSpellPrintNum),"_______________________"))'))
             w2.font = F_BODY
         ws.row_dimensions[rr].height = 24
     r = first + 14
@@ -1655,7 +1690,7 @@ def build_emaillog(wb):
     ws = wb.create_sheet("EmailLog")
     ws.sheet_view.showGridLines = False
     header_row(ws, ["Date", "AgencyID", "Exam #", "Spelling #", "Cadets",
-                    "Included Discipline Since", "Drafted By", "Notes"])
+                    "Included Discipline Since", "Logged By", "Notes"])
     first, last = DATA_ROW, DATA_ROW + 499
     fill_rows(ws, first, last, {c: (None, "in") for c in "BCDEFGHI"})
     for r in range(first, last + 1):
@@ -1664,9 +1699,13 @@ def build_emaillog(wb):
     define(wb, "nrELagency", "EmailLog", f"$C${first}:$C${last}")
     col_widths(ws, {"A": 3, "B": 12, "C": 10, "D": 8, "E": 10, "F": 9,
                     "G": 22, "H": 16, "I": 30})
-    sheet_note(ws, "Appended automatically by the email macro (one row per "
-                   "agency draft). 'Last Email Sent' on Agencies and the "
-                   "since-last-email digest read from here.")
+    sheet_note(ws, "Appended by the email macro (one row per agency) only "
+                   "after you confirm the draft was actually SENT — drafts "
+                   "are never auto-sent, and a row here advances that "
+                   "agency's since-last-report cutoff, so anything older "
+                   "drops out of every later digest. 'Last Email Sent' on "
+                   "Agencies and the digest cutoff read from here; delete a "
+                   "row logged in error.")
     return ws
 
 
@@ -1737,6 +1776,11 @@ def build_printcenter(wb):
     # captions are clipped to a few characters
     col_widths(ws, {"A": 3, "B": 26, "C": 52, "D": 16, "E": 20,
                     "F": 3, "G": 20, "H": 20})
+    # the only green/OUTPUT tab that shipped unprotected. It has no input
+    # cells at all, and both VBA modules already assume it is protected:
+    # ClearButtons restores the protection state it found, and the installer
+    # unprotects it (Install-BPOC-VBA.ps1) without ever re-protecting.
+    protect(ws)
     return ws
 
 
@@ -1865,7 +1909,10 @@ def gray_separated_rows(wb):
     gray_fill = _Fill("solid", fgColor="EDEFF2")
     targets = {
         "Writing": "B6:AT55", "Spelling": "B6:S55", "PT": "B6:AC55",
-        "Certifications": "B6:U55", "ScoresGrid": "B6:AC55",
+        # AD, not AC: ScoresGrid runs out to AD ("Rank"), so a separated
+        # cadet's row was struck through for 28 columns and then printed in
+        # normal black for the Rank cell.
+        "Certifications": "B6:U55", "ScoresGrid": "B6:AD55",
         "GradChecklist": "B6:P55", "StateExam": "B6:L55",
         "Cadets": "B6:M55",
     }

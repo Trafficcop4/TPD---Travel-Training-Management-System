@@ -186,6 +186,9 @@ End Sub
     Add-Button $pc 'G20' 2 'Exam Grade Sheet'  'modPrint.btnPrintGradeSheet'
     Add-Button $pc 'G21' 2 'Addendum Report'   'modPrint.btnPrintAddendum'
     Add-Button $pc 'G22' 2 'Schedule'          'modPrint.btnPrintSchedule'
+    # re-protect, exactly like the Dashboard and EmailPreview blocks below:
+    # PrintCenter has no input cells and the unprotect above was never undone
+    $pc.Protect($pw) 2>$null
 
     # Dashboard is now a protected pure-output sheet (zero input cells), so
     # it has to be unprotected while its button is (re)placed, exactly like

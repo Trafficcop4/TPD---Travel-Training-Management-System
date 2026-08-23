@@ -8,7 +8,9 @@ Option Explicit
 '   * Spelling INCLUDED only when Current Spelling # >= Current Exam #.
 '   * Outside agencies get only their own ACTIVE cadets; the home agency
 '     (cfgHomeAgency) gets ONE draft with ALL active cadets by agency.
-'   * Drafts are DISPLAYED for review - never auto-sent. Runs are logged.
+'   * Drafts are DISPLAYED for review - never auto-sent. A run is written to
+'     EmailLog only after the coordinator confirms it was sent, because that
+'     row is what advances the agency's "since your last report" cutoff.
 ' New in V6 (policy 300.6 reporting of deficiencies):
 '   * Class average beside each score.
 '   * RETEST note when the recorded score is a capped retake.
@@ -22,8 +24,18 @@ Private Const ROW1 As Long = 6          ' first data row everywhere
 Private Const ROWN As Long = 55         ' last cadet row
 Private Const AVG_ROW As Long = 57      ' ScoresGrid class-average row
 
+' Buffer of email runs that have been DRAFTED but not yet written to
+' EmailLog. MakeDraft only calls .Display - nothing is ever auto-sent - so a
+' run that is logged the instant the draft opens advances that agency's
+' "since your last report" cutoff even when the coordinator closes the draft
+' without sending it, permanently dropping every flagged incident, counseling
+' entry and memo older than that run from all later digests. Nothing is
+' written until FlushPendingLog asks.
+Private pendLog As Collection
+
 Public Sub GenerateAgencyEmails()
     Dim wb As Workbook: Set wb = ThisWorkbook
+    Set pendLog = New Collection
     Dim wsCad As Worksheet, wsAg As Worksheet, wsGrid As Worksheet
     Dim wsPlan As Worksheet, wsSpell As Worksheet
     Set wsCad = wb.Worksheets("Cadets")
@@ -91,10 +103,23 @@ Public Sub GenerateAgencyEmails()
             MakeDraft olApp, agEmail, academyClass & " - Results (" & examName & _
                 SpellSuffix(omitSpelling, spellNum) & ")", body
             made = made + 1
-            LogRun wb, agID, examNum, spellNum, n, cutoff
+            pendLog.Add Array(agID, agName, examNum, spellNum, n, cutoff)
         End If
 NextAg:
     Next agRow
+
+    ' cfgHomeAgency that matches no AgencyID used to skip the whole block
+    ' below - the consolidated "All Cadets" draft, the all-agency discipline
+    ' digest and the orphan-cadet warning - while the run still reported the
+    ' same number of drafts, because the home agency simply fell through the
+    ' loop above as an ordinary agency. Say so out loud.
+    If homeRow = 0 Then
+        MsgBox "Home Agency (Settings > cfgHomeAgency) is '" & homeAgency & _
+               "', which matches no AgencyID on the Agencies sheet." & vbCrLf & _
+               "The consolidated 'All Cadets' draft, the all-agency " & _
+               "discipline digest and the orphan-cadet check were NOT run.", _
+               vbExclamation, "Agency Score Emails"
+    End If
 
     If homeRow > 0 Then
         Dim hEmail As String, hName As String, allBody As String
@@ -138,9 +163,12 @@ NextAg:
             MakeDraft olApp, hEmail, academyClass & " - Results (" & examName & _
                 SpellSuffix(omitSpelling, spellNum) & ") - All Cadets", allBody
             made = made + 1
-            LogRun wb, homeAgency, examNum, spellNum, total, hCut
+            pendLog.Add Array(homeAgency, hName & " (All Cadets)", examNum, _
+                              spellNum, total, hCut)
         End If
     End If
+
+    FlushPendingLog wb
 
     MsgBox made & " draft email(s) opened in Outlook for review." & vbCrLf & _
            IIf(omitSpelling, "Spelling was OMITTED (spelling # < exam #).", _
@@ -464,6 +492,48 @@ Private Sub MakeDraft(olApp As Object, toAddr As String, subj As String, html As
     m.Subject = subj
     m.HTMLBody = html
     m.Display                                       ' review only - never .Send
+End Sub
+
+' Ask before advancing any agency's since-last-report cutoff. Failing to log
+' is recoverable (the next digest simply repeats the items); logging a draft
+' that was never sent is not.
+Private Sub FlushPendingLog(wb As Workbook)
+    Dim i As Long, it As Variant, lst As String, ans As Long
+    If pendLog Is Nothing Then Exit Sub
+    If pendLog.Count = 0 Then Exit Sub
+    For i = 1 To pendLog.Count
+        it = pendLog(i)
+        lst = lst & "   - " & it(1) & " (" & it(0) & ") - " & _
+              it(4) & " cadet(s)" & vbCrLf
+    Next i
+    ans = MsgBox("Drafts open for review and are never sent automatically, " & _
+        "so the workbook cannot tell which ones you actually sent:" & vbCrLf & _
+        vbCrLf & lst & vbCrLf & _
+        "Logging a run advances that agency's 'since your last report' " & _
+        "cutoff - incidents, counseling entries and memos older than now " & _
+        "will not appear in any later digest for it." & vbCrLf & vbCrLf & _
+        "Yes = all of these were sent, log them all" & vbCrLf & _
+        "No = ask me one agency at a time" & vbCrLf & _
+        "Cancel = none were sent, log nothing", _
+        vbYesNoCancel + vbQuestion, "Log these email runs?")
+    If ans = vbCancel Then
+        Set pendLog = Nothing
+        Exit Sub
+    End If
+    For i = 1 To pendLog.Count
+        it = pendLog(i)
+        If ans = vbYes Then
+            LogRun wb, CStr(it(0)), CLng(it(2)), CLng(it(3)), CLng(it(4)), _
+                   CDate(it(5))
+        ElseIf MsgBox("Was the draft to " & it(1) & " (" & it(0) & _
+                      ") sent?" & vbCrLf & "Yes advances its " & _
+                      "since-last-report cutoff to now.", _
+                      vbYesNo + vbQuestion, "Log email run") = vbYes Then
+            LogRun wb, CStr(it(0)), CLng(it(2)), CLng(it(3)), CLng(it(4)), _
+                   CDate(it(5))
+        End If
+    Next i
+    Set pendLog = Nothing
 End Sub
 
 Private Sub LogRun(wb As Workbook, agID As String, examNum As Long, _

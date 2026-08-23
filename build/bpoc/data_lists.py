@@ -11,7 +11,12 @@ critique form (eval questions, lightly modernized).
 LISTS = {
     "Yes/No": ["Yes", "No"],
     "Cadet Status": ["Active", "Separated", "Graduated", "On Leave"],
-    "Exam Type": ["Major", "Minor", "Spelling", "Final"],
+    # "Spelling" was offered here but NOTHING consumes an exam typed
+    # Spelling: every category count, average and weight on sysGrades
+    # keys on Major/Minor/Final only, and the 10% spelling category
+    # comes from the Spelling SHEET (sysGrades G/K read Spelling!Q/P).
+    # Picking it printed and emailed a score that moved no grade.
+    "Exam Type": ["Major", "Minor", "Final"],
     "Attendance Event": ["Tardy", "Early Departure", "Late Arrival",
                          "Removed From Class", "Absent Full Day",
                          "Absent Partial Day", "PT Missed", "PT Modified",
@@ -34,7 +39,15 @@ LISTS = {
     "Resolution": ["Open", "In Review", "Resolved", "Closed"],
     "Assignment Type": ["Report", "Memo", "Essay", "Affidavit", "Other"],
     "Submission": ["Not Submitted", "Submitted", "Late", "Resubmitted"],
+    # Skills genuinely allows up to 5 (SkillsMaster "Max Attempts":
+    # Driving 5, Firearms/MOA/SFST/Medical 3), so this list stays 1-5
+    # for Skills only.
     "Attempt #": ["1", "2", "3", "4", "5"],
+    # ...but policy 300.5 allows ONE retest per exam, and every exam
+    # rule in the workbook is written for attempts 1 and 2. A third
+    # attempt used to be an ordinary dropdown pick that silently
+    # replaced a passed retest with the failed first-attempt score.
+    "Exam Attempt #": ["1", "2"],
     "IssueType": ["Absence", "Failure to Train", "Deficiency", "Conduct",
                   "Injury", "Equipment", "Other"],
     # -- new in V6 --

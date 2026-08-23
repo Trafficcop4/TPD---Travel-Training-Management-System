@@ -150,7 +150,14 @@ def build_settings(wb):
             # here scales cfgClassroomCapMinutes (the 5% attendance cap) by
             # exactly its own error
             ws.cell(row=row, column=6, value=(
-                "=IFERROR(ROUND(SUM(nrSCH_Hrs)*60,0),0)"
+                # nrSCH_TimeCheck,"OK": a block whose End is before its
+                # Start still produces MOD-derived hours (a 13:00->09:00
+                # typo reads 20 hrs), and those bogus hours used to be
+                # summed straight into the figure this cell tells the
+                # coordinator to copy into cfgTotalScheduledMinutes - which
+                # scales the 5% classroom attendance cap with it.
+                '=IFERROR(ROUND(SUMIFS(nrSCH_Hrs,nrSCH_TimeCheck,"OK")'
+                "*60,0),0)"
             )).font = F_CALC
             # the empty-schedule branch must still object when C holds the
             # PREVIOUS academy's minutes: New Academy Reset empties the
@@ -171,6 +178,28 @@ def build_settings(wb):
         # A blank / non-date Start Date empties the entire class-day
         # calendar (Control), and with it every retest deadline, memo due
         # date, writing date and sign-in sheet. Nothing used to say so here.
+        # cfgHomeAgency drives the "All Cadets" draft in modAgencyEmail: a
+        # value matching no AgencyID silently skipped the consolidated draft,
+        # the all-agency discipline digest and the orphan-cadet warning, and
+        # the run still reported the same draft count. It was the only cell in
+        # the C25/C26/C27 email-run group with neither a dropdown nor a check.
+        if nm == "cfgHomeAgency":
+            ws.cell(row=row, column=6, value=(
+                f'=IF($C${row}="","(blank)",'
+                f'IFERROR(INDEX(rngAgencyNames,MATCH($C${row},rngAgencyIDs,0)),'
+                f'"(no such AgencyID)"))')).font = F_CALC
+            ws.cell(row=row, column=7, value=(
+                f'=IF(COUNTIF(rngAgencyIDs,$C${row})=0,'
+                f'"CHECK - not an AgencyID on the Agencies sheet; the '
+                f'\'All Cadets\' draft, the all-agency discipline digest and '
+                f'the orphan-cadet warning are all SKIPPED",'
+                f'IF(INDEX(rngAgencyActive,MATCH($C${row},rngAgencyIDs,0))'
+                f'<>"Yes","CHECK - that agency is not marked Active","OK"))'
+            )).font = F_SMALL
+            # same dropdown Cadets!G and EmailPreview!C5 already carry — the
+            # cell that drives the PREVIEW was validated while the cell that
+            # drives the actual emails was free text
+            dv_list(ws, "=rngAgencyIDs", [f"C{row}"])
         if nm == "cfgStartDate":
             ws.cell(row=row, column=6, value=(
                 f'=IF(ISNUMBER($C${row}),TEXT($C${row},"ddd mm/dd/yyyy"),'
@@ -497,7 +526,12 @@ def build_chaptermaster(wb):
         "E": (None, "in"), "F": (None, "in"),
         # rollup by chapter NUMBER: schedule rows resolve sub-classes
         # (Traffic Code, Crash, TIM, Crim-Inv subs) to their parent chapter
-        "G": ('IF($D{r}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_ChNum,$C{r}),2))', "fx"),
+        # nrSCH_TimeCheck,"OK" quarantines a swapped start/end: those blocks
+        # are flagged on Schedule and counted by the sysAudit "impossible
+        # times" line, but their MOD-derived hours were still rolled up here,
+        # into nrCHtotalDelivered and into the 736-hour audit figure.
+        "G": ('IF($D{r}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_ChNum,$C{r},'
+              'nrSCH_TimeCheck,"OK"),2))', "fx"),
         "H": ('IF($D{r}="","",IF($G{r}=0,"",$G{r}-$E{r}))', "fx"),
         "I": ('IF($D{r}="","",IFERROR(IF(MINIFS(nrSCH_Date,nrSCH_ChNum,$C{r})=0,'
               '"",MINIFS(nrSCH_Date,nrSCH_ChNum,$C{r})),""))', "fx"),
@@ -612,7 +646,8 @@ def build_chaptermaster(wb):
         t.font = F_INPUT
         t.border = BOX
         d = ws.cell(row=sr, column=7, value=(
-            f'=IF($B{sr}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$B{sr}),2))'))
+            f'=IF($B{sr}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$B{sr},'
+            f'nrSCH_TimeCheck,"OK"),2))'))
         d.font = F_CALC
         d.fill = FILL_CALC
         d.border = BOX
@@ -632,7 +667,8 @@ def build_chaptermaster(wb):
             if col == 5:            # parent chapter # — text, like nrCHnum
                 cc.number_format = "@"
         ws.cell(row=rr, column=7, value=(
-            f'=IF($B{rr}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$B{rr}),2))'
+            f'=IF($B{rr}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$B{rr},'
+            f'nrSCH_TimeCheck,"OK"),2))'
         )).font = F_CALC
         ws.cell(row=rr, column=8, value=(
             f'=IF(OR($B{rr}="",$G{rr}=0),"",ROUND($G{rr}-$F{rr},2))'
@@ -1152,10 +1188,15 @@ def build_schedule(wb):
     col_widths(ws, {"A": 3, "B": 12, "C": 6, "D": 9, "E": 9, "F": 8,
                     "G": 46, "H": 6, "I": 24, "J": 16, "K": 8, "L": 7,
                     "M": 30, "N": 13, "O": 30})
-    # full grid, and out to N: the print area used to stop at M406, silently
+    # full grid, and out to O: the print area used to stop at M406, silently
     # dropping every block past row 406 and the whole "Instructor OK?" column
-    # that was appended later. fitToWidth/fitToHeight are already set, so the
-    # trailing empty rows cost no pages.
+    # that was appended later. The trailing rows DO cost pages - fitToHeight
+    # is 0, which means "as many pages tall as needed", not "one page" - and
+    # all 900 rows carry formulas, borders and fill, so Excel paginates every
+    # one of them. modPrint.btnPrintSchedule narrows the area to the rows
+    # actually used before it prints and restores this one afterwards; this
+    # static area stays full-height so a manual File > Print can never clip a
+    # block.
     page_setup_landscape(ws, print_area=f"B{HDR_ROW}:O{last}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "One row per time block (a day usually has several). "
@@ -1195,7 +1236,19 @@ def build_schedule_items_helper(wb):
         '=IFERROR(LET(ids,TOCOL(VSTACK(Incidents!$B$6:$B$405,'
         'Attendance!$B$6:$B$805,Counseling!$B$6:$B$405),1),'
         'FILTER(ids,ids<>"")),"")'))
-    define(wb, "nrAllRefIDs", "sysListsHelper", f"$D${DATA_ROW}:$D${DATA_ROW+1615}")
+    # 400 + 800 + 400 = 1600 rows maximum; the range used to be 16 rows
+    # longer than the spill it wraps could ever be
+    define(wb, "nrAllRefIDs", "sysListsHelper", f"$D${DATA_ROW}:$D${DATA_ROW+1599}")
+    # Attendance EventIDs only, for the Makeup "Linked Event" dropdown. The
+    # dropdown used to point straight at nrAT_ID (Attendance!$B$6:$B$805),
+    # whose 800 cells are all FORMULAS: an unused row emits "" and a
+    # formula-produced "" is NOT blank, so the picker listed ~795 empty
+    # entries. Same strip-the-blanks pattern as nrAllRefIDs above.
+    ws.cell(row=HDR_ROW, column=5, value="Attendance EventIDs").font = F_LABEL
+    ws.cell(row=DATA_ROW, column=5, value=(
+        '=IFERROR(FILTER(Attendance!$B$6:$B$805,'
+        'Attendance!$B$6:$B$805<>""),"")'))
+    define(wb, "nrAT_IDlist", "sysListsHelper", f"$E${DATA_ROW}:$E${DATA_ROW+799}")
     # locked and veryHidden like the rest of the engine: D6 is a dynamic
     # array (up to 1,600 record IDs) and column B generates the Schedule
     # dropdown, so one stray value typed in the spill zone kills both

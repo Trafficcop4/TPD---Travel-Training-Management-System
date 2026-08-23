@@ -91,8 +91,29 @@ Public Sub btnPrintGradeSheet()
     PrintSheet "ExamSheet"
 End Sub
 
+' The Schedule print area is published full-height ($B$5:$O$905) so a manual
+' File > Print can never clip a block - but all 900 rows carry formulas,
+' borders and fill, and fitToHeight is 0 ("as many pages as needed"), so
+' printing it whole emits ~11 pages of empty bordered grid after the data.
+' Narrow it to the used rows for the button press, then put it back.
 Public Sub btnPrintSchedule()
-    PrintSheet "Schedule"
+    Dim ws As Worksheet, keep As String, msg As String, lastRow As Long
+    On Error GoTo Oops
+    Set ws = ThisWorkbook.Worksheets("Schedule")
+    keep = ws.PageSetup.PrintArea
+    lastRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
+    If lastRow < ROW1 Then lastRow = ROW1
+    If lastRow > 905 Then lastRow = 905
+    ws.PageSetup.PrintArea = "$B$5:$O$" & lastRow
+    ws.PrintOut
+    ws.PageSetup.PrintArea = keep
+    Exit Sub
+Oops:
+    msg = Err.Description          ' read BEFORE any further error handling
+    On Error Resume Next
+    If Not ws Is Nothing And keep <> "" Then ws.PageSetup.PrintArea = keep
+    On Error GoTo 0
+    MsgBox "Could not print 'Schedule': " & msg, vbExclamation
 End Sub
 
 ' one critique per ACTIVE cadet (same blank form; prints N copies)

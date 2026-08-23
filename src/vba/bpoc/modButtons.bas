@@ -72,16 +72,21 @@ Public Sub AddAllButtons()
 End Sub
 
 Private Sub ClearButtons(sheetName As String)
-    Dim ws As Worksheet, b As Object
+    Dim ws As Worksheet
     Dim wasProt As Boolean
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets(sheetName)
     If ws Is Nothing Then Exit Sub
     wasProt = ws.ProtectContents
     ws.Unprotect PW
-    For Each b In ws.Buttons
-        b.Delete
-    Next b
+    ' iterate DOWNWARD, never For Each: deleting members of the live
+    ' Buttons collection while enumerating it skips alternate items, so a
+    ' second AddAllButtons left about half the old buttons behind and
+    ' stacked a full new set on top of them.
+    Dim bi As Long
+    For bi = ws.Buttons.Count To 1 Step -1
+        ws.Buttons(bi).Delete
+    Next bi
     ' restore the protection state this sub found - Dashboard, EmailPreview
     ' and PrintCenter must not be left open because buttons were refreshed
     If wasProt Then ws.Protect PW

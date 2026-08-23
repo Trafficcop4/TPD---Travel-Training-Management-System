@@ -444,8 +444,11 @@ def test_workbook():
           "Makeup row check gates Credit Applies (unlinked / wrong cadet / "
           "unit / type)")
     mk_dvs = [dv.formula1 for dv in wb["Makeup"].data_validations.dataValidation]
-    check(any("nrAT_ID" in (f or "") for f in mk_dvs),
-          "Makeup Linked Event dropdown = attendance EventIDs")
+    # nrAT_IDlist, not nrAT_ID: the raw column is 800 formula cells, so the
+    # picker listed one blank entry per unused row
+    check(any((f or "").strip() == "=nrAT_IDlist" for f in mk_dvs)
+          and "nrAT_IDlist" in wb.defined_names,
+          "Makeup Linked Event dropdown = FILTERed attendance EventIDs")
     me = wb["Memos"]
     check("cfgMemoDueClassDays" in me["H6"].value and
           "OVERDUE" in me["L6"].value,
@@ -482,9 +485,15 @@ def test_workbook():
     tot_row = next(r for r in range(6, 60)
                    if st.cell(row=r, column=5).value == "cfgTotalScheduledMinutes")
     tot_chk = str(st.cell(row=tot_row, column=7).value or "")
-    check("SUM(nrSCH_Hrs)" in str(st.cell(row=tot_row, column=6).value or "")
+    # SUMIFS(...,nrSCH_TimeCheck,"OK"), not SUM: a swapped start/end still
+    # produces MOD-derived hours, and this is the figure the sheet tells the
+    # coordinator to copy into cfgTotalScheduledMinutes (which scales the 5%
+    # classroom attendance cap)
+    tot_det = str(st.cell(row=tot_row, column=6).value or "")
+    check('SUMIFS(nrSCH_Hrs,nrSCH_TimeCheck,"OK")' in tot_det
           and "No schedule entered yet" in tot_chk,
-          "academy length cross-checked against the Schedule")
+          "academy length cross-checked against the Schedule, "
+          "impossible-time blocks excluded")
     # the silent window this check exists to close: New Academy Reset empties
     # the Schedule but leaves the previous academy's minutes in C, and an
     # empty Schedule used to take the blind "No schedule entered yet" branch
@@ -534,9 +543,21 @@ def test_workbook():
     # an unscored attempt-2 row must not delete the failed exam it retests
     check(all('nrES_Att,2,nrES_Raw,">=0"' in es[c + "6"].value
               for c in "MQU") and
-          'nrES_Att,">"&$K6,nrES_Raw,">=0"' in es["P6"].value and
+          'nrES_Att,">"&$K6,nrES_Att,"<=2",nrES_Raw,">=0"' in es["P6"].value and
           "RETEST ROW HAS NO SCORE" in es["X6"].value,
           "a retest only counts once it is scored (M/P/Q/U + Row Check)")
+    # policy 300.5 = one retest per exam. Attempt 3+ used to be a legal
+    # dropdown pick that recorded the FAILED attempt-1 score over the passed
+    # retest with Row Check still reading OK.
+    es_dvs = [dv.formula1 for dv in wb["ExamScores"].data_validations.dataValidation]
+    check(any("lstExamAttemptNum" in (f or "") for f in es_dvs),
+          "ExamScores Attempt # dropdown offers 1 and 2 only")
+    check("ATTEMPT 3+ NOT ALLOWED" in es["X6"].value and
+          'IF(N($K6)>2,""' in es["M6"].value and
+          'IF(N($K6)>2,"No"' in es["P6"].value and
+          'AND(N($K6)>=2' in es["R6"].value,
+          "attempt 3+ records nothing, is flagged, and still opens a "
+          "dismissal review")
     # deadlines may not roll onto days the calendar marks In Session? = No
     check("nrCDinsession" in es["T6"].value and
           "nrCDinsession" in wb["Memos"]["H6"].value,
@@ -731,8 +752,16 @@ def test_workbook():
           "sysAttendance Cl % / PT % are percent-formatted")
 
     # A16 / A40 / A41: protection gaps
-    for n in ("Audit", "Dashboard", "InputGuide"):
+    # PrintCenter was the only green/OUTPUT tab shipping unprotected, even
+    # though ClearButtons restores the protection state it finds and the
+    # installer unprotects it without ever re-protecting
+    for n in ("Audit", "Dashboard", "InputGuide", "PrintCenter"):
         check(wb[n].protection.sheet, f"{n} protected")
+    _ps1x = _io.open(os.path.join(os.path.dirname(os.path.dirname(HERE)),
+                                  "tools", "Install-BPOC-VBA.ps1"),
+                     encoding="utf-8").read()
+    check("$pc.Protect($pw)" in _ps1x,
+          "installer re-protects PrintCenter after placing its buttons")
     audx = wb["Audit"]
     docr = next(r for r in range(5, audx.max_row + 1)
                 if str(audx.cell(row=r, column=3).value or "") == "Enroll App")
@@ -896,6 +925,77 @@ def test_workbook():
           '(anchor span {1:N0}pt)' in _ps1 and
           'right" -f $caption, $width)' in _ps1,
           "installer's width warning formats inside the parentheses")
+
+    # ---- fixes from the V6 stress pass ------------------------------------
+    import data_lists as _DL
+    # every unlocked cfg* printable picker must carry a data validation:
+    # on a protected sheet the picker is the only cell a user can type in
+    sp = wb["SpellingPrint"]
+    sp_dvs = [dv.formula1 for dv in sp.data_validations.dataValidation]
+    check("=nrSpellTestNums" in sp_dvs and '"Test,Key"' in sp_dvs,
+          "SpellingPrint test-number picker is validated 1-12")
+    guard = "N(cfgSpellPrintNum)"
+    words = [sp.cell(row=rr, column=cc).value
+             for rr in range(12, 25) for cc in (3, 6)
+             if isinstance(sp.cell(row=rr, column=cc).value, str)
+             and "cfgSpellPrintNum" in sp.cell(row=rr, column=cc).value]
+    check(len(words) == 25 and all(guard in w for w in words)
+          and guard in str(sp["B8"].value or ""),
+          "SpellingPrint words + heading refuse an out-of-range test number")
+
+    # the exam Attempt # list must not offer 3-5 (Skills still may)
+    check(_DL.LISTS["Exam Attempt #"] == ["1", "2"] and
+          _DL.LISTS["Attempt #"] == ["1", "2", "3", "4", "5"],
+          "exam attempts 1-2, skills attempts 1-5")
+    # nothing in the workbook consumes an exam typed "Spelling"
+    check("Spelling" not in _DL.LISTS["Exam Type"],
+          "Exam Type dropdown offers no unwired 'Spelling' value")
+
+    # a swapped start/end must not roll its bogus hours into the 736 number
+    check('nrSCH_TimeCheck,"OK"' in wb["ChapterMaster"]["G6"].value,
+          "ChapterMaster Delivered Hrs excludes impossible-time blocks")
+
+    # final PT: a partially scored rubric is not a pass
+    check('COUNT(T6:Z6)<7' in wb["PT"]["AB6"].value and
+          '"Incomplete"' in wb["PT"]["AB6"].value,
+          "final PT needs all seven events scored before it can read Yes")
+    for cell in ("L6", "P6"):
+        check('PT!$AB6="Incomplete"' in wb["sysChecks"][cell].value,
+              f"sysChecks {cell[:1]} has an explicit PT Incomplete state")
+    check('PT!$AB6="Incomplete"' in wb["sysFlags"]["M6"].value,
+          "a partially scored final PT raises the PT flag")
+
+    # ChapterPacket spills: cap, reservation and an overflow marker
+    cp = wb["ChapterPacket"]
+    check("),20)" in cp["B20"].value and
+          cp.cell(row=40, column=2).value is not None and
+          "more instructor(s) not shown" in cp.cell(row=40, column=2).value,
+          "ChapterPacket instructor list holds 20 and reports overflow")
+    check("more block(s) not shown" in
+          str(cp.cell(row=74, column=2).value or ""),
+          "ChapterPacket block list reports overflow")
+
+    # cfgHomeAgency is the cell that drives the real emails
+    st_dvs = [dv.formula1 for dv in wb["Settings"].data_validations.dataValidation]
+    home_row = next(r for r in range(6, 60)
+                    if wb["Settings"].cell(row=r, column=5).value == "cfgHomeAgency")
+    check("=rngAgencyIDs" in st_dvs and
+          "not an AgencyID" in str(wb["Settings"].cell(row=home_row,
+                                                      column=7).value or ""),
+          "Home Agency is validated and checked against the Agencies sheet")
+
+    _vba = _io.open(os.path.join(os.path.dirname(os.path.dirname(HERE)),
+                                 "src", "vba", "bpoc", "modAgencyEmail.bas"),
+                    encoding="utf-8").read()
+    check("FlushPendingLog" in _vba and "LogRun wb, agID" not in _vba,
+          "EmailLog rows are written only after a send is confirmed")
+    check("matches no AgencyID" in _vba,
+          "a bogus cfgHomeAgency is reported, not silently skipped")
+    _pr = _io.open(os.path.join(os.path.dirname(os.path.dirname(HERE)),
+                                "src", "vba", "bpoc", "modPrint.bas"),
+                   encoding="utf-8").read()
+    check('ws.PageSetup.PrintArea = "$B$5:$O$" & lastRow' in _pr,
+          "the Schedule button prints the used rows, not all 900")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
 
