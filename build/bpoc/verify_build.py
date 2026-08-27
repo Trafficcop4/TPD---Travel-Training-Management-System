@@ -397,6 +397,54 @@ def test_workbook():
     check("Certifications!$U" in wb["sysFlags"]["O6"].value and
           "cert copies outstanding" in wb["sysFlags"]["T6"].value,
           "cert warning flag in sysFlags with reason text")
+
+    # Cert Expiration was a dead field: keyed, never read. It is now graded
+    # against the LAST date that instructor appears on the Schedule, because
+    # what TCOLE checks is that the instructor was licensed on the day taught
+    # - not merely that the certificate is valid today.
+    ins2 = wb["Instructors"]
+    check(ins2["N5"].value == "Last Class Taught" and
+          ins2["O5"].value == "Cert Status" and
+          "nrSCH_Date" in str(ins2["N6"].value) and
+          "MAX(" in str(ins2["N6"].value),
+          "Instructors: last class taught computed from the schedule")
+    ocell = str(ins2["O6"].value)
+    check("EXPIRED BEFORE LAST CLASS TAUGHT" in ocell and
+          "MISSING EXPIRATION" in ocell and
+          "RENEW - expires during academy" in ocell and
+          "$G6<$N6" in ocell,
+          "Instructors: cert expiration graded against the date taught")
+    check(ocell.count("(") == ocell.count(")"),
+          "Instructors Cert Status parens balanced")
+    check('LEFT($O6,7)<>"EXPIRED"' in str(ins2["K6"].value) and
+          '$O6<>"MISSING EXPIRATION"' in str(ins2["K6"].value),
+          "an expired/undocumented cert fails Audit Ready")
+    check("nrInstrCertStat" in wb.defined_names and
+          "nrInstrLastTaught" in wb.defined_names,
+          "cert-status named ranges defined")
+    # the InstructorBanks sheet asserted who may teach what and nothing
+    # enforced it: the Schedule dropdown is warning-only and a multi-name
+    # cell bypasses validation entirely.
+    schP = str(wb["Schedule"]["P6"].value)
+    check(wb["Schedule"]["P5"].value == "Bank Check" and
+          '"NOT IN BANK"' in schP and "nrBankGrid" in schP and
+          "nrBankTopics" in schP,
+          "Schedule flags an instructor outside the topic's certified bank")
+    # kept out of N's LET on purpose: LibreOffice cannot evaluate LET, and a
+    # control that cannot be exercised on real data in the recalc sweep is a
+    # control nobody has ever seen work
+    check("_xlfn.LET" not in schP and "_xlpm." not in schP,
+          "the bank check is LET-free so the recalc sweep can exercise it")
+    check('COUNTA(INDEX(nrBankGrid' in schP,
+          "bank enforcement is skipped for a topic with an empty bank")
+    check("nrSCH_BankOK" in wb.defined_names,
+          "nrSCH_BankOK defined")
+    import sheets_engine as _SE2
+    _audit_names = [c[0] for c in _SE2.AUDIT_CHECKS]
+    for _want in ("Blocks taught outside the topic's certified bank",
+                  "Instructor cert expired before a class they taught",
+                  "Teaching instructor certs missing or expiring mid-academy"):
+        check(_want in _audit_names, f"sysAudit check present: {_want}")
     wr = wb["Writing"]
     # "overdue missing" counts anything that is not an X, not merely
     # blanks: a stray mark used to erase the assignment from the counter,
@@ -601,8 +649,9 @@ def test_workbook():
           "Schedule hours are midnight-safe (never negative)")
     check("CHECK TIMES" in str(sch["O6"].value or "") and
           "nrSCH_TimeCheck" in wb.defined_names and
-          sch.auto_filter.ref == "B5:O5",
-          "Schedule Time Check column, named and inside the filter")
+          sch.auto_filter.ref == "B5:P5",
+          "Schedule Time Check column, named and inside the filter "
+          "(which now reaches P, the Bank Check)")
     sp = wb["Spelling"]
     check("SCORE OUT OF RANGE" in str(sp["S6"].value or "") and
           "nrSpellRowCheck" in wb.defined_names,

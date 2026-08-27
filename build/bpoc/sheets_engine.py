@@ -709,6 +709,26 @@ AUDIT_CHECKS = [
          'COUNTIF(nrSCH_InstrOK,"UNRECOGNIZED")', "0",
          'IF(COUNTIF(nrSCH_InstrOK,"UNRECOGNIZED")=0,"OK","CHECK")',
          '"Instructor text matches nobody on the Instructors roster - fix spelling or add them"'),
+        ("Blocks taught outside the topic's certified bank",
+         'COUNTIF(nrSCH_BankOK,"NOT IN BANK")', "0",
+         'IF(COUNTIF(nrSCH_BankOK,"NOT IN BANK")=0,"OK","CHECK")',
+         '"Someone is scheduled for a topic they are not in the InstructorBanks '
+         'certified pool for - add them to that bank with the documentation that '
+         'justifies it, or reassign the block"'),
+        ("Instructor cert expired before a class they taught",
+         'SUMPRODUCT((nrInstrOnSched="Yes")*(LEFT(nrInstrCertStat,7)="EXPIRED"))',
+         "0",
+         'IF(SUMPRODUCT((nrInstrOnSched="Yes")*(LEFT(nrInstrCertStat,7)="EXPIRED"))'
+         '=0,"OK","CHECK")',
+         '"Cert Expiration is earlier than the last date that instructor appears on '
+         'the Schedule - TCOLE checks the instructor was licensed ON the day taught"'),
+        ("Teaching instructor certs missing or expiring mid-academy",
+         'SUMPRODUCT((nrInstrOnSched="Yes")*((nrInstrCertStat="MISSING EXPIRATION")'
+         '+(LEFT(nrInstrCertStat,5)="RENEW")))', "0",
+         'IF(SUMPRODUCT((nrInstrOnSched="Yes")*((nrInstrCertStat="MISSING EXPIRATION")'
+         '+(LEFT(nrInstrCertStat,5)="RENEW")))=0,"OK","CHECK")',
+         '"No expiration date recorded, or it falls inside the academy - collect the '
+         'current certificate copy and update the Instructors sheet"'),
         # a swapped start/end time is arithmetic, not a typo Excel can see:
         # the block's hours land in ChapterMaster "Delivered Hrs" and in the
         # Settings schedule-minutes detector that sets the 5% attendance cap

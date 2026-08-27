@@ -22,6 +22,14 @@ headers on every sheet. Tables start at row 5, data at row 6.
 2. **Lists / Agencies / Instructors** — confirm dropdowns and contacts.
    Instructors need name, PID, type, certs; a non-TCOLE instructor is not
    audit-ready until the **SME letter** from the Training Sgt is On File.
+   **Cert Expiration is now enforced**, not just recorded: the sheet works
+   out the **Last Class Taught** for every instructor from the schedule and
+   grades the expiration against *that date*, because what TCOLE checks is
+   whether the instructor was licensed **on the day they taught**.
+   `Cert Status` reads *Current*, *RENEW - expires during academy* (a
+   heads-up: collect the new copy), *MISSING EXPIRATION*, or *EXPIRED
+   BEFORE LAST CLASS TAUGHT* — and the last two force `Audit Ready?` to No
+   and raise their own Audit-sheet lines.
 3. **ChapterMaster** — TCOLE minimums and planned hours are seeded. The
    per-chapter **training file** columns (SME lesson plan, instructor bio,
    sign-in sheets, assessment, grade sheet, eval) and the **Special TCOLE

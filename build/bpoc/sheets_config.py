@@ -371,7 +371,8 @@ def build_instructors(wb):
                     "Instructor Type", "Certificates (list)",
                     "Cert Expiration", "SME Letter", "Bio On File?",
                     "Notes", "Audit Ready?", "On Schedule?",
-                    "Chapters Taught"])
+                    "Chapters Taught", "Last Class Taught",
+                    "Cert Status"])
     last = DATA_ROW + 89
     for i, nm in enumerate(DL.INSTRUCTORS):
         ws.cell(row=DATA_ROW + i, column=2, value=nm)
@@ -385,10 +386,17 @@ def build_instructors(wb):
         "H": (None, "in"), "I": (None, "in"), "J": (None, "in"),
         # IRG: every instructor/co-teacher teaching LOs needs a documented
         # qualification (TCOLE cert or written SME approval) AND a bio.
+        # Cert Expiration (G) used to be a dead field: it could be keyed
+        # and nothing read it, so an instructor whose TCOLE certificate
+        # lapsed BEFORE the day they taught still reported Audit Ready. O
+        # now grades the expiration against the last date they actually
+        # taught, and Audit Ready refuses an expired or undocumented one.
         "K": ('IF($B{r}="","",IF($E{r}="Guest/Outside","N/A",'
               'IF(AND(OR($E{r}="TCOLE Instructor",'
               'AND(LEFT($E{r},3)="SME",$H{r}="On File")),'
-              'OR($I{r}="On File",$I{r}="N/A")),"Yes","No")))', "fx"),
+              'OR($I{r}="On File",$I{r}="N/A"),'
+              'LEFT($O{r},7)<>"EXPIRED",$O{r}<>"MISSING EXPIRATION"'
+              '),"Yes","No")))', "fx"),
         "L": ('IF($B{r}="","",IF(SUMPRODUCT(--ISNUMBER(SEARCH($B{r},'
               'nrSCH_Instr)))>0,"Yes",""))', "fx"),
         # nrSCH_ChNum carries chapter numbers as TEXT (they are the
@@ -399,9 +407,35 @@ def build_instructors(wb):
         "M": ('IF($B{r}="","",IFERROR(LET(v,UNIQUE(FILTER(nrSCH_ChNum,'
               'ISNUMBER(SEARCH($B{r},nrSCH_Instr))*(nrSCH_ChNum<>""))),'
               'TEXTJOIN(", ",TRUE,SORTBY(v,IFERROR(v+0,99999),1))),""))', "fx"),
+        # deliberately LET-free so the LibreOffice recalc sweep can still
+        # exercise both columns against real schedule data
+        # SUMPRODUCT(MAX(...)), not MAX(IF(...)): the IF form needs an
+        # array context this cell does not have, and it silently returned a
+        # blank for 60 of the 65 instructors actually on the schedule (only
+        # the two whose own row happened to intersect resolved). SUMPRODUCT
+        # forces the array evaluation, and boolean*date makes the IF
+        # unnecessary - non-matching rows contribute 0.
+        "N": ('IF($B{r}="","",'
+              'IF(SUMPRODUCT(MAX(ISNUMBER(SEARCH($B{r},nrSCH_Instr))'
+              '*nrSCH_Date))=0,"",'
+              'SUMPRODUCT(MAX(ISNUMBER(SEARCH($B{r},nrSCH_Instr))'
+              '*nrSCH_Date))))', "fx"),
+        "O": ('IF($B{r}="","",'
+              'IF($E{r}="Guest/Outside","N/A",'
+              'IF($L{r}<>"Yes","(not on schedule)",'
+              'IF(LEFT($E{r},3)="SME","N/A (SME letter)",'
+              'IF($E{r}<>"TCOLE Instructor","CHECK TYPE",'
+              'IF($G{r}="","MISSING EXPIRATION",'
+              'IF(NOT(ISNUMBER($G{r})),"CHECK DATE",'
+              'IF(AND(N($N{r})>0,$G{r}<$N{r}),'
+              '"EXPIRED BEFORE LAST CLASS TAUGHT "&TEXT($G{r},"mm/dd/yy"),'
+              'IF($G{r}<cfgEndDate,'
+              '"RENEW - expires during academy "&TEXT($G{r},"mm/dd/yy"),'
+              '"Current")))))))))', "fx"),
     })
     for r in range(DATA_ROW, last + 1):
         ws[f"G{r}"].number_format = DATE
+        ws[f"N{r}"].number_format = DATE
     dv_list(ws, "=lstInstructorType", [f"E{DATA_ROW}:E{last}"])
     dv_list(ws, "=lstMaterialsStatus",
             [f"H{DATA_ROW}:H{last}", f"I{DATA_ROW}:I{last}"])
@@ -412,9 +446,17 @@ def build_instructors(wb):
     define(wb, "nrInstrReady", "Instructors", f"$K${DATA_ROW}:$K${last}")
     define(wb, "nrInstrOnSched", "Instructors", f"$L${DATA_ROW}:$L${last}")
     define(wb, "nrInstrChTaught", "Instructors", f"$M${DATA_ROW}:$M${last}")
+    define(wb, "nrInstrLastTaught", "Instructors", f"$N${DATA_ROW}:$N${last}")
+    define(wb, "nrInstrCertStat", "Instructors", f"$O${DATA_ROW}:$O${last}")
+    cf_formula(ws, f"O{DATA_ROW}:O{last}",
+               f'OR(LEFT($O{DATA_ROW},7)="EXPIRED",'
+               f'LEFT($O{DATA_ROW},5)="RENEW",'
+               f'$O{DATA_ROW}="MISSING EXPIRATION",'
+               f'$O{DATA_ROW}="CHECK DATE",$O{DATA_ROW}="CHECK TYPE")',
+               FILL_WARNBG)
     col_widths(ws, {"A": 3, "B": 24, "C": 18, "D": 12, "E": 20, "F": 30,
                     "G": 13, "H": 12, "I": 12, "J": 26, "K": 11, "L": 12,
-                    "M": 30})
+                    "M": 30, "N": 15, "O": 34})
     sheet_note(ws, "IRG: EVERY instructor or co-teacher who teaches a "
                    "learning objective needs a bio + documented "
                    "qualification (TCOLE instructor cert, or SME letter "
@@ -1097,7 +1139,7 @@ def build_schedule(wb):
     header_row(ws, ["Date", "Day", "Start", "End", "Hours",
                     "Chapter / Activity", "Ch #", "Instructor", "Location",
                     "Week #", "Day #", "Notes", "Instructor OK?",
-                    "Time Check"])
+                    "Time Check", "Bank Check"])
     first, last = DATA_ROW, DATA_ROW + ROWS_SCHEDULE - 1
     fill_rows(ws, first, last, {
         "B": (None, "in"),
@@ -1151,6 +1193,25 @@ def build_schedule(wb):
         "O": ('IF(OR($B{r}="",$D{r}="",$E{r}=""),"",'
               'IF($E{r}=$D{r},"CHECK TIMES (start = end)",'
               'IF($F{r}>12,"CHECK TIMES (End is before Start?)","OK")))', "fx"),
+        # The second instructor question, kept in its OWN column and
+        # deliberately LET-free: N answers "does this text name anybody on
+        # the roster", P answers "is every name it resolves to inside THAT
+        # TOPIC's certified bank". InstructorBanks asserted who may teach
+        # what and nothing enforced it - the Schedule dropdown only suggests
+        # (warning-only), and a multi-name cell bypasses validation entirely.
+        # Enforcement is skipped when the topic has no bank row or its bank
+        # is empty: nothing has been asserted, so nothing can be violated.
+        "P": ('IF(OR($B{r}="",$I{r}=""),"",'
+              'IF(IFERROR(MATCH($G{r},nrBankTopics,0),0)=0,"OK",'
+              'IF(COUNTA(INDEX(nrBankGrid,'
+              'IFERROR(MATCH($G{r},nrBankTopics,0),1),0))=0,"OK",'
+              'IF(SUMPRODUCT((nrInstrNames<>"")*'
+              'ISNUMBER(SEARCH(nrInstrNames,$I{r}))*'
+              '(COUNTIF(INDEX(nrBankGrid,'
+              'IFERROR(MATCH($G{r},nrBankTopics,0),1),0),nrInstrNames)>0))'
+              '<SUMPRODUCT((nrInstrNames<>"")*'
+              'ISNUMBER(SEARCH(nrInstrNames,$I{r}))),'
+              '"NOT IN BANK","OK"))))', "fx"),
     })
     for r2 in range(first, last + 1):
         ws[f"B{r2}"].number_format = DATE
@@ -1180,14 +1241,17 @@ def build_schedule(wb):
     define(wb, "nrSCH_Instr", "Schedule", f"$I${first}:$I${last}")
     define(wb, "nrSCH_Loc", "Schedule", f"$J${first}:$J${last}")
     define(wb, "nrSCH_InstrOK", "Schedule", f"$N${first}:$N${last}")
+    define(wb, "nrSCH_BankOK", "Schedule", f"$P${first}:$P${last}")
     define(wb, "nrSCH_TimeCheck", "Schedule", f"$O${first}:$O${last}")
     cf_formula(ws, f"N{first}:N{last}", f'$N{first}="UNRECOGNIZED"',
+               FILL_WARNBG)
+    cf_formula(ws, f"P{first}:P{last}", f'$P{first}="NOT IN BANK"',
                FILL_WARNBG)
     cf_formula(ws, f"O{first}:O{last}",
                f'AND($O{first}<>"",$O{first}<>"OK")', FILL_WARNBG)
     col_widths(ws, {"A": 3, "B": 12, "C": 6, "D": 9, "E": 9, "F": 8,
                     "G": 46, "H": 6, "I": 24, "J": 16, "K": 8, "L": 7,
-                    "M": 30, "N": 13, "O": 30})
+                    "M": 30, "N": 15, "O": 30, "P": 15})
     # full grid, and out to O: the print area used to stop at M406, silently
     # dropping every block past row 406 and the whole "Instructor OK?" column
     # that was appended later. The trailing rows DO cost pages - fitToHeight
@@ -1197,7 +1261,7 @@ def build_schedule(wb):
     # actually used before it prints and restores this one afterwards; this
     # static area stays full-height so a manual File > Print can never clip a
     # block.
-    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:O{last}",
+    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:P{last}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "One row per time block (a day usually has several). "
                    "Hours, chapter reconciliation, sign-in sheets, writing "

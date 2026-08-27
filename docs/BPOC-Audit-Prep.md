@@ -49,7 +49,18 @@ the standard.
   instructors (43).
 - **Instructors** — Instructors sheet: PID, type, certs, expiration, bio.
   Non-TCOLE instructor ⇒ written SME approval (Training Sgt letter) On
-  File, per the IRG. `Audit Ready?` computes.
+  File, per the IRG. `Audit Ready?` computes. **Expiration is checked
+  against the date taught**, not against today: `Last Class Taught` is
+  derived from the schedule and `Cert Status` reports EXPIRED BEFORE LAST
+  CLASS TAUGHT / MISSING EXPIRATION / RENEW - expires during academy /
+  Current. Two Audit-sheet lines count them.
+- **Who may teach what** — the Schedule's **Bank Check** column (last
+  column) refuses an instructor who is not in that topic's certified pool
+  on **InstructorBanks**, and the Audit sheet counts the blocks. The
+  instructor dropdown only *suggests* — it is warning-only and a
+  multi-name cell bypasses it — so this column is what actually enforces
+  the bank. Topics with no bank row, or an empty bank, are skipped:
+  nothing has been asserted about them, so nothing can be violated.
 - **Program-level items** — Audit sheet manual checklist: Rule 215.9
   commission-rules distribution and required rule review (211.33, 221.1,
   223.1/223.3/223.15/223.17/223.19), approved TCLEDDS roster, exactly-736

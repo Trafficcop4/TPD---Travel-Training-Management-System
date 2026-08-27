@@ -284,14 +284,37 @@ Driving, #2055 Firearms, #101 Addendum for everything else).
 `Instructors` scans the Schedule's instructor text and reports **On
 Schedule?** and **Chapters Taught** per person — including co-teachers
 buried in a multi-name cell. **Audit Ready?** requires a documented
-qualification (TCOLE cert, or SME letter on file) **plus a bio**.
-Anyone teaching without documentation turns red.
+qualification (TCOLE cert, or SME letter on file) **plus a bio**, and a
+certificate that had not expired when they taught. Anyone teaching
+without documentation turns red.
+
+**Cert Expiration is graded against the date taught, not against today.**
+`Last Class Taught` = the newest schedule date whose instructor text
+contains that name; `Cert Status` then reads:
+
+| Cert Status | Meaning | `Audit Ready?` |
+|---|---|---|
+| `Current` | expiration is after the academy ends | unaffected |
+| `RENEW - expires during academy` | still valid on every day taught, but lapses before the class ends — collect the new copy | unaffected |
+| `MISSING EXPIRATION` | on the schedule, TCOLE type, no date recorded | forced **No** |
+| `EXPIRED BEFORE LAST CLASS TAUGHT` | the certificate lapsed before a day they actually taught | forced **No** |
+| `N/A` / `N/A (SME letter)` / `(not on schedule)` | not applicable | unaffected |
 
 `InstructorBanks` is the per-topic pool: **Bank 1–10** = everyone
 certified for that topic (survives New Academy Reset); **Teach 1–10** =
 who you picked for *this* class. The Schedule's instructor dropdown for
 a topic offers exactly that topic's picks; pick a second name and it
 appends, pick an existing one and it is removed.
+
+The dropdown only *suggests* — it is warning-only, and a multi-name cell
+bypasses validation entirely — so the Schedule's **Bank Check** column
+(P, the last one) is what actually enforces the bank: every roster name
+the cell resolves to must appear in that topic's **Bank** columns, or the
+row reads `NOT IN BANK` and the Audit sheet counts it. A topic with no
+bank row, or an empty bank, is skipped — nothing has been asserted about
+who may teach it. Note this checks the **Bank** (certified pool), not the
+**Teach** picks: teaching a topic you are certified for but were not
+pre-picked for is a scheduling change, not a credentials problem.
 
 ### 4.7 Flags vs gates — two different things
 - **`sysFlags` (warnings)** — 15 threshold tests, every threshold a
