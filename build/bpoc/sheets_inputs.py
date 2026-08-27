@@ -991,7 +991,7 @@ def build_certifications(wb):
     hdrs = ["PID", "Cadet Name"]
     for nm, _src in DL.CERTS:
         hdrs += [f"{nm} Date", f"{nm} Copy?"]
-    hdrs += ["All Certs?", "To Collect"]
+    hdrs += ["All Certs?", "To Collect", "Waived (N/A)"]
     header_row(ws, hdrs)
     first, last = DATA_ROW, CADET_LAST
     cols = {
@@ -1004,6 +1004,7 @@ def build_certifications(wb):
         cols[get_column_letter(5 + 2 * i)] = (None, "in")      # copy?
     col_all = get_column_letter(4 + 2 * n)       # T
     col_miss = get_column_letter(5 + 2 * n)      # U
+    col_waived = get_column_letter(6 + 2 * n)    # V
     # missing = cert has no date OR copy not Yes/N/A
     parts = []
     for i, (nm, _src) in enumerate(DL.CERTS):
@@ -1015,6 +1016,20 @@ def build_certifications(wb):
     cols[col_miss] = ('IF($B{r}="","",TEXTJOIN("; ",TRUE,' +
                       ",".join(parts) + "))", "fx")
     cols[col_all] = ('IF($B{r}="","",IF($%s{r}="","Yes","No"))' % col_miss, "fx")
+    # Marking a Copy? cell "N/A" excuses that TCOLE-mandatory certification
+    # completely: it drops out of To Collect, out of All Certs?, out of the
+    # graduation block and out of the Audit sheet's count - silently, with
+    # nothing anywhere recording that a requirement was waived or by whom.
+    # Certifications are a hard graduation gate by decision ("they have to do
+    # everything"), so the waiver stays available for the legitimate cases
+    # but is no longer invisible: it is named per cadet here and counted on
+    # the Audit sheet, where each one has to be defensible to a field agent.
+    wparts = []
+    for i, (nm, _src) in enumerate(DL.CERTS):
+        ccol = get_column_letter(5 + 2 * i)
+        wparts.append(f'IF(${ccol}{{r}}="N/A","{nm}","")')
+    cols[col_waived] = ('IF($B{r}="","",TEXTJOIN("; ",TRUE,' +
+                        ",".join(wparts) + "))", "fx")
     fill_rows(ws, first, last, cols)
     for r in range(first, last + 1):
         for i in range(n):
@@ -1025,19 +1040,28 @@ def build_certifications(wb):
     cf_yes_no(ws, f"{col_all}{first}:{col_all}{last}")
     define(wb, "nrCERTall", "Certifications", f"${col_all}${first}:${col_all}${last}")
     define(wb, "nrCERTmissing", "Certifications", f"${col_miss}${first}:${col_miss}${last}")
+    define(wb, "nrCERTwaived", "Certifications",
+           f"${col_waived}${first}:${col_waived}${last}")
+    cf_formula(ws, f"{col_waived}{first}:{col_waived}{last}",
+               f'${col_waived}{first}<>""', FILL_WARNBG)
     # legend row under the grid
     lr = last + 2
     ws.cell(row=lr, column=2, value="Cert sources:").font = F_LABEL
     ws.cell(row=lr, column=3, value="; ".join(
         f"{nm} = {src}" for nm, src in DL.CERTS)).font = F_SMALL
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, col_all: 10, col_miss: 40})
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, col_all: 10, col_miss: 40,
+                    col_waived: 30})
     for i in range(n):
         ws.column_dimensions[get_column_letter(4 + 2 * i)].width = 11
         ws.column_dimensions[get_column_letter(5 + 2 * i)].width = 9
     sheet_note(ws, "TCOLE-mandatory per-student completions. Enter the "
                    "completion date and mark Copy? = Yes once the cadet's "
                    "certificate copy is in the file. 'To Collect' feeds the "
-                   "Dashboard reminder list; All Certs gates graduation.")
+                   "Dashboard reminder list; All Certs GATES GRADUATION - "
+                   "every cert must have a date AND Copy? = Yes. Copy? = "
+                   "N/A waives that requirement entirely, so every waiver is "
+                   "named in 'Waived (N/A)' and counted on the Audit sheet; "
+                   "be ready to justify each one to a TCOLE field agent.")
     return ws
 
 

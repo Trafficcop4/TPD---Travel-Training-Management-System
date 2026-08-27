@@ -94,7 +94,11 @@ headers on every sheet. Tables start at row 5, data at row 6.
   *and* every category actually recorded (major, minor, spelling and the
   final exam), under caps, makeup complete, skills qualified, writing
   current, no open chain-of-command incident review, final PT **passed**,
-  all certificate copies on file, no open dismissal review. A final PT that
+  all certificate copies on file, no open dismissal review.
+  **Certifications block graduation** — a cert needs a date *and*
+  `Copy? = Yes`, and a blank row blocks rather than passing. `Copy? = N/A`
+  waives one, but every waiver is listed in the **Waived (N/A)** column and
+  counted on the Audit sheet. A final PT that
   was never assessed reads "Not taken" and a final PT rubric that has not
   been entered on Settings reads "Pending" — both block, neither is a pass.
 - **sysAwards** — Valedictorian, Physical Fitness, Top Gun, Grit computed

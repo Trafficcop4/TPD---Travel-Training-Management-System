@@ -771,6 +771,12 @@ AUDIT_CHECKS = [
          'SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))=0,"OK","CHECK")',
          '"TIM, SFST, TCIC, CPR/AED, ALERRT, ICS copies - see Certifications sheet"'),
+        ("Certification requirements waived as N/A",
+         'SUMPRODUCT((nrCadetStatus="Active")*(nrCERTwaived<>""))', "0",
+         'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCERTwaived<>""))=0,"OK","CHECK")',
+         '"Copy? = N/A removes that cert from the graduation gate entirely. '
+         'Legitimate in places, but every waiver must be defensible - see the '
+         'Certifications sheet\'s Waived (N/A) column for who and which"'),
         ("Cadets missing enrollment documents",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrENRall="No"))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrENRall="No"))=0,'

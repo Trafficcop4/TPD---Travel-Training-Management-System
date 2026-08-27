@@ -327,10 +327,21 @@ pre-picked for is a scheduling change, not a credentials problem.
   every planned exam recorded, no open dismissal review.
   Produces **GraduationElig** and a **Blocking Issues** sentence.
 
-Certifications are a **gate**, not just a flag: `sysChecks` column Q reads
-`Certifications!T` and feeds the `GradChecklist` **Certs** column, so a
-missing certificate copy adds `Certs;` to Blocking Issues and holds
-GraduationElig at **No**.
+Certifications are a **gate**, not just a flag — coordinator decision, on
+the record: *"Keep it a block. They have to do everything."* `sysChecks`
+column Q reads `Certifications!T` and feeds the `GradChecklist` **Certs**
+column, so a missing certificate copy adds `Certs;` to Blocking Issues and
+holds GraduationElig at **No**. A cert needs **both** a completion date and
+`Copy? = Yes`; a date alone still blocks, and a row with nothing entered
+blocks too (the gate fails **closed**, never open). The `sysFlags`
+**F:Certs** warning still fires on the WatchList — that is the early
+reminder, not the decision.
+
+The one escape hatch is `Copy? = N/A`, which drops that cert out of the
+gate entirely. It stays available for genuine cases, but it is no longer
+invisible: every waiver is named per cadet in the **Waived (N/A)** column
+and counted by the sysAudit line *"Certification requirements waived as
+N/A"*, so each one has to be defensible to a field agent.
 
 The per-cadet **enrollment documents** grid on the Audit sheet (enrollment
 app, TCLEDDS L1, medical L2, psych L3, background, photo ID/DL, Rules Ack)

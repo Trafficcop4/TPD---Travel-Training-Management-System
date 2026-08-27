@@ -388,6 +388,20 @@ def test_workbook():
     check("TEXTJOIN" in str(cert["U6"].value) and
           cert["D5"].value == "TIM Date",
           "Certifications grid with to-collect rollup")
+    # decision on record: certifications are a HARD graduation block, not a
+    # warning ("they have to do everything"). The gate must also fail CLOSED
+    # on absent data - a cadet row with nothing entered blocks, it does not
+    # sail through - and the one escape hatch (Copy? = N/A) must be visible.
+    cf2 = wb["Certifications"]
+    check(cf2["V5"].value == "Waived (N/A)" and
+          '="N/A"' in str(cf2["V6"].value) and
+          "nrCERTwaived" in wb.defined_names,
+          "every N/A waiver is named per cadet, not silently dropped")
+    check(str(cf2["T6"].value).endswith('IF($U6="","Yes","No"))'),
+          "All Certs? fails closed: blank row is No, never Yes")
+    check("Certification requirements waived as N/A" in
+          [c[0] for c in sheets_engine.AUDIT_CHECKS],
+          "sysAudit counts waived certification requirements")
     check("Certifications!$T" in wb["sysChecks"]["Q6"].value and
           '$Q6="Yes"' in wb["sysChecks"]["N6"].value and
           "Certs; " in wb["sysChecks"]["O6"].value,
