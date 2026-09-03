@@ -6,8 +6,9 @@ medical, flags, awards, agency emails, TCOLE audit readiness, and every
 printable (sign-ins, evals, spelling tests, writing handouts, transcripts).
 
 **Color language:** white boxes with a blue border are yours to type (what
-you type shows in blue); gray cells calculate; yellow cells are pending data
-(the PT points rubric). Gray `sys*` tabs are the locked engine (password
+you type shows in blue); gray cells calculate. (Nothing ships yellow any
+more — the PT points rubric was the last pending item and the approved
+chart is now loaded.) Gray `sys*` tabs are the locked engine (password
 `TPDAcademy`) — never edit them. The one exception is **sysAwards**, which is
 deliberately left editable in its override (E) and notes (G) columns.
 **Layout rule:** column A is empty and rows 1–4 are reserved for your own
@@ -16,9 +17,14 @@ headers on every sheet. Tables start at row 5, data at row 6.
 ## Setting up a new academy
 
 1. **Settings** — class label, start/end dates, weights (40/30/10/20),
-   caps, retest window, flag thresholds. The **PT rubric block** stays
-   yellow until the approved points chart arrives — paste it in and set
-   *PT Final Min Points*; the Final-Exam gate activates automatically.
+   caps, retest window, flag thresholds. The **PT rubric block** holds the
+   approved *PT Test Score Chart*: five events, tiers worth
+   **12 / 14 / 16 / 18 / 20** points, so 60 = every minimum met and 100 =
+   Tier 5 across the board. **Passing is 70** (*PT Final Min Points*) —
+   note that meeting every event minimum scores 60 and therefore does
+   **not** pass; a cadet needs roughly two tier bumps beyond the floor.
+   Each cell in the block is the value a cadet must **reach** for that
+   tier, and the PT sheet scores itself from it — you never type points.
 2. **Lists / Agencies / Instructors** — confirm dropdowns and contacts.
    Instructors need name, PID, type, certs; a non-TCOLE instructor is not
    audit-ready until the **SME letter** from the Training Sgt is On File.
@@ -99,8 +105,8 @@ headers on every sheet. Tables start at row 5, data at row 6.
   `Copy? = Yes`, and a blank row blocks rather than passing. `Copy? = N/A`
   waives one, but every waiver is listed in the **Waived (N/A)** column and
   counted on the Audit sheet. A final PT that
-  was never assessed reads "Not taken" and a final PT rubric that has not
-  been entered on Settings reads "Pending" — both block, neither is a pass.
+  was never assessed reads "Not taken", and one with any of the five events
+  still unrecorded reads "Incomplete" — both block, neither is a pass.
 - **sysAwards** — Valedictorian, Physical Fitness, Top Gun, Grit computed
   from the data; your override cell always wins (Grit especially is
   decision support, not a verdict).

@@ -90,7 +90,7 @@ SETTINGS = [
     ("Current Exam # (for emails)", 1, "Sequence # of the exam to email", "cfgCurrentExamNum", None),
     ("Current Spelling # (for emails)", 1, "Highest spelling test # administered", "cfgCurrentSpellingNum", None),
     ("Writing Due Time", "1700", "Due time shown on handouts", "cfgWritingDueTime", None),
-    ("PT Final Min Points", 0, "Minimum points to pass final PT (set when rubric arrives)", "cfgPTFinalMinPoints", None),
+    ("PT Final Min Points", 70, "Points needed to pass the final PT assessment (approved chart: 60 = every event minimum met, 100 = Tier 5 in all five)", "cfgPTFinalMinPoints", None),
     # flag engine thresholds
     ("Flag: consecutive exam fails", 2, "Consecutive graded-exam scores below passing", "cfgFlagConsecFails", None),
     ("Flag: grade drop (points)", 10, "Drop in recorded score vs cadet's prior exam", "cfgFlagGradeDrop", None),
@@ -262,37 +262,57 @@ def build_settings(wb):
     )).font = F_CALC
     r += 3
 
-    # ---- PT final-assessment points rubric (values arrive later) ----
+    # ---- PT final-assessment points rubric (approved chart v1 09/03/2026) --
     section_bar(ws, r, 2, 9, "Final PT Assessment — Points Rubric "
-                             "(enter the approved chart when received; "
-                             "engine uses it as soon as points are present)")
+                             "(approved PT Test Score Chart — each cell is "
+                             "the value a cadet must REACH for that tier)")
     r += 1
     rub_hdr = r
-    header_row(ws, ["Event", "Standard (baseline)", "Level 1 pts",
-                    "Level 2 pts", "Level 3 pts", "Level 4 pts", "Level 5 pts",
-                    "Level thresholds (notes)"], row=r)
+    header_row(ws, ["Event", "Measure", "Tier 1", "Tier 2", "Tier 3",
+                    "Tier 4", "Tier 5", "Notes"], row=r)
+    r += 1
+    # the tier point values are themselves editable, so a revised chart that
+    # keeps five tiers but changes what they are worth needs no rebuild
+    rub_pts = r
+    ws.cell(row=r, column=2, value="Points per tier").font = F_LABEL
+    ws.cell(row=r, column=3, value="(editable)").font = F_SMALL
+    for i, pts in enumerate(DL.PT_TIER_POINTS):
+        cc = ws.cell(row=r, column=4 + i, value=pts)
+        cc.font = F_INPUT
+        cc.border = BOX
+    ws.cell(row=r, column=9,
+            value="5 events x 20 = 100 max; x 12 = 60 (every minimum met). "
+                  "Passing = PT Final Min Points above.").font = F_SMALL
     r += 1
     rub_first = r
-    for ev, std, unit, hib in DL.PT_EVENTS:
+    for ev, _src, hib, measure, bands in DL.PT_FINAL_BANDS:
         ws.cell(row=r, column=2, value=ev).font = F_LABEL
-        ws.cell(row=r, column=3, value=std).font = F_SMALL
-        for c in range(4, 9):
-            cc = ws.cell(row=r, column=c)
-            cc.fill = FILL_YELLOW
+        ws.cell(row=r, column=3, value=measure).font = F_SMALL
+        for i, v in enumerate(bands):
+            cc = ws.cell(row=r, column=4 + i, value=v)
             cc.font = F_INPUT
             cc.border = BOX
-        ws.cell(row=r, column=9).fill = FILL_YELLOW
-        ws.cell(row=r, column=9).font = F_INPUT
-        ws.cell(row=r, column=9).border = BOX
+        ws.cell(row=r, column=9, value=(
+            "best tier whose threshold is met"
+            + ("; higher is better" if hib else "; lower is better")
+            + "; below Tier 1 scores 0")).font = F_SMALL
         r += 1
-    define(wb, "nrPTRubricEvents", "Settings", f"$B${rub_first}:$B${r-1}")
-    define(wb, "nrPTRubricPoints", "Settings", f"$D${rub_first}:$H${r-1}")
+    ws.cell(row=r, column=2, value=(
+        "Bench Press and Vertical Jump are BASELINE standards only — they "
+        "are not scored at the final assessment.")).font = F_SMALL
+    r += 1
+    define(wb, "nrPTTierPts", "Settings", f"$D${rub_pts}:$H${rub_pts}")
+    define(wb, "nrPTBands", "Settings", f"$D${rub_first}:$H${rub_first + 4}")
+    define(wb, "nrPTBandEvents", "Settings",
+           f"$B${rub_first}:$B${rub_first + 4}")
     col_widths(ws, {"A": 3, "B": 34, "C": 22, "D": 12, "E": 12, "F": 12,
                     "G": 12, "H": 12, "I": 30})
     sheet_note(ws, "White boxes with a blue border = edit per academy "
-                   "(entries show in blue). Yellow = pending data (PT rubric "
-                   "from the other coordinator). Gray = calculated. Internal "
-                   "names must not change.")
+                   "(entries show in blue). Gray = calculated. Internal "
+                   "names must not change. The PT rubric block holds the "
+                   "approved PT Test Score Chart — each cell is the value a "
+                   "cadet must REACH for that tier, and the PT sheet scores "
+                   "itself from it.")
     return ws
 
 

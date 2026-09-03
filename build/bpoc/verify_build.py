@@ -1069,10 +1069,44 @@ def test_workbook():
     check('nrSCH_TimeCheck,"OK"' in wb["ChapterMaster"]["G6"].value,
           "ChapterMaster Delivered Hrs excludes impossible-time blocks")
 
-    # final PT: a partially scored rubric is not a pass
-    check('COUNT(T6:Z6)<7' in wb["PT"]["AB6"].value and
-          '"Incomplete"' in wb["PT"]["AB6"].value,
-          "final PT needs all seven events scored before it can read Yes")
+    # final PT: a partially scored assessment is not a pass. FIVE events,
+    # not seven - the approved chart does not score bench or vertical jump,
+    # so a seven-count could never be satisfied and every cadet would read
+    # Incomplete forever.
+    pt = wb["PT"]
+    check('COUNT($V6:$Z6)<5' in pt["AB6"].value and
+          '"Incomplete"' in pt["AB6"].value,
+          "final PT needs all five scored events before it can read Yes")
+    check(str(pt["T6"].value).endswith('"n/a (baseline only)")') and
+          "n/a" in str(pt["U6"].value),
+          "bench and vertical jump are marked baseline-only, not blank")
+    # the rubric is no longer typed in by hand: each event column derives its
+    # points from the approved chart's bands on Settings
+    for _c, _row in (("V", 1), ("W", 2), ("X", 3), ("Y", 4), ("Z", 5)):
+        _f = str(pt[f"{_c}6"].value)
+        check(f"INDEX(nrPTBands,{_row},0)" in _f and "nrPTTierPts" in _f,
+              f"PT {_c} scores itself from the approved chart (band {_row})")
+    check(">=INDEX(nrPTBands,1,0)" in str(pt["V6"].value) and
+          "<=INDEX(nrPTBands,3,0)" in str(pt["X6"].value),
+          "reps score higher-is-better, times lower-is-better")
+    check("$R6*60" in str(pt["Y6"].value),
+          "the 1.5 mile is converted from decimal minutes to seconds")
+    _sv = wb["Settings"]
+    check("nrPTBands" in wb.defined_names and
+          "nrPTTierPts" in wb.defined_names and
+          "nrPTBandEvents" in wb.defined_names,
+          "approved PT chart is a named, editable table on Settings")
+    _bands = wb.defined_names["nrPTBands"].value
+    _sh, _ref = _bands.split("!")
+    _vals = [[c.value for c in row] for row in _sv[_ref.replace("$", "")]]
+    check(_vals[0] == [23, 33, 41, 51, 79] and
+          _vals[3] == [942, 848, 755, 662, 570] and
+          _vals[4] == [66.99, 61.40, 55.80, 50.20, 45.99],
+          f"chart thresholds seeded exactly as approved {_vals[4]}")
+    _pts = wb.defined_names["nrPTTierPts"].value.split("!")[1]
+    check([c.value for c in _sv[_pts.replace("$", "")][0]] ==
+          [12, 14, 16, 18, 20],
+          "tier points 12/14/16/18/20")
     for cell in ("L6", "P6"):
         check('PT!$AB6="Incomplete"' in wb["sysChecks"][cell].value,
               f"sysChecks {cell[:1]} has an explicit PT Incomplete state")

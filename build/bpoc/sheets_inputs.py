@@ -888,18 +888,38 @@ def build_pt(wb):
     cols["L"] = (None, "in")
     for i in range(7):
         cols[get_column_letter(13 + i)] = (None, "in")
-    for i in range(7):
-        cols[get_column_letter(20 + i)] = (None, "in")
-    cols["AA"] = ('IF($B{r}="","",IF(COUNT(T{r}:Z{r})=0,"",SUM(T{r}:Z{r})))', "fx")
-    # COUNT(T:Z)<7 -> "Incomplete": the pass test used to compare the SUM of
-    # whatever rubric points happened to be entered against the minimum, so
-    # ONE high event score with the other six blank read "Yes" and opened
-    # both the graduation gate (sysChecks L) and the final-exam gate
-    # (sysChecks P). AA stays numeric so CadetProfile still prints "20 pts"
-    # and the sysAwards MAX still works; the completeness rule lives here.
+    # Pts columns T..Z. Bench (T) and VertJump (U) are BASELINE-only
+    # standards - the approved chart scores FIVE events, not seven - so they
+    # say so instead of sitting there as blank inputs that look unfinished.
+    cols["T"] = ('IF($B{r}="","","n/a (baseline only)")', "fx")
+    cols["U"] = ('IF($B{r}="","","n/a")', "fx")
+    # V..Z score themselves from the approved chart on Settings: the points
+    # of the BEST tier whose threshold the result reaches, and 0 when it is
+    # below the Tier 1 minimum (coordinator's rule - 0 for that event, the
+    # total still decides). SUMPRODUCT(MAX(...)) forces the array evaluation
+    # this needs; a half-entered rubric row scores nothing rather than
+    # under-scoring a cadet against thresholds that are not all there yet.
+    for i, (_ev, src, hib, _measure, _bands) in enumerate(DL.PT_FINAL_BANDS):
+        val = ('$%s{r}*60' % src) if src == "R" else ('$%s{r}' % src)
+        cmp_ = ">=" if hib else "<="
+        cols[get_column_letter(22 + i)] = (
+            'IF($B{r}="","",IF($%s{r}="","",'
+            'IF(COUNT(INDEX(nrPTBands,%d,0))<5,"",'
+            'SUMPRODUCT(MAX((%s%sINDEX(nrPTBands,%d,0))*nrPTTierPts)))))'
+            % (src, i + 1, val, cmp_, i + 1), "fx")
+    cols["AA"] = ('IF($B{r}="","",IF(COUNT($V{r}:$Z{r})=0,"",'
+                  'SUM($V{r}:$Z{r})))', "fx")
+    # COUNT(V:Z)<5 -> "Incomplete": the pass test used to compare the SUM of
+    # whatever points happened to be present against the minimum, so ONE
+    # high event score with the rest blank read "Yes" and opened both the
+    # graduation gate (sysChecks L) and the final-exam gate (sysChecks P).
+    # Five, not seven: bench and vertical jump are baseline-only and are no
+    # longer scored, so a seven-count could never be satisfied. AA stays
+    # numeric so CadetProfile still prints "20 pts" and the sysAwards MAX
+    # still works; the completeness rule lives here.
     cols["AB"] = ('IF($B{r}="","",IF($AA{r}="","",'
                   'IF(cfgPTFinalMinPoints=0,"(rubric pending)",'
-                  'IF(COUNT(T{r}:Z{r})<7,"Incomplete",'
+                  'IF(COUNT($V{r}:$Z{r})<5,"Incomplete",'
                   'IF($AA{r}>=cfgPTFinalMinPoints,"Yes","No")))))', "fx")
     # improvement index: mean % gain on countable events (pushups, situps)
     # plus % time cut on runs (agility, 1.5mi, 300m); ignores blanks
@@ -918,10 +938,7 @@ def build_pt(wb):
     dv_list(ws, "=lstYesNo", [f"K{first}:K{last}", f"L{first}:L{last}"])
     cf_yes_no(ws, f"AB{first}:AB{last}")
     cf_yes_no(ws, f"K{first}:K{last}")
-    # pts cells yellow until rubric arrives
-    for r in range(first, last + 1):
-        for i in range(7):
-            ws[f"{get_column_letter(20+i)}{r}"].fill = FILL_YELLOW
+
     define(wb, "nrPT_BasePass", "PT", f"$K${first}:$K${last}")
     define(wb, "nrPT_FinalPts", "PT", f"$AA${first}:$AA${last}")
     define(wb, "nrPT_FinalPass", "PT", f"$AB${first}:$AB${last}")
@@ -930,11 +947,16 @@ def build_pt(wb):
     for i in range(4, 27):
         ws.column_dimensions[get_column_letter(i)].width = 9
     sheet_note(ws, "Raw values per event: bench lbs, jump inches, pushup/situp "
-                   "reps, agility & 300m seconds, 1.5mi minutes (decimal). "
-                   "Pts columns take the approved rubric's points per event "
-                   "(yellow until the chart arrives — see the rubric block on "
-                   "Settings). Final PT failure blocks the Final Exam "
-                   "(policy 500.1.H).")
+                   "reps, agility & 300m seconds, 1.5mi minutes DECIMAL "
+                   "(12:35 = 12.5833 — the engine converts to seconds to "
+                   "score it). Pts columns COMPUTE from the approved PT Test "
+                   "Score Chart in the rubric block on Settings: the points "
+                   "of the best tier the result reaches, 0 if it is below "
+                   "the Tier 1 minimum. Bench and vertical jump are baseline "
+                   "standards only and are not scored at the final. All five "
+                   "scored events must be recorded before Final PT Pass? "
+                   "resolves — until then it reads Incomplete, which blocks. "
+                   "Final PT failure blocks the Final Exam (policy 500.1.H).")
     return ws
 
 

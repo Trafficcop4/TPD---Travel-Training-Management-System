@@ -62,8 +62,9 @@ the row grays out and drops from every count automatically.
 | ⚫ Gray | **SYSTEM** | `sys*` calculation engine | Yes — never edit |
 
 **Cell colors inside a sheet:** white box with border = you type it
-(your entries show blue); gray fill = calculated; yellow = data pending
-(the PT points rubric).
+(your entries show blue); gray fill = calculated. Yellow meant "data
+pending"; the PT points rubric was the last of it and the approved chart
+is now loaded, so nothing ships yellow.
 
 Protection password is `TPDAcademy`. Protected sheets are still fully
 **selectable and scrollable** — only editing is blocked, except the
@@ -315,6 +316,40 @@ bank row, or an empty bank, is skipped — nothing has been asserted about
 who may teach it. Note this checks the **Bank** (certified pool), not the
 **Teach** picks: teaching a topic you are certified for but were not
 pre-picked for is a scheduling change, not a credentials problem.
+
+### 4.6b Final PT scoring (approved PT Test Score Chart)
+`Settings` carries the approved chart as an editable table: a **Points per
+tier** row (12 / 14 / 16 / 18 / 20) plus one row per event holding the value
+a cadet must **reach** for each tier. `PT` columns V–Z score themselves from
+it — the coordinator never types points.
+
+| Event | PT column | Direction | Tier 1 → Tier 5 |
+|---|---|---|---|
+| Push-Ups | O | higher better | 23 / 33 / 41 / 51 / 79 reps |
+| Sit-Ups (1:00) | P | higher better | 23 / 33 / 41 / 51 / 79 reps |
+| Agility Run | Q | lower better | 20.2 / 18.0 / 15.8 / 13.6 / 12.0 s |
+| 1.5 Mile Run | R | lower better | 942 / 848 / 755 / 662 / 570 s |
+| 300 M Sprint | S | lower better | 66.99 / 61.40 / 55.80 / 50.20 / 45.99 s |
+
+Rules the formulas implement:
+
+- **Score = the best tier whose threshold the result reaches.** Below the
+  Tier 1 minimum scores **0** for that event; the total still decides.
+- **Passing is `cfgPTFinalMinPoints` = 70** of 100. Note the consequence:
+  meeting every event minimum scores 60 and **fails**.
+- **All five events must be recorded.** `Final Points` (AA) stays numeric on
+  a partial row so CadetProfile and sysAwards keep working, but
+  `Final PT Pass?` (AB) reads **Incomplete**, which blocks like a fail.
+- **Bench press and vertical jump are baseline-only** and show `n/a` in
+  their points columns — the chart scores five events, not seven.
+- **The 1.5-mile row is in seconds** while the PT sheet takes decimal
+  minutes; the formula multiplies by 60. Storing whole seconds keeps the
+  thresholds exact — 12:35 as decimal minutes is 12.58333… and rounding it
+  would fail a cadet who ran the qualifying time exactly.
+- **Thresholds are tier ENTRY values, not the printed ranges.** The chart's
+  300 m Tier 1 ends at 61.5 s while Tier 2 begins at 61.40 s, so
+  61.41–61.49 s is uncovered on the page; "best tier met" resolves it
+  conservatively to Tier 1 (12 pts) rather than returning nothing.
 
 ### 4.7 Flags vs gates — two different things
 - **`sysFlags` (warnings)** — 15 threshold tests, every threshold a

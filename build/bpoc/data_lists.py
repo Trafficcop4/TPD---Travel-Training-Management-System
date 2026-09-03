@@ -230,6 +230,41 @@ CERTS = [
 
 # ------------------------------------------------------------------ PT events
 # (event, baseline standard text, unit, higher_is_better)
+# ---------------------------------------------- final PT assessment rubric
+# Approved "PT Test Score Chart" (v1, 09/03/2026). FIVE events - bench press
+# and vertical jump are BASELINE standards only and are not scored here.
+# Each entry is (event, PT-sheet source column, higher_is_better, measure,
+# five tier thresholds = the value a cadet must REACH for tiers 1..5).
+#
+# Tier points are 12 / 14 / 16 / 18 / 20, so 60 = every minimum met and
+# 100 = tier 5 across the board. Passing is cfgPTFinalMinPoints (70).
+#
+# Thresholds are the tier's ENTRY value, not the printed ranges. That
+# matters: the chart's 300 m tier 1 ends at 61.5 s while tier 2 begins at
+# 61.40 s, leaving 61.41-61.49 s uncovered. Scoring on "the best tier whose
+# threshold is met" closes that gap conservatively (61.45 s scores tier 1)
+# instead of returning nothing.
+#
+# The 1.5-mile row is in SECONDS while the PT sheet takes decimal minutes -
+# the scoring formula multiplies by 60. Whole seconds keep the thresholds
+# exact; 12:35 in decimal minutes is 12.58333... and rounding that would
+# fail a cadet who ran the qualifying time exactly.
+PT_FINAL_BANDS = [
+    ("Push-Ups", "O", True, "reps (no time limit)",
+     [23, 33, 41, 51, 79]),
+    ("Sit-Ups", "P", True, "reps in 1:00",
+     [23, 33, 41, 51, 79]),
+    ("Agility Run", "Q", False, "seconds (lower is better)",
+     [20.2, 18.0, 15.8, 13.6, 12.0]),
+    ("1.5 Mile Run", "R", False,
+     "SECONDS (15:42=942, 14:08=848, 12:35=755, 11:02=662, 9:30=570); "
+     "the PT sheet takes decimal minutes and the engine converts",
+     [942, 848, 755, 662, 570]),
+    ("300 M Sprint", "S", False, "seconds (lower is better)",
+     [66.99, 61.40, 55.80, 50.20, 45.99]),
+]
+PT_TIER_POINTS = [12, 14, 16, 18, 20]
+
 PT_EVENTS = [
     ("Bench Press", "62% of body weight (1 rep)", "lbs", True),
     ("Vertical Jump", "14.5 inches", "in", True),
