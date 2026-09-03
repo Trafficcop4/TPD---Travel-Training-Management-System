@@ -378,12 +378,20 @@ or made up, but in practice parts of skills training *can* be made up, so the
 workbook does not turn a skills absence into an automatic failure. The person
 who ran the evaluation decides.
 
-- **Fail** on any skill → `Skills P/F OK?` = No → `sysChecks` **X** = No →
-  graduation blocked, with Blocking Issues naming the skill:
-  `Skills FAILED (Firearms, SFST)`. Also shown on `GradChecklist`.
-- **Blank** is *not* a failure. It is counted in **Not Assessed**, so an
-  unassessed skill is visible without silently gating anyone.
-- Clearing the Fail, or changing it to Pass, lifts the block immediately.
+`Skills P/F OK?` is Yes only when **every** skill has been marked and none
+was failed — no Fails **and** `Not Assessed` = 0.
+
+- **Fail** on any skill → `sysChecks` **X** = No → graduation blocked, with
+  Blocking Issues naming the skill: `Skills FAILED (Firearms, SFST)`.
+- **Blank** blocks as well, and reads differently so the two are never
+  confused: `Skills not all passed (2 not assessed)`.
+- Marking the skill Pass lifts the block immediately. Nothing auto-marks.
+
+`Not Assessed` is counted **position by position** against `SkillsMaster`: a
+slot counts only when that slot has a category behind it *and* the cell is
+blank. That is why a stray mark in one of the spare columns cannot cancel a
+genuinely unassessed skill — an earlier version subtracted tallies from the
+category count and could go negative.
 
 This sits alongside — not instead of — the derived skills gates: `sysChecks`
 **H** (attempt-log qualification), **S** (all categories assessed) and **T**

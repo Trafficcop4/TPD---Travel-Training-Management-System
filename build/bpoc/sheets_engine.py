@@ -478,8 +478,8 @@ def build_syschecks(wb):
         # Coordinator-marked skills pass/fail (SkillsCheck). Deliberately a
         # manual call, not derived from the attempt log and not auto-raised
         # by missed skills time - parts of skills training can be made up in
-        # practice, so the person who ran the evaluation decides. Any Fail
-        # blocks graduation until it is cleared or changed to Pass.
+        # practice, so the person who ran the evaluation decides. EVERY skill
+        # must read Pass: a Fail blocks, and so does a skill never marked.
         "X": ('IF($B{r}="","",IF(SkillsCheck!$P{r}="No","No","Yes"))', "fx"),
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
@@ -504,7 +504,10 @@ def build_syschecks(wb):
               'IF($Q{r}<>"Yes","Certs; ","")&'
               'IF($V{r}<>"Yes","Exam pending (excused absence); ","")&'
               'IF($W{r}<>"Yes","Enrollment documents; ","")&'
-              'IF($X{r}<>"Yes","Skills FAILED ("&SkillsCheck!$N{r}&"); ","")&'
+              'IF($X{r}="Yes","",IF(SkillsCheck!$N{r}<>"",'
+              '"Skills FAILED ("&SkillsCheck!$N{r}&"); ",'
+              '"Skills not all passed ("&SkillsCheck!$O{r}&'
+              '" not assessed); "))&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
               'IF(PT!$AB{r}="(rubric pending)","Pending",'

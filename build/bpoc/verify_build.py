@@ -414,12 +414,17 @@ def test_workbook():
     check('SkillsMaster!$B$6' in str(skc["N6"].value) and
           "TEXTJOIN" in str(skc["N6"].value),
           "failed skills are named from SkillsMaster, not from this header")
-    check('$N6="","Yes","No"' in str(skc["P6"].value),
-          "any Fail turns Skills P/F OK? to No")
-    # a blank must NOT read as a failure - it is counted, not gated
-    check("Not Assessed" == skc["O5"].value and
-          "COUNTIFS" in str(skc["O6"].value),
-          "unassessed skills are counted, not treated as failures")
+    check('AND($N6="",$O6=0)' in str(skc["P6"].value),
+          "EVERY skill must pass: no failures AND nothing unassessed")
+    # counted position by position, so a mark in a spare column (no category
+    # behind it) cannot cancel a genuinely unassessed skill
+    check(skc["O5"].value == "Not Assessed" and
+          'IF(SkillsMaster!$B$6="",0,IF($D6="",1,0))' in str(skc["O6"].value)
+          and "COUNTIFS" not in str(skc["O6"].value),
+          "unassessed count is position-matched to SkillsMaster")
+    check('SkillsCheck!$N6<>""' in str(wb["sysChecks"]["O6"].value) and
+          "not assessed); " in str(wb["sysChecks"]["O6"].value),
+          "blocking text says FAILED vs not-all-passed, never 'FAILED ()'")
     check('SkillsCheck!$P6="No"' in str(wb["sysChecks"]["X6"].value) and
           '$X6="Yes"' in str(wb["sysChecks"]["N6"].value) and
           'Skills FAILED (' in str(wb["sysChecks"]["O6"].value),

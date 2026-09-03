@@ -1359,15 +1359,22 @@ def build_skillscheck(wb):
         parts.append(f'IF(${col}{{r}}="Fail",SkillsMaster!$B${DATA_ROW + i},"")')
     cols[c_failed] = ('IF($C{r}="","",TEXTJOIN(", ",TRUE,' +
                       ",".join(parts) + "))", "fx")
-    # blanks are NOT treated as failures (the coordinator marks a fail
-    # deliberately) but they are counted, so an unassessed skill is visible
-    # rather than silently passing
-    cols[c_notass] = ('IF($C{r}="","",COUNTA(SkillsMaster!$B$%d:$B$%d)'
-                      '-COUNTIFS($%s{r}:$%s{r},"Pass")'
-                      '-COUNTIFS($%s{r}:$%s{r},"Fail"))'
-                      % (DATA_ROW, DATA_ROW + n_slots - 1,
-                         d0, d1, d0, d1), "fx")
-    cols[c_ok] = ('IF($C{r}="","",IF($%s{r}="","Yes","No"))' % c_failed, "fx")
+    # Counted POSITION BY POSITION against SkillsMaster: a slot counts as
+    # unassessed only when that slot actually has a category AND the cell is
+    # blank. The earlier version subtracted the Pass/Fail tallies from the
+    # category count, which meant a mark left in one of the spare columns
+    # (no category behind it) cancelled a genuinely unassessed skill and
+    # could drive the count negative.
+    na_parts = []
+    for i in range(n_slots):
+        col = get_column_letter(4 + i)
+        na_parts.append(f'IF(SkillsMaster!$B${DATA_ROW + i}="",0,'
+                        f'IF(${col}{{r}}="",1,0))')
+    cols[c_notass] = ('IF($C{r}="","",' + "+".join(na_parts) + ")", "fx")
+    # EVERY skills training must read Pass before graduation (coordinator's
+    # rule): no failures AND nothing left unassessed.
+    cols[c_ok] = ('IF($C{r}="","",IF(AND($%s{r}="",$%s{r}=0),"Yes","No"))'
+                  % (c_failed, c_notass), "fx")
     fill_rows(ws, first, last, cols)
     dv_list(ws, '"Pass,Fail"',
             [f"{get_column_letter(4+i)}{first}:{get_column_letter(4+i)}{last}"
@@ -1388,14 +1395,16 @@ def build_skillscheck(wb):
         widths[get_column_letter(4 + i)] = 11
     col_widths(ws, widths)
     sheet_note(ws, "One Pass/Fail per skills training, per cadet - your call, "
-                   "not the attempt log's. Marking ANY skill Fail blocks "
-                   "graduation and names that skill in the cadet's Blocking "
-                   "Issues; clear the Fail (or change it to Pass) once the "
-                   "cadet has satisfied it and the block lifts. A BLANK is "
-                   "not a failure - missed skills time is not auto-triggered, "
+                   "not the attempt log's. EVERY skill must read Pass before "
+                   "a cadet can graduate: a Fail blocks and names that skill "
+                   "in Blocking Issues, and a skill left BLANK blocks too "
+                   "(it counts under 'Not Assessed'). Nothing here is "
+                   "automatic - missed skills time does not mark anything, "
                    "because in practice parts of skills training can be made "
-                   "up - but blanks are counted in 'Not Assessed' so an "
-                   "unassessed skill is visible instead of quietly passing.")
+                   "up - so the block lifts the moment you mark the skill "
+                   "Pass. A column only counts if its category exists on "
+                   "SkillsMaster; the spare columns are ignored until you "
+                   "name them there.")
     return ws
 
 
