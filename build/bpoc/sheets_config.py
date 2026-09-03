@@ -670,14 +670,14 @@ def build_chaptermaster(wb):
         f'TEXT({M},"0.##")&" hrs - the full reported course length.",'
         f'"NOTE: the per-chapter TCOLE minimums above total "&'
         f'TEXT({M},"0.##")&" hrs, not the "&N(cfgRequiredHours)&" hrs the '
-        f'BPOC is reported at. The "&TEXT({G},"0.##")&"-hr difference is not '
-        f'assigned to any numbered chapter in this table (chapter A, '
-        f'Administrative/Departmental Overview, carries no TCOLE minimum '
-        f'here). This is a gap in the MINIMUMS column only - it does not '
-        f'change delivered hours or the exactly-"&N(cfgRequiredHours)&'
-        f'"-hour report. Verify the per-chapter minimums against the current '
-        f'TCOLE BPOC course outline and record where those hours belong '
-        f'before submission.")'))
+        f'BPOC is reported at. The "&TEXT({G},"0.##")&"-hr difference means a '
+        f'line on the TCOLE hours table is missing from or miskeyed in this '
+        f'column. Check it against the IRG hours table (Instructor Resource '
+        f'Guide, \"0. Abstract\", final pages) - note that Module R, End of '
+        f'Course Review (2 hrs), is listed there WITHOUT a chapter number and '
+        f'is easy to drop. This is a gap in the MINIMUMS column only - it does '
+        f'not change delivered hours or the exactly-"&N(cfgRequiredHours)&'
+        f'"-hour report, but resolve it before submission.")'))
     gap.font = F_SMALL
     gap.alignment = A_LEFT_WRAP
     ws.row_dimensions[tr + 2].height = 44

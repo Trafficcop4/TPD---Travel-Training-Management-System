@@ -624,7 +624,11 @@ def test_workbook():
     for sheet, rngs in (("ChapterPacket", ["C5"]), ("EvalSheet", ["C5"]),
                         ("ExamPlan", [f"H{r}" for r in range(6, 31)]),
                         ("WritingMaster", [f"D{r}" for r in range(6, 46)]),
-                        ("ChapterMaster", [f"E{r}" for r in range(56, 71)])):
+                        # derived, never hard-coded: the sub-class block sits
+                        # below the chapter rows, so adding a chapter (e.g.
+                        # Module R "End of Course Review") shifts it and a
+                        # literal row range fails on a healthy workbook
+                        ("ChapterMaster", _subclass_parent_cells(wb))):
         wsx = wb[sheet]
         dvf = [dv.formula1 for dv in wsx.data_validations.dataValidation]
         check("=nrCHnum" in dvf, f"{sheet} chapter dropdown reads nrCHnum")
@@ -1263,6 +1267,17 @@ def test_workbook():
           "agency emails report a cadet whose AgencyID resolves to nothing")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
+
+
+
+def _subclass_parent_cells(wb):
+    """E-column cells of the ChapterMaster sub-class block, read from the
+    nrSUBparent named range rather than assumed to start at row 56."""
+    ref = wb.defined_names["nrSUBparent"].value.split("!")[1].replace("$", "")
+    a, b = ref.split(":")
+    r1 = int(re.sub(r"[A-Z]", "", a))
+    r2 = int(re.sub(r"[A-Z]", "", b))
+    return [f"E{r}" for r in range(r1, r2 + 1)]
 
 
 def main():

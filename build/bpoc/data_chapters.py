@@ -52,6 +52,12 @@ CHAPTERS = [
     ("O", "41", "Firearms", 48, 48),
     ("P", "42", "HazMat Awareness / ICS", 4, 4),
     ("Q", "43", "ALERRT Level 1", 16, 16),
+    # Module R on the TCOLE hours table (IRG "0. Abstract", p.11-12). It is
+    # listed as its own line with 2 hours but carries no chapter NUMBER, so
+    # it had no row here and ChapterMaster's minimums summed to 734 against
+    # a course that must total exactly 736 - a coordinator reconciling the
+    # audit sheet came up 2 hours short with nothing to attribute it to.
+    ("R", "EOC", "End of Course Review", 2, 2),
 ]
 
 REQUIRED_TCOLE_HOURS = 736

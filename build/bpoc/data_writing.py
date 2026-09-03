@@ -20,7 +20,7 @@ ASSIGNMENTS = [
      "Discuss previous experiences with law enforcement, how the interaction "
      "correlates to the police models discussed, and how that interaction "
      "affected the quest for a law enforcement career."),
-    (3, "Professional Policing — TCOLE", "4", 0, 0,
+    (3, "Professional Policing", "4", 0, 0,
      "Discuss how TCOLE's role in policing supports the information discussed "
      "in Professional Policing."),
     (4, "Multiculturalism / Racial Profiling", "6", 0, 0,
@@ -131,9 +131,15 @@ ASSIGNMENTS = [
      "Summarize the details of the offense, the issue on appeal, the position "
      "of the defendant and the state, the final decision and if there is a "
      "dissent, the argument of the dissent."),
-    (29, "Arrest and Control — B (ICS certificates)", "31", 1, 1,
+    # verbatim from the source PDF: the exact FEMA course VERSIONS matter
+    # (IS-100.c / IS-200.c / IS-700.b) and a paraphrase to "training.fema.gov"
+    # dropped them from the handout the cadets actually receive
+    (29, "Arrest and Control — B", "31", 1, 1,
      "Complete the following FEMA online courses and submit your completion "
-     "certificates: ICS 100, ICS 200, and ICS 700 (training.fema.gov)."),
+     "certificates: ICS 100 (https://training.fema.gov/is/courseoverview.aspx"
+     "?code=IS-100.c), ICS 200 (https://training.fema.gov/is/courseoverview."
+     "aspx?code=IS-200.c), ICS 700 (https://training.fema.gov/is/"
+     "courseoverview.aspx?code=IS-700.b)"),
     (30, "Booking Procedures", "32", 0, 1,
      "Complete a booking form."),
     (31, "Interview", "32", 1, 2,
