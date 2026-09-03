@@ -277,26 +277,35 @@ PT_EVENTS = [
 
 # ------------------------------------------------------- course critique form
 # Existing "Class Evaluation and Assessment" questions, lightly modernized.
+# VERBATIM from the academy's approved "Class Evaluation and Assessment"
+# form (Chapter 01 packet), verified against the PDF. Five of these had been
+# silently copy-edited here - "my job needs" had become "your job needs",
+# which changes what is being asked - and the coordinator's instruction is to
+# match the approved form exactly. The source's own grammar in Q6 and Q8 is
+# intentional and must NOT be "fixed": this is an audit artifact and it has
+# to read the way the form the cadets sign reads.
 EVAL_QUESTIONS = [
     "Were the goals and objectives for the course provided at the beginning "
     "of the class?",
     "Was the material presented in a logical order?",
-    "Was the course related to your job needs?",
-    "Were real-life examples or situations used to relate the material?",
+    "Was the course related to my job needs?",
+    "Were real life examples or situations used to relate the materials?",
     "Will this course improve your job performance?",
-    "Were the teaching aids, demonstrations, and handout materials of "
-    "adequate quality?",
+    "Were the teaching aids (demonstrations) handout materials of adequate "
+    "quality?",
     "Was the instructor knowledgeable about the course material?",
-    "Did the instructor present the information in a clear and "
-    "understandable way?",
+    "Did the instructor present the information a clear and understandable "
+    "way?",
     "Did the instructor give you an opportunity to interact with the class "
     "or ask questions?",
-    "Did you get satisfactory answers to your questions about the material?",
+    "Did you get satisfactory answers to your questions about the materials?",
     "Would you recommend this course to others?",
 ]
-EVAL_SCALE = "Check the appropriate box — 1 (lowest) to 5 (highest) — for each question."
-EVAL_FOOTER = ("Please use the space below to elaborate on any of the above "
-               "points or any personal comments you may have. Your responses "
-               "will be used to shape and refine the quality and content of "
-               "future schools.")
+# also verbatim from the approved form
+EVAL_SCALE = ("CHECK APPROPRIATE BOX.  1 LOWEST TO 5 HIGHEST RATING FOR EACH "
+              "OF THE BELOW LISTED QUESTIONS.")
+EVAL_FOOTER = ("Please use the below listed space to elaborate on any of the "
+               "above points or any personal comments you may have. Your "
+               "responses will be used to shape and refine the quality and "
+               "content of future schools.")
 ACADEMY_ADDRESS = "711 W. Ferguson St., Tyler, TX 75702 — (903) 531-1018  Fax (903) 535-0102"

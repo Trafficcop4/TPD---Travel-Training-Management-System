@@ -260,9 +260,25 @@ the caps don't credit (**TYPE NOT CREDITED**), and minutes booked
 against a PT event (**UNIT MISMATCH**). Credit is also capped at the
 event's own size, so over-crediting cannot mask an owed balance.
 
-`sysAttendance` totals it against the caps: classroom minutes vs
-`cfgClassroomCapMinutes` (5% of scheduled minutes) and PT sessions vs
-`cfgPTCapSessions` (5). **Makeup Complete?** must be Yes to graduate.
+`sysAttendance` totals it. **There is no classroom attendance allowance** —
+TCOLE's IRG says so outright (*"Learners are required to attend all classroom
+hours … there is no 10% attendance rule"*) and Academy policy 400 sets no
+percentage either. Every missed classroom minute must be made up
+minute-for-minute, so the classroom columns carry **minutes still owed**, not
+a share of a cap: `Cl Owed (min)`, a `Cl Tier` that escalates
+OK → Owes time → Advisory → CRITICAL on `cfgMakeupAdvisoryMin` /
+`cfgMakeupCriticalMin`, and `Cl Clear?`, which is Yes only at zero. Those two
+thresholds are **early warnings for the coordinator — they forgive nothing
+and gate nothing.**
+
+An earlier build of this workbook enforced an invented 5% classroom cap. It
+was not in any policy and is gone.
+
+PT is the one real cap in policy: no more than **five (5) sessions**
+(400.1.D), so `PT %` remains a share of `cfgPTCapSessions`. Skills-training
+time is stricter still — policy 400.1.C bars missing *any* of it, excused or
+not, and it cannot be made up. **Makeup Complete?** must be Yes to
+graduate.
 
 ### 4.5 Chapters, sub-classes, and hours
 You schedule under **your** class names; TCOLE counts **its** chapters.

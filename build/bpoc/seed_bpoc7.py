@@ -386,7 +386,8 @@ def seed():
 
     # ---- academy length comes from the schedule, not from the old workbook --
     # the V5.4 value (145,800 min = 2,430 hrs) is 2.5x the real 972-hr
-    # calendar, which inflates cfgClassroomCapMinutes (5%) by the same factor
+    # calendar. It no longer scales any cap (there is none), but it is the
+    # academy-length reference and must match the schedule.
     st = v6["Settings"]
     for r in range(6, 60):
         if sval(st.cell(row=r, column=5)) == "cfgTotalScheduledMinutes":
@@ -394,7 +395,7 @@ def seed():
             st.cell(row=r, column=3).value = sched_minutes
             print(f"cfgTotalScheduledMinutes: {old} -> {sched_minutes} "
                   f"({sched_minutes/60:.0f} hrs from the schedule); "
-                  f"5% classroom cap = {round(sched_minutes*0.05)} min")
+                  f"academy-length reference only - no attendance cap")
             break
 
     # ---------- instructor banks from actual schedule usage ---------------

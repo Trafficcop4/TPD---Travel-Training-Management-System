@@ -82,10 +82,20 @@ SETTINGS = [
     ("Weight: Spelling", 0.1, "Spelling weight", "cfgWeightSpelling", "0%"),
     ("Weight: Final", 0.2, "Final exam weight", "cfgWeightFinal", "0%"),
     ("Spelling Intervention Avg", 75, "Below this spelling avg = early intervention (300.4.B)", "cfgSpellInterventionAvg", None),
-    ("Classroom Cap %", 0.05, "Attendance cap as % of total minutes", "cfgClassroomCapPct", "0.0%"),
+    # There is NO classroom attendance allowance. TCOLE's IRG is explicit -
+    # "Learners are required to attend all classroom hours as listed in this
+    # instructor resource guide, there is no 10% attendance rule" - and
+    # Academy policy 400 sets no percentage either: it bars missing skills
+    # training at all, caps PT at five sessions, and requires minute-for-
+    # minute makeup of everything else. A 5% cap shipped here for several
+    # rounds and was an invention of this build, not a rule. The two values
+    # below are EARLY-WARNING thresholds for the coordinator only; they
+    # forgive nothing and gate nothing.
+    ("Makeup Advisory (minutes owed)", 120, "Watch a cadet once outstanding makeup reaches this many minutes (early warning only - NOT an allowance)", "cfgMakeupAdvisoryMin", "#,##0"),
+    ("Makeup Critical (minutes owed)", 480, "Escalate once outstanding makeup reaches this many minutes (early warning only - NOT an allowance)", "cfgMakeupCriticalMin", "#,##0"),
     ("PT Cap (sessions)", 5, "Max PT sessions missed", "cfgPTCapSessions", None),
-    ("Attendance Advisory %", 0.6, "Tier 1 warning at this % of cap", "cfgAttendanceAdvisoryPct", "0%"),
-    ("Attendance Critical %", 0.8, "Tier 2 warning at this % of cap", "cfgAttendanceCriticalPct", "0%"),
+    ("PT Advisory (% of 5-session cap)", 0.6, "Tier 1 warning at this share of the PT session cap (PT is the only real cap in policy)", "cfgAttendanceAdvisoryPct", "0%"),
+    ("PT Critical (% of 5-session cap)", 0.8, "Tier 2 warning at this share of the PT session cap", "cfgAttendanceCriticalPct", "0%"),
     ("Home Agency (gets all cadets)", "TPD", "Agency code whose email includes every cadet", "cfgHomeAgency", None),
     ("Current Exam # (for emails)", 1, "Sequence # of the exam to email", "cfgCurrentExamNum", None),
     ("Current Spelling # (for emails)", 1, "Highest spelling test # administered", "cfgCurrentSpellingNum", None),
@@ -95,14 +105,12 @@ SETTINGS = [
     ("Flag: consecutive exam fails", 2, "Consecutive graded-exam scores below passing", "cfgFlagConsecFails", None),
     ("Flag: grade drop (points)", 10, "Drop in recorded score vs cadet's prior exam", "cfgFlagGradeDrop", None),
     ("Flag: category margin", 5, "Category avg within this many points of 70", "cfgFlagCategoryMargin", None),
-    ("Flag: attendance % of cap", 0.6, "Classroom or PT usage at/over this % of cap", "cfgFlagAttendancePct", "0%"),
+    ("Flag: PT % of session cap", 0.6, "Flag once PT sessions missed reach this share of the five-session cap", "cfgFlagAttendancePct", "0%"),
     ("Flag: open negative incidents", 2, "Open negative incidents at/above this count", "cfgFlagOpenIncidents", None),
     ("Flag: overdue writing", 1, "Overdue writing assignments at/above this count", "cfgFlagOverdueWriting", None),
 ]
 
 CALC_SETTINGS = [
-    ("Classroom Cap (minutes)", "ROUND(cfgTotalScheduledMinutes*cfgClassroomCapPct,0)",
-     "CALCULATED", "cfgClassroomCapMinutes", "#,##0"),
     ("Weights total (must = 100%)", "cfgWeightMajor+cfgWeightMinor+cfgWeightSpelling+cfgWeightFinal",
      "CALCULATED", "cfgWeightsTotal", "0%"),
 ]
@@ -146,24 +154,22 @@ def build_settings(wb):
     for i, (lab, _, _, nm, _) in enumerate(SETTINGS):
         row = DATA_ROW + i
         if nm == "cfgTotalScheduledMinutes":
-            # the Schedule is the authority on academy length; a stale value
-            # here scales cfgClassroomCapMinutes (the 5% attendance cap) by
-            # exactly its own error
+            # the Schedule is the authority on academy length. This no longer
+            # scales any cap (there is none); it is the reference figure for
+            # the 736-hour reconciliation and for sanity-checking the
+            # schedule, so a stale value is still worth objecting to.
             ws.cell(row=row, column=6, value=(
                 # nrSCH_TimeCheck,"OK": a block whose End is before its
                 # Start still produces MOD-derived hours (a 13:00->09:00
                 # typo reads 20 hrs), and those bogus hours used to be
                 # summed straight into the figure this cell tells the
-                # coordinator to copy into cfgTotalScheduledMinutes - which
-                # scales the 5% classroom attendance cap with it.
+                # coordinator to copy into cfgTotalScheduledMinutes.
                 '=IFERROR(ROUND(SUMIFS(nrSCH_Hrs,nrSCH_TimeCheck,"OK")'
                 "*60,0),0)"
             )).font = F_CALC
             # the empty-schedule branch must still object when C holds the
             # PREVIOUS academy's minutes: New Academy Reset empties the
-            # Schedule but leaves this value, and a stale value scales
-            # cfgClassroomCapMinutes (and therefore the classroom half of the
-            # graduation gate) by exactly its own error, silently.
+            # Schedule but leaves this value.
             ws.cell(row=row, column=7, value=(
                 f'=IF(AND($F${row}=0,N($C${row})=0),"No schedule entered yet",'
                 f'IF($F${row}=0,"CHECK - no schedule entered yet, but Total '
@@ -172,8 +178,7 @@ def build_settings(wb):
                 f'- enter this academy\'s schedule, then set this to match",'
                 f'IF(ROUND($C${row},0)=ROUND($F${row},0),"OK",'
                 f'"CHECK - schedule totals "&TEXT($F${row},"#,##0")&" min ("'
-                f'&TEXT($F${row}/60,"#,##0")&" hrs); cap would be "'
-                f'&TEXT(ROUND($F${row}*cfgClassroomCapPct,0),"#,##0")&" min")))'
+                f'&TEXT($F${row}/60,"#,##0")&" hrs)")))'
             )).font = F_SMALL
         # A blank / non-date Start Date empties the entire class-day
         # calendar (Control), and with it every retest deadline, memo due
@@ -1289,7 +1294,7 @@ def build_schedule(wb):
                    "run past midnight (22:00-02:00 counts as 4.00 hrs); "
                    "Time Check flags a block whose End is at or before its "
                    "Start, because those hours move chapter totals and the "
-                   "5% attendance cap. Printable as-is (File > Print).")
+                   "academy length. Printable as-is (File > Print).")
     return ws
 
 

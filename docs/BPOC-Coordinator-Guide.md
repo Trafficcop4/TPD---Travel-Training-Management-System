@@ -81,8 +81,16 @@ headers on every sheet. Tables start at row 5, data at row 6.
   flags INTERVENTION (policy 300.4.B) — document your response on
   **Counseling**.
 - **Attendance / Makeup** — exception log in minutes (classroom) and
-  sessions (PT). Makeup is minute-for-minute; `Cl Owed` must reach zero
-  before graduation. Print the day's **SignIn** sheet for the paper record
+  sessions (PT). **There is no classroom attendance allowance.** TCOLE's IRG
+  says it plainly — *"there is no 10% attendance rule"* — and Academy policy
+  400 sets no percentage either, so every missed classroom minute is made up
+  minute-for-minute and `Cl Owed` must reach **zero** before graduation.
+  (An earlier build enforced an invented 5% cap; it was never policy and is
+  gone.) The `Makeup Advisory` / `Makeup Critical` minute settings only
+  decide when a cadet appears on your watch list — **they forgive nothing.**
+  PT is the one real cap: no more than **five sessions** (400.1.D). Skills
+  training is stricter than both — policy 400.1.C bars missing *any* of it,
+  excused or not, and it cannot be made up. Print the day's **SignIn** sheet for the paper record
   (TCOLE requires original sign-ins **with PID**).
 - **Skills / PT / Medical / Incidents / Counseling / DismissalLog** — log
   as events happen; the engine rolls everything up.
@@ -98,7 +106,8 @@ headers on every sheet. Tables start at row 5, data at row 6.
   page (grades, projections, attendance, flags, latest incidents/counseling).
 - **GradChecklist / sysChecks** — the graduation gate: 70 in each category
   *and* every category actually recorded (major, minor, spelling and the
-  final exam), under caps, makeup complete, skills qualified, writing
+  final exam), PT sessions under the five-session cap, **all makeup
+  complete (classroom owed = 0)**, skills qualified, writing
   current, no open chain-of-command incident review, final PT **passed**,
   all certificate copies on file, no open dismissal review.
   **Certifications block graduation** — a cert needs a date *and*
@@ -170,11 +179,11 @@ powershell -File tools/Install-BPOC-VBA.ps1   # on Windows+Excel: builds the .xl
   OPEN until that same cadet's Makeup rows linked to its EventID cover the
   balance — then it shows CLEARED with the date. The Dashboard lists every
   OPEN event.
-- **What counts against the cap is the `Excused?` column, not the Reason.**
+- **What counts as missed time is the `Excused?` column, not the Reason.**
   The engine's `Counts?` formula reads `Excused?` (and the one documented
   exception: a `PT Modified` event whose documentation is Received). It does
   not look at the Reason column at all — Reason is reporting detail. So an
-  agency recall counts against the cap and must be made up **only if you log
+  agency recall counts as missed time and must be made up **only if you log
   it as `Counted`**. If a recall is genuinely excused, mark it `Excused` and
   it neither counts nor needs makeup. Earlier wording here said agency
   recalls always count as if the engine enforced it; it does not, and the

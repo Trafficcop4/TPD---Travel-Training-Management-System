@@ -97,11 +97,12 @@ Public Sub NewAcademyReset()
     SetName "cfgCurrentExamNum", 1
     SetName "cfgCurrentSpellingNum", 1
     Application.ScreenUpdating = True
-    ' cfgTotalScheduledMinutes is deliberately NOT zeroed here: it drives
-    ' cfgClassroomCapMinutes (the 5% classroom cap), and sysAttendance treats
-    ' a cap of 0 as "everyone passes" - a hard fail-open, worse than a stale
-    ' value. Settings F/G now flags the stale value on sight instead, and the
-    ' message below sends the coordinator there.
+    ' cfgTotalScheduledMinutes is deliberately NOT zeroed here. It no longer
+    ' drives any cap - there is no classroom attendance allowance, per TCOLE
+    ' ("there is no 10% attendance rule") and Academy policy 400 - but it is
+    ' still the academy-length reference, and a zero would read as a real
+    ' answer. Settings F/G flags a stale value on sight, and the message
+    ' below sends the coordinator there.
     MsgBox "Reset complete. Update Settings — class label, start/end dates, " & _
            "and Total Scheduled Minutes (this academy's length; the Check " & _
            "column beside it will say CHECK until it matches the new " & _

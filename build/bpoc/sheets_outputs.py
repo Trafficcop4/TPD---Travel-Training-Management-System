@@ -315,10 +315,11 @@ def build_watchlist(wb):
     ws = wb.create_sheet("WatchList")
     ws.sheet_view.showGridLines = False
     header_row(ws, ["Cadet", "Agency", "Flags", "Reasons", "Current Grade",
-                    "Attendance Cl%", "Overdue Writing", "Open Counseling"])
+                    "Makeup Owed (min)", "Overdue Writing",
+                    "Open Counseling"])
     ws.cell(row=FIRST, column=2, value=(
         '=IFERROR(SORTBY(FILTER(HSTACK(rngCadetNames,nrCadetAgency,nrFLcount,'
-        'nrFLreasons,nrGRcurrent,TEXT(nrATTclPct,"0%%"),nrWRoverdue,'
+        'nrFLreasons,nrGRcurrent,TEXT(nrATTclOwed,"#,##0"),nrWRoverdue,'
         'sysIncidents!$M$%d:$M$%d),(nrFLcount>0)*(nrCadetStatus="Active")),'
         'FILTER(nrFLcount,(nrFLcount>0)*(nrCadetStatus="Active")),-1),'
         '"No flagged cadets")' % (FIRST, LAST)))
@@ -551,9 +552,10 @@ def build_transcript(wb):
     r += 26
     section_bar(ws, r, 2, 10, "Attendance / Skills / PT / Writing / Conduct")
     r += 1
-    _profile_label(ws, r, 2, "Classroom minutes missed (net)",
-                   P + f'sysAttendance!$G${FIRST}:$G${LAST},"0")&" of "&'
-                   'cfgClassroomCapMinutes&" cap"', wide=4)
+    # no "of N cap": there is no classroom allowance to be a fraction of
+    _profile_label(ws, r, 2, "Classroom minutes still owed",
+                   P + f'sysAttendance!$G${FIRST}:$G${LAST},"0")&'
+                   '" min (all missed time must be made up)"', wide=4)
     r += 1
     _profile_label(ws, r, 2, "PT sessions missed (net)",
                    P + f'sysAttendance!$O${FIRST}:$O${LAST},"0")&" of "&'

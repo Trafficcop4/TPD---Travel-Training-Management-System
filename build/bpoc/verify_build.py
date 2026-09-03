@@ -578,8 +578,8 @@ def test_workbook():
     tot_chk = str(st.cell(row=tot_row, column=7).value or "")
     # SUMIFS(...,nrSCH_TimeCheck,"OK"), not SUM: a swapped start/end still
     # produces MOD-derived hours, and this is the figure the sheet tells the
-    # coordinator to copy into cfgTotalScheduledMinutes (which scales the 5%
-    # classroom attendance cap)
+    # coordinator to copy into cfgTotalScheduledMinutes (the academy-length
+    # reference)
     tot_det = str(st.cell(row=tot_row, column=6).value or "")
     check('SUMIFS(nrSCH_Hrs,nrSCH_TimeCheck,"OK")' in tot_det
           and "No schedule entered yet" in tot_chk,
@@ -842,10 +842,27 @@ def test_workbook():
     check("SORTBY" in wb["Instructors"]["M6"].value,
           "'Chapters Taught' sorts numerically")
 
-    # A42: Cl % / PT % carry a percent format under a % header
-    check(wb["sysAttendance"]["I6"].number_format == "0.0%" and
-          wb["sysAttendance"]["Q6"].number_format == "0.0%",
-          "sysAttendance Cl % / PT % are percent-formatted")
+    # PT % is still a share of a real cap (five sessions) and must render as
+    # a percentage. The classroom column is NOT a share of anything any more
+    # - there is no classroom allowance - so it carries minutes owed.
+    att = wb["sysAttendance"]
+    check(att["Q6"].number_format == "0.0%" and
+          att["I6"].number_format == "#,##0",
+          "PT % is a percentage; classroom column is minutes owed")
+    check(att["H5"].value == "Advisory At" and att["I5"].value ==
+          "Cl Owed (min)" and att["K5"].value == "Cl Clear?",
+          "sysAttendance classroom columns are cap-free")
+    check("cfgClassroomCapPct" not in wb.defined_names and
+          "cfgClassroomCapMinutes" not in wb.defined_names,
+          "the invented 5% classroom cap is gone from Settings")
+    check("cfgMakeupAdvisoryMin" in wb.defined_names and
+          "cfgMakeupCriticalMin" in wb.defined_names,
+          "makeup early-warning thresholds exist (warnings, not allowances)")
+    check('$I6=0,"Yes","No"' in str(att["K6"].value),
+          "classroom clearance asks only whether anything is still owed")
+    check(all("cfgClassroomCap" not in str(c.value)
+              for row in att.iter_rows(min_row=6, max_row=8) for c in row),
+          "no sysAttendance formula still reads a classroom cap")
 
     # A16 / A40 / A41: protection gaps
     # PrintCenter was the only green/OUTPUT tab shipping unprotected, even

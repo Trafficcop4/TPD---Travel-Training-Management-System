@@ -157,7 +157,8 @@ def build_sysattendance(wb):
     ws = wb.create_sheet("sysAttendance")
     ws.sheet_view.showGridLines = False
     header_row(ws, ["PID", "Cadet Name", "Status", "Cl Missed", "Cl MadeUp",
-                    "Cl Net", "Cl Cap", "Cl %", "Cl Tier", "Cl Elig",
+                    "Cl Net", "Advisory At", "Cl Owed (min)", "Cl Tier",
+                    "Cl Clear?",
                     "Cl Owed", "PT Missed", "PT MadeUp", "PT Net", "PT Cap",
                     "PT %", "PT Tier", "PT Elig", "Makeup Complete?",
                     "Tardy", "FullAbs", "PartAbs", "PTMissCnt", "Excused"])
@@ -173,11 +174,18 @@ def build_sysattendance(wb):
         "F": ('IF($B{r}="","",SUMIFS(nrAT_MadeUpMin,nrAT_PID,$B{r},'
               'nrAT_Counts,"Yes",nrAT_IsPT,"No"))', "fx"),
         "G": ('IF($B{r}="","",MAX(0,$E{r}-$F{r}))', "fx"),
-        "H": ('IF($B{r}="","",cfgClassroomCapMinutes)', "fx"),
-        "I": ('IF($B{r}="","",IF($H{r}=0,0,$G{r}/$H{r}))', "fx"),
-        "J": ('IF($B{r}="","",IF($I{r}>=1,"At Cap",IF($I{r}>=cfgAttendanceCriticalPct,'
-              '"Critical",IF($I{r}>=cfgAttendanceAdvisoryPct,"Advisory","OK"))))', "fx"),
-        "K": ('IF($B{r}="","",IF($H{r}=0,"Yes",IF($G{r}<$H{r},"Yes","No")))', "fx"),
+        # No classroom allowance exists. TCOLE: "there is no 10% attendance
+        # rule"; policy 400 requires every missed minute to be made up. So
+        # H is an early-warning threshold, not a cap; I is the minutes still
+        # OWED (not a share of anything); J escalates on those minutes; and
+        # K asks the only question policy actually asks - is anything still
+        # outstanding?
+        "H": ('IF($B{r}="","",cfgMakeupAdvisoryMin)', "fx"),
+        "I": ('IF($B{r}="","",MAX(0,$E{r}-$F{r}))', "fx"),
+        "J": ('IF($B{r}="","",IF($I{r}=0,"OK",'
+              'IF($I{r}>=cfgMakeupCriticalMin,"CRITICAL",'
+              'IF($I{r}>=cfgMakeupAdvisoryMin,"Advisory","Owes time"))))', "fx"),
+        "K": ('IF($B{r}="","",IF($I{r}=0,"Yes","No"))', "fx"),
         "L": ('IF($B{r}="","",MAX(0,$E{r}-$F{r}))', "fx"),
         "M": ('IF($B{r}="","",SUMIFS(nrAT_Sess,nrAT_PID,$B{r},nrAT_Counts,"Yes",nrAT_IsPT,"Yes"))', "fx"),
         "N": ('IF($B{r}="","",SUMIFS(nrAT_MadeUpSess,nrAT_PID,$B{r},'
@@ -185,7 +193,7 @@ def build_sysattendance(wb):
         "O": ('IF($B{r}="","",MAX(0,$M{r}-$N{r}))', "fx"),
         "P": ('IF($B{r}="","",cfgPTCapSessions)', "fx"),
         "Q": ('IF($B{r}="","",IF($P{r}=0,0,$O{r}/$P{r}))', "fx"),
-        "R": ('IF($B{r}="","",IF($Q{r}>=1,"At Cap",IF($Q{r}>=cfgAttendanceCriticalPct,'
+        "R": ('IF($B{r}="","",IF($Q{r}>=1,"AT CAP (5 sessions)",IF($Q{r}>=cfgAttendanceCriticalPct,'
               '"Critical",IF($Q{r}>=cfgAttendanceAdvisoryPct,"Advisory","OK"))))', "fx"),
         "S": ('IF($B{r}="","",IF($P{r}=0,"Yes",IF($O{r}<$P{r},"Yes","No")))', "fx"),
         "T": ('IF($B{r}="","",IF(AND($L{r}=0,$O{r}=0),"Yes","No"))', "fx"),
@@ -198,11 +206,12 @@ def build_sysattendance(wb):
     # fix column collision: header has 24 cols B..Y; L duplicated (Cl Owed)
     cols["L"] = ('IF($B{r}="","",MAX(0,$E{r}-$F{r}))', "fx")
     fill_rows(ws, FIRST, LAST, cols)
-    # I and Q are fractions of the cap under headers that say "%" - shipped
-    # as General they displayed 0.6521739130434783 on the visible engine
-    # sheet (and in anything that echoed them without its own TEXT()).
+    # Q is still a fraction of a real cap (five PT sessions) and must show as
+    # a percentage; shipped as General it displayed 0.6521739130434783. I is
+    # no longer a fraction of anything - it is minutes still owed - so it is
+    # formatted as a whole number.
     for rr in range(FIRST, LAST + 1):
-        ws[f"I{rr}"].number_format = "0.0%"
+        ws[f"I{rr}"].number_format = "#,##0"
         ws[f"Q{rr}"].number_format = "0.0%"
     define(wb, "nrATTclTier", "sysAttendance", f"$J${FIRST}:$J${LAST}")
     define(wb, "nrATTclElig", "sysAttendance", f"$K${FIRST}:$K${LAST}")
@@ -213,7 +222,7 @@ def build_sysattendance(wb):
     define(wb, "nrATTptPct", "sysAttendance", f"$Q${FIRST}:$Q${LAST}")
     define(wb, "nrATTmakeupOK", "sysAttendance", f"$T${FIRST}:$T${LAST}")
     col_widths(ws, {"A": 3, "B": 10, "C": 24})
-    sheet_note(ws, "Minutes vs the 5% classroom cap; PT sessions vs the "
+    sheet_note(ws, "Classroom MINUTES STILL OWED (there is no attendance allowance - every missed minute is made up); PT sessions vs the "
                    "5-session cap (policy 400). 'Cl MadeUp'/'PT MadeUp' are "
                    "the sum of the PER-EVENT credits on Attendance (P/Q), "
                    "each capped at that event's own duration — so these can "
@@ -358,7 +367,9 @@ def build_sysflags(wb):
               'AND(sysGrades!$J{r}<>"",sysGrades!$J{r}<cfgThresholdScore'
               '+cfgFlagCategoryMargin)),1,0))', "fx"),
         "H": ('IF($B{r}="","",IF(Spelling!$R{r}="INTERVENTION",1,0))', "fx"),
-        "I": ('IF($B{r}="","",IF(OR(sysAttendance!$I{r}>=cfgFlagAttendancePct,'
+        # classroom: any outstanding makeup at/over the advisory threshold.
+        # PT: still a real cap (five sessions, policy 400.1.D), so still a %.
+        "I": ('IF($B{r}="","",IF(OR(N(sysAttendance!$I{r})>=cfgMakeupAdvisoryMin,'
               'sysAttendance!$Q{r}>=cfgFlagAttendancePct),1,0))', "fx"),
         "J": ('IF($B{r}="","",IF(sysIncidents!$H{r}>=cfgFlagOpenIncidents,1,0))', "fx"),
         "K": ('IF($B{r}="","",IF(N(Writing!$AS{r})>=cfgFlagOverdueWriting,1,0))', "fx"),
@@ -731,13 +742,13 @@ AUDIT_CHECKS = [
          'current certificate copy and update the Instructors sheet"'),
         # a swapped start/end time is arithmetic, not a typo Excel can see:
         # the block's hours land in ChapterMaster "Delivered Hrs" and in the
-        # Settings schedule-minutes detector that sets the 5% attendance cap
+        # Settings schedule-minutes detector (academy-length reference)
         ("Schedule blocks with impossible times",
          'SUMPRODUCT((nrSCH_TimeCheck<>"")*(nrSCH_TimeCheck<>"OK"))', "0",
          'IF(SUMPRODUCT((nrSCH_TimeCheck<>"")*(nrSCH_TimeCheck<>"OK"))=0,'
          '"OK","CHECK")',
          '"End time is at or before Start: the block\'s hours are wrong, '
-         'which moves delivered chapter hours and the 5% attendance cap"'),
+         'which moves delivered chapter hours and the academy-length figure"'),
         # CHECK DATE rows are counted too: a retest dated on a weekend or a
         # holiday used to sit at "Pending" forever, so the 5-class-day clock
         # was unenforceable for exactly the rows that needed it.
