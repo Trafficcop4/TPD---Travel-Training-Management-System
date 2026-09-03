@@ -94,6 +94,15 @@ headers on every sheet. Tables start at row 5, data at row 6.
   (TCOLE requires original sign-ins **with PID**).
 - **Skills / PT / Medical / Incidents / Counseling / DismissalLog** — log
   as events happen; the engine rolls everything up.
+- **SkillsCheck** — one **Pass/Fail per skills training, per cadet**, and it
+  is *your* call, not something derived from the attempt log. Click **Fail**
+  on whatever they failed and that cadet cannot graduate: Blocking Issues
+  reads `Skills FAILED (Driving)` naming the skill. Change it to **Pass**
+  (or clear it) once they satisfy it and the block lifts by itself.
+  **Blank is not a failure** — missed skills time is deliberately *not*
+  auto-triggered, because in practice parts of skills training can be made
+  up — but every blank is counted in **Not Assessed** so an unassessed skill
+  is visible rather than quietly passing.
 - **Writing** — type **X** when received (lowercase x auto-capitalizes;
   blank = not done); red means past the computed due date.
 

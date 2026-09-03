@@ -450,7 +450,7 @@ def build_syschecks(wb):
                     "GraduationElig", "Blocking Issues", "Final Exam Elig",
                     "Certs", "Exams Recorded", "Skills Assessed",
                     "Firearms CoF", "Open Reviews", "Exams Pending",
-                    "Enroll Docs"])
+                    "Enroll Docs", "Skills P/F"])
     cols = _mirror()
     cols.update({
         "E": ('IF($B{r}="","",sysGrades!$V{r})', "fx"),
@@ -475,10 +475,17 @@ def build_syschecks(wb):
         # reviews actually recorded, approved and tagged on the DismissalLog,
         # so one closed review cannot pre-clear a future one.
         "M": ('IF($B{r}="","",IF($U{r}="","No","Yes"))', "fx"),
+        # Coordinator-marked skills pass/fail (SkillsCheck). Deliberately a
+        # manual call, not derived from the attempt log and not auto-raised
+        # by missed skills time - parts of skills training can be made up in
+        # practice, so the person who ran the evaluation decides. Any Fail
+        # blocks graduation until it is cleared or changed to Pass.
+        "X": ('IF($B{r}="","",IF(SkillsCheck!$P{r}="No","No","Yes"))', "fx"),
         "N": ('IF($B{r}="","",IF(AND($E{r}="Yes",$F{r}="Yes",$G{r}="Yes",'
               '$H{r}="Yes",$I{r}="Yes",$J{r}="Yes",$K{r}="Yes",$L{r}="Yes",'
               '$Q{r}="Yes",$R{r}="Yes",$S{r}="Yes",$T{r}="Yes",'
-              '$M{r}="No",$V{r}="Yes",$W{r}="Yes"),"Yes","No"))', "fx"),
+              '$M{r}="No",$V{r}="Yes",$W{r}="Yes",$X{r}="Yes"),"Yes","No"))',
+              "fx"),
         "O": ('IF($B{r}="","",IF($N{r}="Yes","Eligible",TRIM('
               'IF($E{r}<>"Yes","Academic; ","")&'
               'IF($R{r}<>"Yes","Exams not all recorded; ","")&'
@@ -497,6 +504,7 @@ def build_syschecks(wb):
               'IF($Q{r}<>"Yes","Certs; ","")&'
               'IF($V{r}<>"Yes","Exam pending (excused absence); ","")&'
               'IF($W{r}<>"Yes","Enrollment documents; ","")&'
+              'IF($X{r}<>"Yes","Skills FAILED ("&SkillsCheck!$N{r}&"); ","")&'
               'IF($M{r}="Yes","Dismissal review; ",""))))', "fx"),
         "P": ('IF($B{r}="","",IF(PT!$AB{r}="Yes","Yes",IF(PT!$AB{r}="No","No",'
               'IF(PT!$AB{r}="(rubric pending)","Pending",'

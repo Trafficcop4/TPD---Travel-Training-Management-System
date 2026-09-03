@@ -614,7 +614,8 @@ def build_gradchecklist(wb):
     header_row(ws, ["PID", "Cadet", "Agency", "Academic", "Classroom",
                     "PT Sessions", "Skills", "Incidents", "Writing",
                     "Makeup", "Final PT", "No Dismiss Rev", "Certs",
-                    "Enroll Docs", "ELIGIBLE", "Blocking Issues"])
+                    "Enroll Docs", "Skills P/F", "ELIGIBLE",
+                    "Blocking Issues"])
     cols = {
         "B": ('IF(Cadets!$B{r}="","",Cadets!$B{r})', "fx"),
         "C": ('IF($B{r}="","",Cadets!$F{r})', "fx"),
@@ -632,23 +633,25 @@ def build_gradchecklist(wb):
         # Enroll Docs (sysChecks W) sits BEFORE the verdict columns so
         # ELIGIBLE and Blocking Issues stay last on the printed page.
         "O": ('IF($B{r}="","",sysChecks!$W{r})', "fx"),
-        "P": ('IF($B{r}="","",sysChecks!$N{r})', "fx"),
-        "Q": ('IF($B{r}="","",sysChecks!$O{r})', "fx"),
+        # coordinator-marked skills pass/fail, also before the verdict columns
+        "P": ('IF($B{r}="","",sysChecks!$X{r})', "fx"),
+        "Q": ('IF($B{r}="","",sysChecks!$N{r})', "fx"),
+        "R": ('IF($B{r}="","",sysChecks!$O{r})', "fx"),
     }
     fill_rows(ws, FIRST, LAST, cols)
-    cf_yes_no(ws, f"E{FIRST}:P{LAST}")
+    cf_yes_no(ws, f"E{FIRST}:Q{LAST}")
     # anything that is not a plain "Yes" is a block — "Pending" / "Not taken"
     # (final PT never assessed, rubric never configured) must read as red,
     # not as an uncoloured neutral value on the graduation gate
-    cf_formula(ws, f"E{FIRST}:P{LAST}",
+    cf_formula(ws, f"E{FIRST}:Q{LAST}",
                f'AND(E{FIRST}<>"",E{FIRST}<>"Yes")', FILL_WARNBG)
-    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 18, "Q": 54})
-    for cl in "EFGHIJKLMNOP":
+    col_widths(ws, {"A": 3, "B": 10, "C": 24, "D": 18, "R": 54})
+    for cl in "EFGHIJKLMNOPQ":
         ws.column_dimensions[cl].width = 10
-    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:Q{LAST}",
+    page_setup_landscape(ws, print_area=f"B{HDR_ROW}:R{LAST}",
                          repeat_rows=f"{HDR_ROW}:{HDR_ROW}")
     sheet_note(ws, "The final gate before the ceremony — columns Academic "
-                   "through Enroll Docs must ALL read Yes and Blocking Issues must "
+                   "through Skills P/F must ALL read Yes and Blocking Issues must "
                    "read 'Eligible' — it is never blank for a passing cadet. "
                    "Anything else blocks and is spelled out in "
                    "Blocking Issues: 'No', 'Pending' (Final PT points rubric "
@@ -1885,6 +1888,10 @@ INPUT_GUIDE = [
     ("Makeup", "Makeup credit: minutes/sessions, documentation, holds."),
     ("Skills", "Skills attempts: category, result, score, firearms course "
      "of fire."),
+    ("SkillsCheck", "One Pass/Fail per skills training per cadet — your "
+     "call, not the attempt log's. Marking any skill Fail blocks graduation "
+     "and names that skill in Blocking Issues. Blank is not a failure, but "
+     "it is counted under 'Not Assessed'."),
     ("Writing", "Type X when an assignment is received (auto-capitalizes)."),
     ("Incidents", "Positive/negative incidents with severity and resolution."),
     ("Counseling", "Every intervention: tutoring, counseling, agency "

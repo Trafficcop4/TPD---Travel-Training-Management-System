@@ -367,6 +367,28 @@ Rules the formulas implement:
   61.41–61.49 s is uncovered on the page; "best tier met" resolves it
   conservatively to Tier 1 (12 pts) rather than returning nothing.
 
+### 4.6c Skills pass/fail (SkillsCheck)
+`SkillsCheck` is a per-cadet × per-skill grid of **Pass / Fail**, one column
+per `SkillsMaster` category (10 slots; the spare ones label themselves from
+SkillsMaster). It is a **coordinator judgment, entered by hand** — it is not
+computed from the `Skills` attempt log, and nothing auto-raises it.
+
+That is deliberate. Policy 400.1.C says skills-training time cannot be missed
+or made up, but in practice parts of skills training *can* be made up, so the
+workbook does not turn a skills absence into an automatic failure. The person
+who ran the evaluation decides.
+
+- **Fail** on any skill → `Skills P/F OK?` = No → `sysChecks` **X** = No →
+  graduation blocked, with Blocking Issues naming the skill:
+  `Skills FAILED (Firearms, SFST)`. Also shown on `GradChecklist`.
+- **Blank** is *not* a failure. It is counted in **Not Assessed**, so an
+  unassessed skill is visible without silently gating anyone.
+- Clearing the Fail, or changing it to Pass, lifts the block immediately.
+
+This sits alongside — not instead of — the derived skills gates: `sysChecks`
+**H** (attempt-log qualification), **S** (all categories assessed) and **T**
+(both firearms courses of fire).
+
 ### 4.7 Flags vs gates — two different things
 - **`sysFlags` (warnings)** — 15 threshold tests, every threshold a
   `cfg*` cell on Settings. Produces a **Flag Count** and a plain-English

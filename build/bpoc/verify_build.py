@@ -59,7 +59,7 @@ def test_postprocess_units():
 
 def test_workbook():
     wb = load_workbook(WB_PATH)
-    check(len(wb.sheetnames) == 60, f"60 sheets ({len(wb.sheetnames)} found)")
+    check(len(wb.sheetnames) == 61, f"61 sheets ({len(wb.sheetnames)} found)")
 
     # every referenced name is defined
     defined = set(wb.defined_names.keys())
@@ -402,6 +402,31 @@ def test_workbook():
     check("Certification requirements waived as N/A" in
           [c[0] for c in sheets_engine.AUDIT_CHECKS],
           "sysAudit counts waived certification requirements")
+    # Coordinator-marked skills pass/fail. Explicitly a MANUAL call: missed
+    # skills time must not auto-trigger anything, because parts of skills
+    # training can be made up in practice. A Fail is what blocks.
+    skc = wb["SkillsCheck"]
+    check(skc["B5"].value == "PID" and skc["N5"].value == "Failed" and
+          skc["P5"].value == "Skills P/F OK?",
+          "SkillsCheck grid with a named-failures rollup")
+    _dvf = [dv.formula1 for dv in skc.data_validations.dataValidation]
+    check('"Pass,Fail"' in _dvf, "SkillsCheck cells offer only Pass/Fail")
+    check('SkillsMaster!$B$6' in str(skc["N6"].value) and
+          "TEXTJOIN" in str(skc["N6"].value),
+          "failed skills are named from SkillsMaster, not from this header")
+    check('$N6="","Yes","No"' in str(skc["P6"].value),
+          "any Fail turns Skills P/F OK? to No")
+    # a blank must NOT read as a failure - it is counted, not gated
+    check("Not Assessed" == skc["O5"].value and
+          "COUNTIFS" in str(skc["O6"].value),
+          "unassessed skills are counted, not treated as failures")
+    check('SkillsCheck!$P6="No"' in str(wb["sysChecks"]["X6"].value) and
+          '$X6="Yes"' in str(wb["sysChecks"]["N6"].value) and
+          'Skills FAILED (' in str(wb["sysChecks"]["O6"].value),
+          "a failed skill blocks graduation and is named in Blocking Issues")
+    check(wb["GradChecklist"]["P5"].value == "Skills P/F" and
+          'sysChecks!$X' in str(wb["GradChecklist"]["P6"].value),
+          "GradChecklist shows the skills pass/fail column")
     check("Certifications!$T" in wb["sysChecks"]["Q6"].value and
           '$Q6="Yes"' in wb["sysChecks"]["N6"].value and
           "Certs; " in wb["sysChecks"]["O6"].value,

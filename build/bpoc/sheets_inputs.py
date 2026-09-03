@@ -1315,6 +1315,90 @@ def build_advisoryboard(wb):
     return ws
 
 
+# --------------------------------------------------------------------------
+# Explicit per-cadet pass/fail on each skills training. This is a COORDINATOR
+# JUDGMENT, deliberately NOT derived from the Skills attempt log and NOT
+# triggered automatically by missed skills time: in practice there are ways to
+# make up aspects of skills training, so the decision stays with the person
+# who ran the evaluation. Marking Fail is what blocks graduation.
+def build_skillscheck(wb):
+    ws = wb.create_sheet("SkillsCheck")
+    ws.sheet_view.showGridLines = False
+    # one column per SkillsMaster row (rngSM_cat is B6:B15 = 10 slots). The
+    # seeded categories get static headers; the spare slots pull their label
+    # from SkillsMaster so adding a category there names its column here
+    # instead of leaving an anonymous column nobody dares use.
+    n_slots = 10
+    cats = [c[0] for c in DL.SKILLS]
+    hdrs = ["PID", "Cadet Name"]
+    for i in range(n_slots):
+        hdrs.append(cats[i] if i < len(cats) else None)
+    hdrs += ["Failed", "Not Assessed", "Skills P/F OK?"]
+    header_row(ws, hdrs)
+    for i in range(len(cats), n_slots):
+        c = ws.cell(row=HDR_ROW, column=4 + i)
+        c.value = f'=IF(SkillsMaster!$B${DATA_ROW+i}="","(spare)",SkillsMaster!$B${DATA_ROW+i})'
+    first, last = DATA_ROW, CADET_LAST
+    d0 = get_column_letter(4)                    # D
+    d1 = get_column_letter(3 + n_slots)          # M
+    c_failed = get_column_letter(4 + n_slots)    # N
+    c_notass = get_column_letter(5 + n_slots)    # O
+    c_ok = get_column_letter(6 + n_slots)        # P
+    cols = {
+        "B": ('IF(Cadets!$B{r}="","",Cadets!$B{r})', "fx"),
+        "C": ('IF(Cadets!$B{r}="","",Cadets!$F{r})', "fx"),
+    }
+    for i in range(n_slots):
+        cols[get_column_letter(4 + i)] = (None, "in")
+    # which ones they failed, named - so the blocking reason is specific
+    parts = []
+    for i in range(n_slots):
+        col = get_column_letter(4 + i)
+        # name the skill from SkillsMaster, not from this sheet's header, so
+        # a renamed category renames itself in the blocking reason too
+        parts.append(f'IF(${col}{{r}}="Fail",SkillsMaster!$B${DATA_ROW + i},"")')
+    cols[c_failed] = ('IF($C{r}="","",TEXTJOIN(", ",TRUE,' +
+                      ",".join(parts) + "))", "fx")
+    # blanks are NOT treated as failures (the coordinator marks a fail
+    # deliberately) but they are counted, so an unassessed skill is visible
+    # rather than silently passing
+    cols[c_notass] = ('IF($C{r}="","",COUNTA(SkillsMaster!$B$%d:$B$%d)'
+                      '-COUNTIFS($%s{r}:$%s{r},"Pass")'
+                      '-COUNTIFS($%s{r}:$%s{r},"Fail"))'
+                      % (DATA_ROW, DATA_ROW + n_slots - 1,
+                         d0, d1, d0, d1), "fx")
+    cols[c_ok] = ('IF($C{r}="","",IF($%s{r}="","Yes","No"))' % c_failed, "fx")
+    fill_rows(ws, first, last, cols)
+    dv_list(ws, '"Pass,Fail"',
+            [f"{get_column_letter(4+i)}{first}:{get_column_letter(4+i)}{last}"
+             for i in range(n_slots)])
+    for i in range(n_slots):
+        col = get_column_letter(4 + i)
+        cf_formula(ws, f"{col}{first}:{col}{last}", f'${col}{first}="Fail"',
+                   FILL_WARNBG)
+    cf_formula(ws, f"{c_failed}{first}:{c_failed}{last}",
+               f'${c_failed}{first}<>""', FILL_WARNBG)
+    define(wb, "nrSKC_Failed", "SkillsCheck",
+           f"${c_failed}${first}:${c_failed}${last}")
+    define(wb, "nrSKC_NotAssessed", "SkillsCheck",
+           f"${c_notass}${first}:${c_notass}${last}")
+    define(wb, "nrSKC_OK", "SkillsCheck", f"${c_ok}${first}:${c_ok}${last}")
+    widths = {"A": 3, "B": 10, "C": 24, c_failed: 34, c_notass: 13, c_ok: 14}
+    for i in range(n_slots):
+        widths[get_column_letter(4 + i)] = 11
+    col_widths(ws, widths)
+    sheet_note(ws, "One Pass/Fail per skills training, per cadet - your call, "
+                   "not the attempt log's. Marking ANY skill Fail blocks "
+                   "graduation and names that skill in the cadet's Blocking "
+                   "Issues; clear the Fail (or change it to Pass) once the "
+                   "cadet has satisfied it and the block lifts. A BLANK is "
+                   "not a failure - missed skills time is not auto-triggered, "
+                   "because in practice parts of skills training can be made "
+                   "up - but blanks are counted in 'Not Assessed' so an "
+                   "unassessed skill is visible instead of quietly passing.")
+    return ws
+
+
 def build_all_inputs(wb):
     build_cadets(wb)
     build_examscores(wb)
@@ -1322,6 +1406,7 @@ def build_all_inputs(wb):
     build_attendance(wb)
     build_makeup(wb)
     build_skills(wb)
+    build_skillscheck(wb)
     build_writing(wb)
     build_incidents(wb)
     build_counseling(wb)

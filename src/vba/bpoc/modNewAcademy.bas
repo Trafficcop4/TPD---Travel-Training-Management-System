@@ -36,6 +36,9 @@ Public Sub NewAcademyReset()
     ClearRange "Makeup", "M6:M505"
     ClearRange "Skills", "C6:C605": ClearRange "Skills", "E6:E605"
     ClearRange "Skills", "I6:M605": ClearRange "Skills", "Q6:R605"
+    ' SkillsCheck: the coordinator's Pass/Fail marks (D..M). B/C mirror the
+    ' roster and N/O/P are formulas, so only the ten input columns are cleared.
+    ClearRange "SkillsCheck", "D6:M55"
     ClearRange "Writing", "D6:AQ55"
     ClearRange "Incidents", "C6:D405": ClearRange "Incidents", "F6:K405"
     ClearRange "Incidents", "M6:O405"
