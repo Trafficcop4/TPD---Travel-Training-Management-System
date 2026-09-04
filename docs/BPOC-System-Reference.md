@@ -334,6 +334,18 @@ who may teach it. Note this checks the **Bank** (certified pool), not the
 pre-picked for is a scheduling change, not a credentials problem.
 
 ### 4.6b Final PT scoring (approved PT Test Score Chart)
+**Baseline and final are two different tests, and they are supposed to
+disagree.** The seven BASELINE events on the PT sheet are the *entry*
+standard from the policy manual; the chart below is the *exit* standard. A
+cadet is expected to improve across the academy, so every final minimum is
+stricter than its baseline — 23 push-ups against 18, 20.2 s agility against
+22.0, 15:42 against 18:48, 66.99 s against 76. The push-up protocol differs
+as well: baseline is 18 reps **in one minute**, the final is 23 reps with
+**no time limit**. None of that is a contradiction to reconcile, and
+`verify_build` asserts the direction so a typo cannot quietly make a final
+standard *easier* than its baseline. Bench press and vertical jump are
+baseline-only and have no final equivalent.
+
 `Settings` carries the approved chart as an editable table: a **Points per
 tier** row (12 / 14 / 16 / 18 / 20) plus one row per event holding the value
 a cadet must **reach** for each tier. `PT` columns V–Z score themselves from

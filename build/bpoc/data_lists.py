@@ -265,6 +265,28 @@ PT_FINAL_BANDS = [
 ]
 PT_TIER_POINTS = [12, 14, 16, 18, 20]
 
+# The BASELINE standards in PT_EVENTS below and the FINAL chart above are two
+# DIFFERENT tests and are SUPPOSED to disagree. Baseline is the entry standard
+# from the policy manual; the chart is the exit standard, and the whole point
+# of the academy is that a cadet improves, so every final minimum is stricter
+# than its baseline. Do not "reconcile" them - they are not a contradiction.
+#
+# Note the push-up protocol genuinely differs too: baseline is 18 reps IN ONE
+# MINUTE, the final is 23 reps with NO TIME LIMIT. Different tests, not a
+# typo.
+#
+# Baseline values restated numerically, in the SAME units the final bands use
+# (seconds for the 1.5 mile), purely so verify_build can assert that no final
+# standard is ever EASIER than the baseline it is meant to exceed. Bench press
+# and vertical jump are baseline-only and have no final equivalent.
+PT_BASELINE_NUMERIC = {
+    "Push-Ups":     (18, True),      # 18 reps in 1:00
+    "Sit-Ups":      (16, True),      # 16 reps in 1:00
+    "Agility Run":  (22.0, False),   # Illinois agility, under 22.0 s
+    "1.5 Mile Run": (18 * 60 + 48, False),   # 18:48 = 1128 s
+    "300 M Sprint": (76, False),     # 76 s
+}
+
 PT_EVENTS = [
     ("Bench Press", "62% of body weight (1 rep)", "lbs", True),
     ("Vertical Jump", "14.5 inches", "in", True),

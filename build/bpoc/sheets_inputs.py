@@ -946,7 +946,15 @@ def build_pt(wb):
     col_widths(ws, {"A": 3, "B": 10, "C": 24, "AA": 11, "AB": 13, "AC": 14})
     for i in range(4, 27):
         ws.column_dimensions[get_column_letter(i)].width = 9
-    sheet_note(ws, "Raw values per event: bench lbs, jump inches, pushup/situp "
+    sheet_note(ws, "BASELINE columns are the ENTRY standard (policy manual); "
+                   "FINAL columns are graded against the approved PT Test "
+                   "Score Chart, which is the EXIT standard. They differ on "
+                   "purpose — cadets are expected to improve, so every final "
+                   "minimum is higher than its baseline, and the push-up "
+                   "protocol differs too (baseline 18 reps in 1:00, final 23 "
+                   "reps with no time limit). That is not a contradiction to "
+                   "reconcile. "
+                   "Raw values per event: bench lbs, jump inches, pushup/situp "
                    "reps, agility & 300m seconds, 1.5mi minutes DECIMAL "
                    "(12:35 = 12.5833 — the engine converts to seconds to "
                    "score it). Pts columns COMPUTE from the approved PT Test "

@@ -1154,6 +1154,18 @@ def test_workbook():
           _vals[3] == [942, 848, 755, 662, 570] and
           _vals[4] == [66.99, 61.40, 55.80, 50.20, 45.99],
           f"chart thresholds seeded exactly as approved {_vals[4]}")
+    # Baseline (entry) and final (exit) are different tests and are MEANT to
+    # differ - a cadet is expected to improve - so the only wrong state is a
+    # final standard that is EASIER than the baseline it should exceed.
+    for _ev, _src, _hib, _m, _bands in _DLm.PT_FINAL_BANDS:
+        if _ev not in _DLm.PT_BASELINE_NUMERIC:
+            continue
+        _base, _bhib = _DLm.PT_BASELINE_NUMERIC[_ev]
+        _t1 = _bands[0]
+        _ok = (_t1 >= _base) if _hib else (_t1 <= _base)
+        check(_hib == _bhib and _ok,
+              f"final {_ev} tier 1 ({_t1}) is stricter than baseline "
+              f"({_base})")
     _pts = wb.defined_names["nrPTTierPts"].value.split("!")[1]
     check([c.value for c in _sv[_pts.replace("$", "")][0]] ==
           [12, 14, 16, 18, 20],

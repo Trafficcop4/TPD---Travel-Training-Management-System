@@ -18,7 +18,9 @@ headers on every sheet. Tables start at row 5, data at row 6.
 
 1. **Settings** — class label, start/end dates, weights (40/30/10/20),
    caps, retest window, flag thresholds. The **PT rubric block** holds the
-   approved *PT Test Score Chart*: five events, tiers worth
+   approved *PT Test Score Chart* — the **final/exit** standard, deliberately
+   higher than the baseline entry standards on the PT sheet, because cadets
+   are expected to improve: five events, tiers worth
    **12 / 14 / 16 / 18 / 20** points, so 60 = every minimum met and 100 =
    Tier 5 across the board. **Passing is 70** (*PT Final Min Points*) —
    note that meeting every event minimum scores 60 and therefore does

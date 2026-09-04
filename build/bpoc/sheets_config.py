@@ -269,8 +269,10 @@ def build_settings(wb):
 
     # ---- PT final-assessment points rubric (approved chart v1 09/03/2026) --
     section_bar(ws, r, 2, 9, "Final PT Assessment — Points Rubric "
-                             "(approved PT Test Score Chart — each cell is "
-                             "the value a cadet must REACH for that tier)")
+                             "(approved PT Test Score Chart, the EXIT "
+                             "standard — each cell is the value a cadet must "
+                             "REACH for that tier; higher than the entry "
+                             "standard by design)")
     r += 1
     rub_hdr = r
     header_row(ws, ["Event", "Measure", "Tier 1", "Tier 2", "Tier 3",
