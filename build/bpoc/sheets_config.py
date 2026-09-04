@@ -680,7 +680,7 @@ def build_chaptermaster(wb):
         f'BPOC is reported at. The "&TEXT({G},"0.##")&"-hr difference means a '
         f'line on the TCOLE hours table is missing from or miskeyed in this '
         f'column. Check it against the IRG hours table (Instructor Resource '
-        f'Guide, \"0. Abstract\", final pages) - note that Module R, End of '
+        f'Guide, ""0. Abstract"", final pages) - note that Module R, End of '
         f'Course Review (2 hrs), is listed there WITHOUT a chapter number and '
         f'is easy to drop. This is a gap in the MINIMUMS column only - it does '
         f'not change delivered hours or the exactly-"&N(cfgRequiredHours)&'

@@ -24,6 +24,65 @@ WB_PATH = os.path.join(os.path.dirname(os.path.dirname(HERE)),
 failures = []
 
 
+
+def _formula_string_regions(f):
+    """Split an Excel formula into (kind, text) honouring "" escaping."""
+    out = []
+    i, n, cur = 0, len(f), []
+    while i < n:
+        if f[i] == '"':
+            out.append(("code", "".join(cur)))
+            cur = []
+            i += 1
+            buf = []
+            while i < n:
+                if f[i] == '"':
+                    if i + 1 < n and f[i + 1] == '"':
+                        buf.append('"')
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                buf.append(f[i])
+                i += 1
+            out.append(("str", "".join(buf)))
+        else:
+            cur.append(f[i])
+            i += 1
+    out.append(("code", "".join(cur)))
+    return out
+
+
+def check_quote_escaping(wb):
+    """A literal quote inside an Excel string must be DOUBLED. A single one
+    ends the string early; Excel then cannot parse the formula and silently
+    DISCARDS it on open - "Removed Records: Formula from /xl/worksheets/
+    sheetNN.xml part" - so the cell arrives blank in the coordinator's copy
+    with no error anywhere in the build. openpyxl writes it out happily and
+    LibreOffice tolerates it, so nothing else in this pipeline catches it.
+
+    Detector: in this build no legitimate formula has a space outside a
+    string literal (sheet names in single quotes are excluded). Prose showing
+    up in a CODE region therefore means a quote was not doubled.
+    """
+    import re as _re
+    bad = []
+    for sh in wb.sheetnames:
+        for row in wb[sh].iter_rows():
+            for c in row:
+                v = c.value
+                if not (isinstance(v, str) and v.startswith("=")):
+                    continue
+                for kind, txt in _formula_string_regions(v):
+                    if kind != "code":
+                        continue
+                    if " " in _re.sub(r"'[^']*'", "", txt):
+                        bad.append(f"{sh}!{c.coordinate}")
+                        break
+    check(not bad,
+          f"every literal quote inside a formula string is doubled {bad[:4]}")
+
+
 def check(cond, msg):
     if cond:
         print(f"  ok  {msg}")
@@ -1326,6 +1385,7 @@ def test_workbook():
           "agency emails report a cadet whose AgencyID resolves to nothing")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
+    check_quote_escaping(wb)
 
 
 
@@ -1348,6 +1408,7 @@ def main():
     if failures:
         print(f"{len(failures)} FAILURE(S)")
         sys.exit(1)
+
     print("All checks passed.")
 
 
