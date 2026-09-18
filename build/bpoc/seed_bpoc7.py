@@ -7,7 +7,12 @@ Sources:
   - BPOC_7_Hourly_Calendar__Locked_20260507.xlsx           (schedule blocks)
 
 Usage:
-    python3 build/bpoc/seed_bpoc7.py <v54.xlsm> <calendar.xlsx>
+    python3 build/bpoc/seed_bpoc7.py <v54.xlsm> [calendar.xlsx]
+
+The hourly calendar is OPTIONAL. Without it everything except the Schedule
+seeds normally and the run says so; the schedule-derived extras (delivered
+chapter hours, instructor banks, exam-date backfill and the recomputed
+academy length) are skipped rather than half-filled with stale values.
 Output:
     workbooks/BPOC_Academy_Management_V6_BPOC7.xlsx   (seeded copy;
     the clean template BPOC_Academy_Management_V6.xlsx is untouched)
@@ -58,10 +63,11 @@ def map_class(name):
 
 
 def seed():
-    v54_path, cal_path = sys.argv[1], sys.argv[2]
+    v54_path = sys.argv[1]
+    cal_path = sys.argv[2] if len(sys.argv) > 2 else None
     v6 = load_workbook(V6_PATH)                 # keep formulas
     v54 = load_workbook(v54_path, data_only=True, keep_vba=False)
-    cal = load_workbook(cal_path, data_only=True)
+    cal = load_workbook(cal_path, data_only=True) if cal_path else None
 
     # ---------------- Settings ----------------
     ws = v6["Settings"]
@@ -328,129 +334,138 @@ def seed():
         out += 1
     print(f"EmailLog runs: {out-6}")
 
-    # ---------------- Schedule (hourly calendar -> blocks) ----------------
-    ws = v6["Schedule"]
-    grid = cal["BPOC #7"]
-    out = 6
-    cur_date = None
-    skipped = set()
-    sched_minutes = 0
-    for r in range(7, 520):
-        d = grid.cell(row=r, column=4).value          # D: date (day rows)
-        if isinstance(d, datetime):
-            cur_date = d
-        start = grid.cell(row=r, column=6).value       # F
-        end = grid.cell(row=r, column=7).value         # G
-        cls = sval(grid.cell(row=r, column=8))         # H
-        instr = sval(grid.cell(row=r, column=9))       # I
-        if cur_date is None or cls == "" or start is None or end is None:
-            continue
-        if cls == "Lunch" or any(h.lower() in cls.lower() for h in HOLIDAY_WORDS):
-            if cls != "Lunch":
-                skipped.add(f"{cur_date.date()} {cls}")
-            continue
-        ws.cell(row=out, column=2).value = cur_date.replace(hour=0, minute=0)
-        ws.cell(row=out, column=4).value = start
-        ws.cell(row=out, column=5).value = end
-        ws.cell(row=out, column=7).value = map_class(cls)
-        for bad, good in INSTR_FIXES.items():
-            instr = instr.replace(bad, good)
-        ws.cell(row=out, column=9).value = instr
-        if isinstance(start, time) and isinstance(end, time):
-            sched_minutes += ((end.hour * 60 + end.minute)
-                              - (start.hour * 60 + start.minute))
-        out += 1
-    import data_lists as DLx
-    import re as _re
-    ros = DLx.INSTRUCTORS + DLx.GUEST_ENTITIES
-    ros_norm = {" ".join(nm.split()).casefold() for nm in ros}
-    unrec = {}
-    for r in range(6, out):
-        it = sval(ws.cell(row=r, column=9))
-        if not it:
-            continue
-        # segment-level: co-teachers hidden in multi-name strings must each
-        # resolve to a roster name (the workbook's any-match can't see them)
-        t2 = _re.sub(r"\(.*?\)", "", str(it))
-        for seg in _re.split(r"[&,]| and ", t2):
-            seg = " ".join(seg.split())
-            # EXACT match after normalising: the old bidirectional
-            # substring test let fragments of a mangled name ("Rebekah",
-            # "Hutson") both pass, so the typo that produced them was
-            # never reported
-            if seg and seg.casefold() not in ros_norm:
-                unrec[seg] = unrec.get(seg, 0) + 1
-    if unrec:
-        print(f"WARNING unrecognized schedule instructors: {unrec}")
-    print(f"Schedule blocks: {out-6}  (skipped holiday rows: {len(skipped)})")
+    # Everything from here down is derived from the hourly calendar. With no
+    # calendar supplied these are SKIPPED rather than left half-filled: a
+    # partial schedule would understate delivered chapter hours and silently
+    # shrink the academy length the rest of the workbook reconciles against.
+    if cal is None:
+        print("Schedule: SKIPPED - no hourly calendar supplied, so the "
+              "Schedule sheet, delivered chapter hours, instructor banks "
+              "and exam-date backfill are all empty in this copy.")
+    else:
+        # ---------------- Schedule (hourly calendar -> blocks) ----------------
+        ws = v6["Schedule"]
+        grid = cal["BPOC #7"]
+        out = 6
+        cur_date = None
+        skipped = set()
+        sched_minutes = 0
+        for r in range(7, 520):
+            d = grid.cell(row=r, column=4).value          # D: date (day rows)
+            if isinstance(d, datetime):
+                cur_date = d
+            start = grid.cell(row=r, column=6).value       # F
+            end = grid.cell(row=r, column=7).value         # G
+            cls = sval(grid.cell(row=r, column=8))         # H
+            instr = sval(grid.cell(row=r, column=9))       # I
+            if cur_date is None or cls == "" or start is None or end is None:
+                continue
+            if cls == "Lunch" or any(h.lower() in cls.lower() for h in HOLIDAY_WORDS):
+                if cls != "Lunch":
+                    skipped.add(f"{cur_date.date()} {cls}")
+                continue
+            ws.cell(row=out, column=2).value = cur_date.replace(hour=0, minute=0)
+            ws.cell(row=out, column=4).value = start
+            ws.cell(row=out, column=5).value = end
+            ws.cell(row=out, column=7).value = map_class(cls)
+            for bad, good in INSTR_FIXES.items():
+                instr = instr.replace(bad, good)
+            ws.cell(row=out, column=9).value = instr
+            if isinstance(start, time) and isinstance(end, time):
+                sched_minutes += ((end.hour * 60 + end.minute)
+                                  - (start.hour * 60 + start.minute))
+            out += 1
+        import data_lists as DLx
+        import re as _re
+        ros = DLx.INSTRUCTORS + DLx.GUEST_ENTITIES
+        ros_norm = {" ".join(nm.split()).casefold() for nm in ros}
+        unrec = {}
+        for r in range(6, out):
+            it = sval(ws.cell(row=r, column=9))
+            if not it:
+                continue
+            # segment-level: co-teachers hidden in multi-name strings must each
+            # resolve to a roster name (the workbook's any-match can't see them)
+            t2 = _re.sub(r"\(.*?\)", "", str(it))
+            for seg in _re.split(r"[&,]| and ", t2):
+                seg = " ".join(seg.split())
+                # EXACT match after normalising: the old bidirectional
+                # substring test let fragments of a mangled name ("Rebekah",
+                # "Hutson") both pass, so the typo that produced them was
+                # never reported
+                if seg and seg.casefold() not in ros_norm:
+                    unrec[seg] = unrec.get(seg, 0) + 1
+        if unrec:
+            print(f"WARNING unrecognized schedule instructors: {unrec}")
+        print(f"Schedule blocks: {out-6}  (skipped holiday rows: {len(skipped)})")
 
-    # ---- academy length comes from the schedule, not from the old workbook --
-    # the V5.4 value (145,800 min = 2,430 hrs) is 2.5x the real 972-hr
-    # calendar. It no longer scales any cap (there is none), but it is the
-    # academy-length reference and must match the schedule.
-    st = v6["Settings"]
-    for r in range(6, 60):
-        if sval(st.cell(row=r, column=5)) == "cfgTotalScheduledMinutes":
-            old = st.cell(row=r, column=3).value
-            st.cell(row=r, column=3).value = sched_minutes
-            print(f"cfgTotalScheduledMinutes: {old} -> {sched_minutes} "
-                  f"({sched_minutes/60:.0f} hrs from the schedule); "
-                  f"academy-length reference only - no attendance cap")
-            break
+        # ---- academy length comes from the schedule, not from the old workbook --
+        # the V5.4 value (145,800 min = 2,430 hrs) is 2.5x the real 972-hr
+        # calendar. It no longer scales any cap (there is none), but it is the
+        # academy-length reference and must match the schedule.
+        st = v6["Settings"]
+        for r in range(6, 60):
+            if sval(st.cell(row=r, column=5)) == "cfgTotalScheduledMinutes":
+                old = st.cell(row=r, column=3).value
+                st.cell(row=r, column=3).value = sched_minutes
+                print(f"cfgTotalScheduledMinutes: {old} -> {sched_minutes} "
+                      f"({sched_minutes/60:.0f} hrs from the schedule); "
+                      f"academy-length reference only - no attendance cap")
+                break
 
-    # ---------- instructor banks from actual schedule usage ---------------
-    import data_lists as DLmod
-    roster = DLmod.INSTRUCTORS + DLmod.GUEST_ENTITIES
-    topic_instr = {}
-    for r in range(6, out):
-        topic = sval(ws.cell(row=r, column=7))
-        itext = sval(ws.cell(row=r, column=9))
-        if not topic or not itext:
-            continue
-        for nm in roster:
-            if nm in itext:
-                topic_instr.setdefault(topic, []).append(nm)
-    ib = v6["InstructorBanks"]
-    topics = {sval(ib.cell(row=r, column=2)): r for r in range(6, 110)
-              if sval(ib.cell(row=r, column=2))}
-    seeded, overflow = 0, []
-    for topic, names in topic_instr.items():
-        row = topics.get(topic)
-        if row is None:
-            continue
-        uniq = list(dict.fromkeys(names))
-        from sheets_config import BANK_SLOTS, SEL_SLOTS
-        for i, nm in enumerate(uniq[:BANK_SLOTS]):
-            ib.cell(row=row, column=3 + i).value = nm          # bank C..
-        # slice by the real capacity, not a hard-coded 8: two instructors
-        # already on 18 seeded Schedule blocks used to be dropped here
-        for i, nm in enumerate(uniq[:SEL_SLOTS]):
-            ib.cell(row=row, column=3 + BANK_SLOTS + i).value = nm   # teach
-        if len(uniq) > min(BANK_SLOTS, SEL_SLOTS):
-            overflow.append(f"{topic} ({len(uniq)})")
-        seeded += 1
-    print(f"Instructor banks seeded: {seeded} topics"
-          + (f"; over 10 instructors: {overflow}" if overflow else ""))
+        # ---------- instructor banks from actual schedule usage ---------------
+        import data_lists as DLmod
+        roster = DLmod.INSTRUCTORS + DLmod.GUEST_ENTITIES
+        topic_instr = {}
+        for r in range(6, out):
+            topic = sval(ws.cell(row=r, column=7))
+            itext = sval(ws.cell(row=r, column=9))
+            if not topic or not itext:
+                continue
+            for nm in roster:
+                if nm in itext:
+                    topic_instr.setdefault(topic, []).append(nm)
+        ib = v6["InstructorBanks"]
+        topics = {sval(ib.cell(row=r, column=2)): r for r in range(6, 110)
+                  if sval(ib.cell(row=r, column=2))}
+        seeded, overflow = 0, []
+        for topic, names in topic_instr.items():
+            row = topics.get(topic)
+            if row is None:
+                continue
+            uniq = list(dict.fromkeys(names))
+            from sheets_config import BANK_SLOTS, SEL_SLOTS
+            for i, nm in enumerate(uniq[:BANK_SLOTS]):
+                ib.cell(row=row, column=3 + i).value = nm          # bank C..
+            # slice by the real capacity, not a hard-coded 8: two instructors
+            # already on 18 seeded Schedule blocks used to be dropped here
+            for i, nm in enumerate(uniq[:SEL_SLOTS]):
+                ib.cell(row=row, column=3 + BANK_SLOTS + i).value = nm   # teach
+            if len(uniq) > min(BANK_SLOTS, SEL_SLOTS):
+                overflow.append(f"{topic} ({len(uniq)})")
+            seeded += 1
+        print(f"Instructor banks seeded: {seeded} topics"
+              + (f"; over 10 instructors: {overflow}" if overflow else ""))
 
-    # ---------- backfill exam dates from the schedule's Test-day blocks ----
-    # V5.4 stored no exam dates; exam seq n was administered on "Test n" day.
-    test_dates = {}
-    for r in range(6, out):
-        act = sval(ws.cell(row=r, column=7))
-        if act.startswith("Test ") and act[5:].isdigit():
-            test_dates[int(act[5:])] = ws.cell(row=r, column=2).value
-    code_seq = {f"E{i:02d}": i for i in range(1, 18)}
-    es = v6["ExamScores"]
-    n = 0
-    for r in range(6, 1506):
-        code = sval(es.cell(row=r, column=6))
-        att = es.cell(row=r, column=11).value
-        if code in code_seq and att == 1 and es.cell(row=r, column=19).value is None:
-            d = test_dates.get(code_seq[code])
-            if d is not None:
-                es.cell(row=r, column=19).value = d
-                n += 1
-    print(f"Exam dates backfilled from schedule: {n}")
+        # ---------- backfill exam dates from the schedule's Test-day blocks ----
+        # V5.4 stored no exam dates; exam seq n was administered on "Test n" day.
+        test_dates = {}
+        for r in range(6, out):
+            act = sval(ws.cell(row=r, column=7))
+            if act.startswith("Test ") and act[5:].isdigit():
+                test_dates[int(act[5:])] = ws.cell(row=r, column=2).value
+        code_seq = {f"E{i:02d}": i for i in range(1, 18)}
+        es = v6["ExamScores"]
+        n = 0
+        for r in range(6, 1506):
+            code = sval(es.cell(row=r, column=6))
+            att = es.cell(row=r, column=11).value
+            if code in code_seq and att == 1 and es.cell(row=r, column=19).value is None:
+                d = test_dates.get(code_seq[code])
+                if d is not None:
+                    es.cell(row=r, column=19).value = d
+                    n += 1
+        print(f"Exam dates backfilled from schedule: {n}")
 
     v6.save(OUT_PATH)
     print(f"Saved {OUT_PATH}")
