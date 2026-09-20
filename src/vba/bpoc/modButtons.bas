@@ -51,6 +51,11 @@ Public Sub AddAllButtons()
     ClearButtons "Dashboard"
     AddButtonAt "Dashboard", "K5", "Agency Email Drafts", _
                 "modAgencyEmail.GenerateAgencyEmails"
+    ' two rows apart: a 22pt button on a ~15pt row would overlap the next
+    AddButtonAt "Dashboard", "K7", "Active Cadets Only", _
+                "modViewFilter.ShowActiveOnly"
+    AddButtonAt "Dashboard", "K9", "Show All Cadets", _
+                "modViewFilter.ShowAllCadets"
 
     ' L5, not H5: the E5 status line ("Exam # ... | Last emailed: ...") spills
     ' across F:J, and a button anchored at H5 sat on top of the cutoff date

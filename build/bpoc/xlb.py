@@ -21,7 +21,8 @@ from xlstyle import (  # noqa: E402
     DATE, TIME, paint, title_bar, section_bar, label, input_cell, define,
     col_widths,
 )
-from openpyxl.styles import Font, PatternFill, Alignment  # noqa: E402
+from openpyxl.styles import (Font, PatternFill, Alignment,  # noqa: E402
+                             Protection)
 from openpyxl.utils import get_column_letter  # noqa: E402
 from openpyxl.worksheet.datavalidation import DataValidation  # noqa: E402
 from openpyxl.formatting.rule import CellIsRule, FormulaRule  # noqa: E402
@@ -89,14 +90,23 @@ def fill_rows(ws, first_row, last_row, cols):
                     c.value = tmpl[1]
                 else:
                     c.value = "=" + tmpl.format(r=r)
+            # Locking is derived from the SAME marker that colours the cell,
+            # so "blue box = you type here" and "the cursor stops here" can
+            # never drift apart. On a protected sheet Tab and Enter then walk
+            # only the input cells - on Writing that is 40 assignment columns
+            # instead of all 45 - and a calculated column cannot be typed
+            # over by accident. Locked cells stay selectable and copyable
+            # (see protect()).
             if style == "in":
                 c.fill = FILL_INPUT
                 c.font = F_INPUT
                 c.border = BOX
+                c.protection = Protection(locked=False)
             elif style == "fx":
                 c.fill = FILL_CALC
                 c.font = F_CALC
                 c.border = BOX
+                c.protection = Protection(locked=True)
             else:
                 c.border = BOX
 
@@ -155,6 +165,35 @@ def protect(ws, locked=True):
         ws.protection.password = PROTECT_PW
         ws.protection.selectLockedCells = False
         ws.protection.selectUnlockedCells = False
+
+
+def protect_inputs(ws):
+    """Protect a sheet, leaving editable exactly the cells that LOOK typeable.
+
+    A cell counts as an input when it carries the input font - the blue the
+    colour key already promises you may type in - whether that came from
+    fill_rows' "in" marker or from a builder setting it directly. Deriving
+    the lock from the very signal the coordinator is told to look for means
+    the two can never disagree: if it is blue you can type in it, if it is
+    not you cannot, and Tab skips straight past the calculated columns.
+
+    Locked cells stay selectable, readable and copyable - see protect().
+    """
+    n = 0
+    for row in ws.iter_rows():
+        for c in row:
+            blue = (c.font is not None and c.font.color is not None
+                    and c.font.color.rgb == "000000FF")
+            c.protection = Protection(locked=not blue)
+            if blue:
+                n += 1
+    protect(ws)
+    # keep the filter dropdowns usable on a protected sheet; keep SORT
+    # blocked, because sorting rows would break the row-for-row cadet
+    # alignment every sheet in this workbook depends on
+    ws.protection.autoFilter = False
+    ws.protection.sort = True
+    return n
 
 
 def unlock_range(ws, rng):

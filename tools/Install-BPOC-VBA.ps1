@@ -197,6 +197,11 @@ End Sub
     $dash.Unprotect($pw) 2>$null
     Remove-OldButtons $dash
     Add-Button $dash 'K5' 1 'Agency Email Drafts' 'modAgencyEmail.GenerateAgencyEmails'
+    # K7 / K9, two rows apart: buttons are 22pt tall and a row is ~15pt, so
+    # anchors one row apart would overlap. Column K onward is empty here;
+    # the KPI text sits in J.
+    Add-Button $dash 'K7' 1 'Active Cadets Only' 'modViewFilter.ShowActiveOnly'
+    Add-Button $dash 'K9' 1 'Show All Cadets'    'modViewFilter.ShowAllCadets'
     $dash.Protect($pw) 2>$null
 
     $ep = $wb.Worksheets.Item('EmailPreview')

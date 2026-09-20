@@ -173,8 +173,19 @@ def test_workbook():
           "sysAwards: override/notes unlocked, computed + FINAL locked")
     check(wb["sysListsHelper"].sheet_state == "veryHidden",
           "sysListsHelper cannot be unhidden from the tab menu")
+    # These used to be asserted UNPROTECTED ("open for entry"). That is no
+    # longer the contract: a typed sheet is now protected with only its input
+    # cells unlocked, so Tab lands where you type and a formula column cannot
+    # be overwritten. The thing worth asserting is that entry still works.
     for n in ("Cadets", "ExamScores", "Attendance", "Counseling", "PT"):
-        check(not wb[n].protection.sheet, f"{n} open for entry")
+        ws_n = wb[n]
+        open_cells = [c.coordinate for row in ws_n.iter_rows(min_row=6,
+                                                             max_row=6)
+                      for c in row
+                      if c.protection and c.protection.locked is False]
+        check(ws_n.protection.sheet and open_cells,
+              f"{n} protected but still open for entry ({len(open_cells)} "
+              f"cells on row 6)")
     # protection must never disable SELECTION: the OOXML flags are inverted
     # (True = "may not select"), and setting both froze every picker cell and
     # home link on the protected sheets.
@@ -1148,11 +1159,19 @@ def test_workbook():
     # SpellingPrint: ExamSheet, SignIn and WritingHandout each shipped an
     # unlocked, unvalidated cell as the only typeable cell on the sheet.
     _pickers = {}
+    # Settings and AdvisoryBoard are EXCLUDED: this rule is about a picker
+    # that is the only typeable cell on an output/printable sheet. On the
+    # config sheets the cfg cells ARE the content - dates, minute counts,
+    # weights, free text - and they are policed by the Check column beside
+    # them, not by a dropdown. Both became protected when typed sheets were
+    # locked down, which dragged 33 legitimate config cells in here.
+    _CFG_OWN = {"Settings", "AdvisoryBoard"}
     for _n, _dn in wb.defined_names.items():
         if not _n.startswith("cfg"):
             continue
         for _sh, _ref in _dn.destinations:
-            if _sh in wb.sheetnames and wb[_sh].protection.sheet:
+            if (_sh in wb.sheetnames and wb[_sh].protection.sheet
+                    and _sh not in _CFG_OWN):
                 _pickers.setdefault(_sh, set()).add(_ref.replace("$", ""))
     _unvalidated = []
     for _sh, _cells in _pickers.items():
@@ -1383,6 +1402,65 @@ def test_workbook():
           _vba.index("Application.Match(agOfCadet") >
           _vba.index("FlushPendingLog wb") - 4000,
           "agency emails report a cadet whose AgencyID resolves to nothing")
+
+    # ---- daily-use ergonomics -------------------------------------------
+    # 1. On every sheet the coordinator types into, the calculated cells must
+    #    be LOCKED and the input cells unlocked, so Tab lands only where you
+    #    may type. Every one of these shipped fully editable before.
+    import sheets_outputs as _SO
+    TYPED = ["Cadets", "ExamScores", "Spelling", "Attendance", "Makeup",
+             "Skills", "SkillsCheck", "Writing", "Incidents", "Counseling",
+             "Memos", "DailyLog", "PT", "Medical", "Certifications",
+             "StateExam", "DismissalLog", "Settings", "Schedule"]
+    unprot = [n for n in TYPED if not wb[n].protection.sheet]
+    check(not unprot, f"every typed sheet is protected {unprot}")
+    noinput = []
+    for n in TYPED:
+        ws = wb[n]
+        if not any(c.protection and c.protection.locked is False
+                   for row in ws.iter_rows(min_row=5, max_row=12)
+                   for c in row):
+            noinput.append(n)
+    check(not noinput,
+          f"every protected typed sheet still has editable cells {noinput}")
+    # a calculated cell on a typed sheet must be locked
+    for _sh, _cell, _what in (("Writing", "AR6", "overdue count"),
+                              ("PT", "AA6", "final points"),
+                              ("Cadets", "F6", "full name"),
+                              ("ExamScores", "M6", "recorded score")):
+        check(wb[_sh][_cell].protection.locked is True,
+              f"{_sh}!{_cell} ({_what}) is locked against typing")
+    # and the cell the coordinator DOES type must stay open
+    check(wb["Writing"]["D6"].protection.locked is False and
+          wb["ExamScores"]["L6"].protection.locked is False,
+          "input cells stay editable under protection")
+
+    # 2. Filtering must WORK on a protected sheet, and sorting must NOT:
+    #    row 12 is the same cadet on every sheet, so a sort breaks the engine.
+    for _n in _SO.CADET_GRIDS:
+        ws = wb[_n]
+        check(ws.protection.autoFilter is False,
+              f"{_n}: the filter dropdowns are usable while protected")
+        check(ws.protection.sort is True,
+              f"{_n}: sorting stays blocked (it would break row alignment)")
+
+    # 3. Every cadet grid carries the status to filter on, plus the shading
+    for _n in _SO.CADET_GRIDS:
+        ws = wb[_n]
+        want = "Status" if _n == "Cadets" else "Cadet Status"
+        hdrs = [str(ws.cell(row=5, column=c).value or "") for c in range(2, 80)]
+        check(want in hdrs, f"{_n} has a {want!r} column to filter on")
+        check(ws.auto_filter.ref is not None, f"{_n} has a filter row")
+        shaded = any("Cadets!$I" in (r.formula[0] if r.formula else "")
+                     for rng, rs in ws.conditional_formatting._cf_rules.items()
+                     for r in rs)
+        check(shaded, f"{_n} shades separated cadets")
+    # StateExam's own "Status" holds the EXAM result, so the cadet status
+    # must be a SEPARATE column there - reusing it filtered the wrong thing
+    _se = wb["StateExam"]
+    _h = [str(_se.cell(row=5, column=c).value or "") for c in range(2, 80)]
+    check(_h.index("Status") != _h.index("Cadet Status"),
+          "StateExam keeps exam Status and Cadet Status apart")
 
     check(wb.calculation.fullCalcOnLoad, "fullCalcOnLoad set")
     check_quote_escaping(wb)

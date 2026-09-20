@@ -1972,21 +1972,76 @@ def add_home_links(wb):
         c.protection = _Prot(locked=True)
 
 
+# Sheets where every row IS a cadet, so a separated cadet sits in the middle
+# of the grid you are typing into. Rows cannot be sorted - row 12 has to be
+# the same cadet on every sheet or the whole engine breaks - so each of these
+# gets a mirrored Status column and a filter instead: filter to Active and
+# the separated rows disappear from view while keeping their row.
+CADET_GRIDS = ["Cadets", "Spelling", "Writing", "PT", "Certifications",
+               "SkillsCheck", "StateExam", "ScoresGrid", "GradChecklist"]
+
+
+def add_status_filter(wb):
+    """Mirror Cadets!Status onto every cadet grid and put a filter on it."""
+    from openpyxl.utils import get_column_letter as _gcl
+    done = {}
+    for name in CADET_GRIDS:
+        ws = wb[name]
+        last = 2
+        for c in range(2, 80):
+            if ws.cell(row=HDR_ROW, column=c).value not in (None, ""):
+                last = c
+        hdrs = [str(ws.cell(row=HDR_ROW, column=c).value or "")
+                for c in range(2, last + 1)]
+        # "Cadet Status", never "Status": StateExam already has a Status
+        # column and it holds the EXAM result ("PASSED 09/12/2026"), so
+        # matching on the bare word reused it and left that sheet with no
+        # way to filter separated cadets at all.
+        if name == "Cadets":
+            col = _gcl(2 + hdrs.index("Status"))     # its own, authoritative
+        elif "Cadet Status" in hdrs:
+            col = _gcl(2 + hdrs.index("Cadet Status"))
+        else:
+            col = _gcl(last + 1)
+            h = ws.cell(row=HDR_ROW, column=last + 1, value="Cadet Status")
+            h.font, h.fill, h.border = F_HDR, FILL_HDR, BOX
+            for r in range(FIRST, LAST + 1):
+                c2 = ws.cell(row=r, column=last + 1)
+                c2.value = (f'=IF(Cadets!$B{r}="","",Cadets!$I{r})')
+                c2.font, c2.fill, c2.border = F_CALC, FILL_CALC, BOX
+            ws.column_dimensions[col].width = 11
+            last += 1
+        ws.auto_filter.ref = f"B{HDR_ROW}:{_gcl(last)}{HDR_ROW}"
+        # Protection BLOCKS the filter dropdowns unless this is switched off
+        # (the flag reads "prevent autofilter"), which would have shipped a
+        # filter on every cadet grid that could not be opened. Sorting stays
+        # blocked on purpose: row 12 must be the same cadet on every sheet,
+        # so a sort is the one action that would genuinely break the engine.
+        ws.protection.autoFilter = False
+        ws.protection.sort = True
+        done[name] = (col, _gcl(last))
+    return done
+
+
 def gray_separated_rows(wb):
     """Gray out (and strike) rows of non-active cadets on cadet grids."""
     from openpyxl.styles import Font as _Font, PatternFill as _Fill
     from openpyxl.formatting.rule import FormulaRule as _FR
     gray_font = _Font(color="9AA5B1", strike=True)
     gray_fill = _Fill("solid", fgColor="EDEFF2")
-    targets = {
-        "Writing": "B6:AT55", "Spelling": "B6:S55", "PT": "B6:AC55",
-        # AD, not AC: ScoresGrid runs out to AD ("Rank"), so a separated
-        # cadet's row was struck through for 28 columns and then printed in
-        # normal black for the Rank cell.
-        "Certifications": "B6:U55", "ScoresGrid": "B6:AD55",
-        "GradChecklist": "B6:Q55", "StateExam": "B6:L55",
-        "Cadets": "B6:M55",
-    }
+    # Computed from each sheet's own last header, not hard-coded: the ranges
+    # used to be literal and went stale every time a column was appended -
+    # a separated cadet was struck through for 28 columns and then printed
+    # in normal black for the 29th. SkillsCheck was missing outright.
+    from openpyxl.utils import get_column_letter as _gcl
+    targets = {}
+    for name in CADET_GRIDS:
+        ws = wb[name]
+        last = 2
+        for c in range(2, 80):
+            if ws.cell(row=HDR_ROW, column=c).value not in (None, ""):
+                last = c
+        targets[name] = f"B{FIRST}:{_gcl(last)}{LAST}"
     for name, rng in targets.items():
         ws = wb[name]
         ws.conditional_formatting.add(rng, _FR(
@@ -2031,6 +2086,7 @@ def build_all_outputs(wb):
     build_printcenter(wb)
     build_inputguide(wb)
     build_dashboard(wb)     # after ScoresGrid/Spelling exist (charts)
+    add_status_filter(wb)
     gray_separated_rows(wb)
     # NamedRanges BEFORE add_home_links: created after, it was the only
     # visible sheet with no '◄ Dashboard' link — and it is protected with

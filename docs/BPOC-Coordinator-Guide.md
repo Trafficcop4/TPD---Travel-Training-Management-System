@@ -6,7 +6,12 @@ medical, flags, awards, agency emails, TCOLE audit readiness, and every
 printable (sign-ins, evals, spelling tests, writing handouts, transcripts).
 
 **Color language:** white boxes with a blue border are yours to type (what
-you type shows in blue); gray cells calculate. (Nothing ships yellow any
+you type shows in blue); gray cells calculate. **You no longer have to
+remember which is which** — every sheet you type into is protected so that
+**Tab and Enter land only on the cells you may type in**, skipping the
+calculated columns entirely. A gray cell can still be clicked, read and
+copied; it just can't be typed over. (Unprotect with `TPDAcademy` if you ever
+need to.) Sorting stays blocked on purpose — see below. (Nothing ships yellow any
 more — the PT points rubric was the last pending item and the approved
 chart is now loaded.) Gray `sys*` tabs are the locked engine (password
 `TPDAcademy`) — never edit them. The one exception is **sysAwards**, which is
@@ -107,6 +112,27 @@ headers on every sheet. Tables start at row 5, data at row 6.
   the skill Pass.
 - **Writing** — type **X** when received (lowercase x auto-capitalizes;
   blank = not done); red means past the computed due date.
+
+## Separated cadets — getting them out of your way
+
+A cadet's row **cannot be sorted to the bottom**. Row 12 has to be the same
+cadet on Cadets, Spelling, Writing, PT, sysGrades and every other sheet —
+that row-for-row alignment is what makes the whole engine work, so sorting is
+deliberately blocked even when a sheet is unprotected.
+
+Filtering does the same job without moving anything:
+
+- Every cadet sheet carries a **Cadet Status** column (mirrored from Cadets)
+  and a filter row. Filter it to **Active** and the separated rows disappear
+  from view while keeping their row and all their data.
+- The Dashboard has **Active Cadets Only** and **Show All Cadets** buttons
+  that do it across all nine cadet sheets at once (after VBA install).
+- Separated rows are also grayed and struck through everywhere a cadet
+  appears, so they recede even unfiltered.
+
+Nothing is deleted by separating a cadet: their scores, attendance and
+records stay exactly where they were, and they drop out of class averages,
+rankings and the agency emails because those already filter on Active.
 
 ## Watching the class
 

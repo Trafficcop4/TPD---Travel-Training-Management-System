@@ -116,6 +116,64 @@ def build():
     hardened = postprocess.harden_workbook(wb)
     print(f"Hardened {hardened} dynamic-array safety panels")
 
+    # Daily-use ergonomics, the biggest one: on every sheet the coordinator
+    # TYPES into, lock the calculated cells and leave only the inputs
+    # editable. Tab and Enter then walk the input cells alone - on Writing
+    # that is the 40 assignment columns rather than all 45 - and a formula
+    # column cannot be typed over by accident. The lock is derived from the
+    # blue input font, the same signal the colour key already promises, so
+    # "blue = you type here" and "the cursor stops here" cannot drift apart.
+    # Locked cells stay selectable and copyable.
+    TYPED_SHEETS = [
+        "Cadets", "ExamScores", "Spelling", "Attendance", "Makeup", "Skills",
+        "SkillsCheck", "Writing", "Incidents", "Counseling", "Memos",
+        "DailyLog", "PT", "Medical", "Certifications", "StateExam",
+        "AdvisoryBoard", "DismissalLog", "EmailLog",
+        "Settings", "Lists", "Agencies", "Instructors", "InstructorBanks",
+        "ChapterMaster", "ExamMaster", "ExamPlan", "SkillsMaster",
+        "SpellingMaster", "WritingMaster", "Control", "Schedule",
+    ]
+    from xlb import protect_inputs
+    locked_sheets, open_cells = 0, 0
+    for _n in TYPED_SHEETS:
+        if _n in wb.sheetnames:
+            open_cells += protect_inputs(wb[_n])
+            locked_sheets += 1
+    print(f"Protected {locked_sheets} typed sheets "
+          f"({open_cells:,} cells left editable)")
+
+    # Collapse the columns that are pure REFERENCE - values echoed from a
+    # master sheet so the row reads on its own - into an outline the
+    # coordinator can expand with the + button above column A.
+    #
+    # Deliberately NOT collapsed: the calculated columns that carry a
+    # VERDICT. Writing's "Overdue Missing" / "Writing Current?",
+    # SkillsCheck's "Failed" / "Skills P/F OK?", Certifications' "To
+    # Collect", Spelling's "Intervention?", Attendance's makeup ledger and
+    # the Schedule's three check columns are the whole reason those sheets
+    # compute anything. Hiding them by default would bury the answer the
+    # sheet exists to give, which is the opposite of what the rest of this
+    # workbook tries to do.
+    REFERENCE_BLOCKS = {
+        # echoed from ExamPlan: name, type, sequence, passing score
+        "ExamScores": [("G", "J")],
+        # echoed from SkillsMaster: max attempts, scoring mode, passing
+        "Skills": [("F", "H")],
+        # per-event PT points. The rollups that decide anything - Final
+        # Points, Final PT Pass?, Improvement Index - stay visible at AA:AC.
+        "PT": [("T", "Z")],
+    }
+    grouped = 0
+    for _n, _blocks in REFERENCE_BLOCKS.items():
+        if _n not in wb.sheetnames:
+            continue
+        for _a, _b in _blocks:
+            wb[_n].column_dimensions.group(_a, _b, outline_level=1,
+                                           hidden=True)
+            grouped += 1
+    print(f"Collapsed {grouped} reference-column blocks "
+          f"(verdict columns left visible)")
+
     # store modern functions with _xlfn/_xlws/_xlpm prefixes so Excel
     # resolves them instead of showing #NAME?
     fixed = postprocess.fix_workbook(wb)
