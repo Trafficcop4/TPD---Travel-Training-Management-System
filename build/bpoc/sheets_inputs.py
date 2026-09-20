@@ -2,7 +2,7 @@
 Writing, Incidents, Counseling, PT, Medical.
 
 All keyed by PID; cadet grids run rows 6..55 (50 cadets); logs are long
-tables. Blue cells = staff entry, gray = calculated.
+tables. WHITE cells = staff entry, pale blue = calculated.
 """
 from openpyxl.utils import get_column_letter
 

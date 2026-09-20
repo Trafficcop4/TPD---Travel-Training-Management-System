@@ -45,7 +45,17 @@ ROWS_CLASSDAYS = 170  # generated class-day calendar
 F_HDR = Font(name=FONT, size=10, bold=True, color="FFFFFF")
 FILL_HDR = FILL_NAVY
 F_CALC = Font(name=FONT, size=10, color="404040")
-FILL_CALC = PatternFill("solid", fgColor="F3F4F6")
+# Calculated cells are PALE BLUE, inputs stay white. Coordinator's call, and
+# it fixes the real problem: the old calc fill was F3F4F6, a gray about 4%
+# off white, so on a sheet with gridlines off - and with fill_rows putting
+# the same border on every cell - the two states were all but
+# indistinguishable. The blue font was no help either, because it only
+# appears AFTER you type; before you type it says nothing about where to.
+# E1ECF7 sits the same distance from white that the reference timesheet's
+# input cream does (~30 units in the dominant channel), reads as part of the
+# existing navy/steel family, and stays lighter than LIGHT_BAND so table
+# banding still separates from it.
+FILL_CALC = PatternFill("solid", fgColor="E1ECF7")
 FILL_WARNBG = PatternFill("solid", fgColor="F8D7DA")
 FILL_OKBG = PatternFill("solid", fgColor="D6E9DC")
 FILL_AMBER = PatternFill("solid", fgColor="FCE8B2")
@@ -187,6 +197,28 @@ def protect_inputs(ws):
             c.protection = Protection(locked=not blue)
             if blue:
                 n += 1
+    # Close the loop on the colour rule. "White = you may type" only holds if
+    # NOTHING locked also renders white, and a cell with no fill at all draws
+    # as the default white background. On mixed sheets - Settings, ExamPlan,
+    # Control - that left locked lookup and check columns looking exactly
+    # like inputs. Any locked cell sitting under a table header now gets the
+    # calculated fill, so white means typeable everywhere, without repainting
+    # the pure-output sheets (this only runs on sheets the coordinator types
+    # into).
+    for row in ws.iter_rows(min_row=DATA_ROW):
+        for c in row:
+            if c.__class__.__name__ == "MergedCell":
+                continue
+            if c.protection is None or c.protection.locked is False:
+                continue
+            if ws.cell(row=HDR_ROW, column=c.column).value in (None, ""):
+                continue          # not inside a table
+            f = c.fill
+            if f is not None and f.fill_type == "solid" and \
+                    getattr(f.fgColor, "rgb", None):
+                continue          # already carries a deliberate colour
+            c.fill = FILL_CALC
+
     protect(ws)
     # keep the filter dropdowns usable on a protected sheet; keep SORT
     # blocked, because sorting rows would break the row-for-row cadet

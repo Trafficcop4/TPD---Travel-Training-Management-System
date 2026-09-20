@@ -1946,7 +1946,7 @@ def build_inputguide(wb):
     sheet_note(ws, "Only pages that take input are listed — gray sys* tabs "
                    "are the locked calculation engine; green tabs are "
                    "outputs. White boxes with a blue border are yours to type "
-                   "(what you type shows in blue); gray cells calculate.")
+                   "(what you type shows in blue); pale blue cells calculate.")
     # pure navigation: every cell is a hyperlink formula or a static label
     protect(ws)
     return ws

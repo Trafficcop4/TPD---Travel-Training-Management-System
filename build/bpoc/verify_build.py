@@ -1435,6 +1435,46 @@ def test_workbook():
           wb["ExamScores"]["L6"].protection.locked is False,
           "input cells stay editable under protection")
 
+    # 1b. THE COLOUR RULE, asserted in both directions across every typed
+    #     sheet: white means you may type here, pale blue means calculated.
+    #     A white cell that refuses typing, or a blue one that accepts it,
+    #     teaches the coordinator to distrust the colour - which is the
+    #     failure this whole scheme replaced.
+    def _in_table(cell):
+        b = cell.border
+        return bool(b and (b.left.style or b.right.style
+                           or b.top.style or b.bottom.style))
+    _viol_white, _viol_blue = [], []
+    for _n in TYPED + ["Writing", "Spelling", "Certifications", "SkillsCheck",
+                       "ExamPlan", "Control", "ChapterMaster", "Lists",
+                       "Agencies", "SkillsMaster", "SpellingMaster",
+                       "WritingMaster", "InstructorBanks", "ExamMaster",
+                       "AdvisoryBoard", "EmailLog", "Instructors"]:
+        ws_c = wb[_n]
+        for row in ws_c.iter_rows(min_row=6):
+            for c in row:
+                if c.__class__.__name__ == "MergedCell" or not _in_table(c):
+                    continue
+                f = c.fill
+                rgb = (getattr(f.fgColor, "rgb", None)
+                       if (f and f.fill_type == "solid") else None)
+                white = rgb in (None, "00FFFFFF", "FFFFFFFF")
+                locked = bool(c.protection and c.protection.locked)
+                if white and locked:
+                    _viol_white.append(f"{_n}!{c.coordinate}")
+                elif rgb == "00E1ECF7" and not locked:
+                    _viol_blue.append(f"{_n}!{c.coordinate}")
+    check(not _viol_white,
+          f"no white cell refuses typing {_viol_white[:4]} "
+          f"({len(_viol_white)} total)")
+    check(not _viol_blue,
+          f"no pale-blue cell accepts typing {_viol_blue[:4]} "
+          f"({len(_viol_blue)} total)")
+    check(str(wb["Writing"]["AR6"].fill.fgColor.rgb) == "00E1ECF7" and
+          str(wb["Writing"]["D6"].fill.fgColor.rgb) in ("00FFFFFF",
+                                                        "FFFFFFFF"),
+          "calculated cells read pale blue, input cells read white")
+
     # 2. Filtering must WORK on a protected sheet, and sorting must NOT:
     #    row 12 is the same cadet on every sheet, so a sort breaks the engine.
     for _n in _SO.CADET_GRIDS:
