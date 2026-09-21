@@ -12,7 +12,13 @@ FONT = "Arial"
 NAVY = "1F3B5C"      # header bars / titles
 STEEL = "44607E"     # sub-headers
 PAGE = "EDEFF2"      # page background (non-input area)
-INPUT = "FFFFFF"     # white input boxes
+# Cream, not white. An input cell is usually EMPTY - the coordinator's
+# reference timesheet has 6,806 blank input cells out of 8,940 - and an empty
+# white cell on a sheet with gridlines off is invisible until you tab into
+# it. A tint is visible when the cell holds nothing, which is exactly when
+# you need to know it is yours. Matches that timesheet's input colour, so the
+# two tools agree on the signal that matters most.
+INPUT = "FFF7DC"     # cream input boxes = TYPE HERE
 ACCENT = "C8A24B"    # gold accent (TPD badge gold)
 WARN = "C0392B"      # overdue / owed
 OK = "1E7145"        # good / reconciled

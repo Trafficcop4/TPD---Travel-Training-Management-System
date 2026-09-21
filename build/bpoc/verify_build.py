@@ -1458,22 +1458,25 @@ def test_workbook():
                 f = c.fill
                 rgb = (getattr(f.fgColor, "rgb", None)
                        if (f and f.fill_type == "solid") else None)
-                white = rgb in (None, "00FFFFFF", "FFFFFFFF")
+                # header bars are neither input nor calculated
+                if rgb in ("001F3B5C", "0044607E"):
+                    continue
                 locked = bool(c.protection and c.protection.locked)
-                if white and locked:
+                cream = rgb == "00FFF7DC"
+                blue = rgb == "00E1ECF7"
+                if locked and not blue:
                     _viol_white.append(f"{_n}!{c.coordinate}")
-                elif rgb == "00E1ECF7" and not locked:
+                elif (not locked) and not cream:
                     _viol_blue.append(f"{_n}!{c.coordinate}")
     check(not _viol_white,
-          f"no white cell refuses typing {_viol_white[:4]} "
+          f"every locked in-table cell reads pale blue {_viol_white[:4]} "
           f"({len(_viol_white)} total)")
     check(not _viol_blue,
-          f"no pale-blue cell accepts typing {_viol_blue[:4]} "
+          f"every typeable in-table cell reads cream {_viol_blue[:4]} "
           f"({len(_viol_blue)} total)")
     check(str(wb["Writing"]["AR6"].fill.fgColor.rgb) == "00E1ECF7" and
-          str(wb["Writing"]["D6"].fill.fgColor.rgb) in ("00FFFFFF",
-                                                        "FFFFFFFF"),
-          "calculated cells read pale blue, input cells read white")
+          str(wb["Writing"]["D6"].fill.fgColor.rgb) == "00FFF7DC",
+          "calculated cells read pale blue, input cells read cream")
 
     # 2. Filtering must WORK on a protected sheet, and sorting must NOT:
     #    row 12 is the same cadet on every sheet, so a sort breaks the engine.

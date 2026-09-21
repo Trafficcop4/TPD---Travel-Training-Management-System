@@ -58,7 +58,9 @@ F_CALC = Font(name=FONT, size=10, color="404040")
 FILL_CALC = PatternFill("solid", fgColor="E1ECF7")
 FILL_WARNBG = PatternFill("solid", fgColor="F8D7DA")
 FILL_OKBG = PatternFill("solid", fgColor="D6E9DC")
-FILL_AMBER = PatternFill("solid", fgColor="FCE8B2")
+# deepened from FCE8B2: input cells are now cream (FFF7DC), and a pale-yellow
+# caution highlight sitting on a cream field stopped being a highlight
+FILL_AMBER = PatternFill("solid", fgColor="F5C542")
 
 PROTECT_PW = "TPDAcademy"
 
@@ -211,13 +213,33 @@ def protect_inputs(ws):
                 continue
             if c.protection is None or c.protection.locked is False:
                 continue
-            if ws.cell(row=HDR_ROW, column=c.column).value in (None, ""):
+            b = c.border
+            if not (b and (b.left.style or b.right.style
+                           or b.top.style or b.bottom.style)):
                 continue          # not inside a table
             f = c.fill
             if f is not None and f.fill_type == "solid" and \
                     getattr(f.fgColor, "rgb", None):
                 continue          # already carries a deliberate colour
             c.fill = FILL_CALC
+    # ...and the same for INPUT cells written outside fill_rows (Lists,
+    # SpellingMaster, AdvisoryBoard set the input font but no fill). Without
+    # this they draw white, and white now means "not part of the table".
+    for row in ws.iter_rows(min_row=DATA_ROW):
+        for c in row:
+            if c.__class__.__name__ == "MergedCell":
+                continue
+            if c.protection is None or c.protection.locked is not False:
+                continue
+            b = c.border
+            if not (b and (b.left.style or b.right.style
+                           or b.top.style or b.bottom.style)):
+                continue
+            f = c.fill
+            if f is not None and f.fill_type == "solid" and \
+                    getattr(f.fgColor, "rgb", None):
+                continue
+            c.fill = FILL_INPUT
 
     protect(ws)
     # keep the filter dropdowns usable on a protected sheet; keep SORT

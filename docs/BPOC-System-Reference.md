@@ -62,7 +62,9 @@ the row grays out and drops from every count automatically.
 | ⚫ Gray | **SYSTEM** | `sys*` calculation engine | Yes — never edit |
 
 **Cell colors inside a sheet:** white box with border = you type it
-(your entries show blue); pale blue fill = calculated. Yellow meant "data
+(your entries show blue); cream fill = you type here; pale blue fill =
+calculated. Every cell inside a table is one or the other - white means the
+cell is not part of a table at all. Yellow meant "data
 pending"; the PT points rubric was the last of it and the approved chart
 is now loaded, so nothing ships yellow.
 

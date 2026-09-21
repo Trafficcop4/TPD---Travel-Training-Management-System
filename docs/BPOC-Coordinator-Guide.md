@@ -5,8 +5,9 @@ spelling, writing, attendance/makeup, skills, PT, incidents, counseling,
 medical, flags, awards, agency emails, TCOLE audit readiness, and every
 printable (sign-ins, evals, spelling tests, writing handouts, transcripts).
 
-**Color language:** white boxes with a blue border are yours to type (what
-you type shows in blue); **pale blue cells calculate — leave them alone**. **You no longer have to
+**Color language:** **cream cells are yours to type** (what you type shows
+in blue); **pale blue cells calculate — leave them alone**. Cream shows even
+when the cell is empty, which is when you most need to know it's yours. **You no longer have to
 remember which is which** — every sheet you type into is protected so that
 **Tab and Enter land only on the cells you may type in**, skipping the
 calculated columns entirely. A gray cell can still be clicked, read and

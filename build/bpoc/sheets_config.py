@@ -58,7 +58,7 @@ def build_starthere(wb):
         ws.row_dimensions[r].height = 30
         r += 1
     col_widths(ws, {"A": 3, "B": 34, "C": 90})
-    sheet_note(ws, "Workbook map: white boxes with a blue border are yours "
+    sheet_note(ws, "Workbook map: CREAM boxes are yours "
                    "to type (your entries show in blue), PALE BLUE = calculated, "
                    "sys* sheets are the locked engine.")
     return ws
@@ -314,7 +314,7 @@ def build_settings(wb):
            f"$B${rub_first}:$B${rub_first + 4}")
     col_widths(ws, {"A": 3, "B": 34, "C": 22, "D": 12, "E": 12, "F": 12,
                     "G": 12, "H": 12, "I": 30})
-    sheet_note(ws, "White boxes with a blue border = edit per academy "
+    sheet_note(ws, "Cream boxes = edit per academy "
                    "(entries show in blue). Pale blue = calculated. Internal "
                    "names must not change. The PT rubric block holds the "
                    "approved PT Test Score Chart — each cell is the value a "
