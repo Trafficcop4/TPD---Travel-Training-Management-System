@@ -1435,6 +1435,15 @@ def test_workbook():
           wb["ExamScores"]["L6"].protection.locked is False,
           "input cells stay editable under protection")
 
+    # 1a. Long scrollable lists keep their header row in view. The one-page
+    #     printables are excluded on purpose - they are forms, not lists.
+    _SCROLLERS = ["InputGuide", "Ranking", "WatchList", "Audit", "Addendum",
+                  "EmailPreview", "Settings", "Lists", "SkillsMaster",
+                  "Control", "sysAudit", "NamedRanges", "Cadets", "Writing",
+                  "ExamScores", "Schedule", "ChapterMaster"]
+    _unfrozen = [n for n in _SCROLLERS if wb[n].freeze_panes is None]
+    check(not _unfrozen, f"scrollable lists keep their headers {_unfrozen}")
+
     # 1b. THE COLOUR RULE, asserted in both directions across every typed
     #     sheet: white means you may type here, pale blue means calculated.
     #     A white cell that refuses typing, or a blue one that accepts it,

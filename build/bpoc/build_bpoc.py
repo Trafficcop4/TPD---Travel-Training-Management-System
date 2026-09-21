@@ -96,6 +96,15 @@ def build():
         "Instructors": "C6", "InstructorBanks": "C6", "ChapterMaster": "E6",
         "WritingMaster": "D6", "SpellingMaster": "C6", "ExamMaster": "B6",
         "ExamPlan": "B6",
+        # Long scrollable lists that lost their header row on scroll. The
+        # one-page printables (Transcript, CadetProfile, EvalSheet, SignIn,
+        # SpellingPrint, WritingHandout, ChapterPacket, ExamSheet) are
+        # deliberately NOT frozen - they are forms, not lists, and freezing
+        # a form's top is just a stripe across the page.
+        "InputGuide": "B6", "Ranking": "B6", "WatchList": "B6",
+        "Audit": "B6", "Addendum": "B6", "EmailPreview": "B6",
+        "Settings": "B6", "Lists": "B6", "SkillsMaster": "B6",
+        "Control": "B6", "sysAudit": "B6", "NamedRanges": "B6",
     }
     for name, cell in FREEZE.items():
         if name in wb.sheetnames:
