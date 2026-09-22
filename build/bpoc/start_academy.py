@@ -76,12 +76,51 @@ def copy_agencies(dst, src_path):
     return n
 
 
+def copy_banks(dst, src_path):
+    """Copy the per-topic CERTIFIED pool, matched by topic NAME.
+
+    Bank columns (C..L) are who is qualified to teach a topic and persist
+    between academies; the Teach columns (M..V) are this class's picks and
+    are deliberately NOT copied - a new academy chooses its own. Matching on
+    the topic name rather than the row means a reordered topic list cannot
+    silently hand one topic's certified pool to another.
+    """
+    src = load_workbook(src_path, data_only=True, keep_vba=False)
+    if "InstructorBanks" not in src.sheetnames:
+        print("  WARNING: source has no InstructorBanks sheet")
+        return 0
+    s, d = src["InstructorBanks"], dst["InstructorBanks"]
+    where = {}
+    for r in range(6, 130):
+        t = s.cell(row=r, column=2).value
+        if t not in (None, ""):
+            where.setdefault(str(t).strip(), r)
+    n = 0
+    for r in range(6, 130):
+        t = d.cell(row=r, column=2).value
+        if t in (None, ""):
+            continue
+        sr = where.get(str(t).strip())
+        if sr is None:
+            continue
+        names = [s.cell(row=sr, column=c).value for c in range(3, 13)]
+        if not any(names):
+            continue
+        for i, v in enumerate(names):
+            d.cell(row=r, column=3 + i).value = v
+        n += 1
+    return n
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--start", required=True, help="YYYY-MM-DD")
     p.add_argument("--end", required=True, help="YYYY-MM-DD")
     p.add_argument("--label", required=True)
     p.add_argument("--agencies-from")
+    p.add_argument("--banks-from", help="workbook to copy the per-topic "
+                   "CERTIFIED instructor pools from (not the per-academy "
+                   "picks, which are cleared for the new class)")
     p.add_argument("--out")
     a = p.parse_args()
 
@@ -105,10 +144,15 @@ def main():
     if a.agencies_from:
         n = copy_agencies(wb, a.agencies_from)
     print(f"Agencies carried over: {n}")
+    b = 0
+    if a.banks_from:
+        b = copy_banks(wb, a.banks_from)
+    print(f"Instructor banks carried over: {b} topics")
     print("Carried by the template itself: TCOLE chapters, exam/spelling/"
           "writing masters, instructor roster")
     print("EMPTY and yours to fill: Schedule (build it on the Schedule "
-          "sheet), InstructorBanks, Cadets and every per-class record")
+          "sheet), the per-academy Teach picks on InstructorBanks, Cadets "
+          "and every per-class record")
 
     out = a.out or os.path.join(
         ROOT, "workbooks",
