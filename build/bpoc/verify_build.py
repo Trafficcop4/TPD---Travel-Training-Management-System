@@ -1435,6 +1435,22 @@ def test_workbook():
           wb["ExamScores"]["L6"].protection.locked is False,
           "input cells stay editable under protection")
 
+    # The end-of-course review is scheduled as "Review" and is the Module R
+    # chapter, not a loose activity. As an activity it counted toward no
+    # chapter and left Module R at delivered 0 - the only chapter short of
+    # its TCOLE minimum on real data.
+    import data_chapters as _DCm
+    _subs = {n: p for n, p, _t in _DCm.SUBTOPICS}
+    check(_subs.get("Review") == "EOC",
+          "the end-of-course review rolls up to the Module R chapter")
+    check("Review" not in _DCm.ACTIVITIES,
+          "'Review' is not ALSO an activity (it would list twice)")
+    check("Digital Forensics" in _DCm.ACTIVITIES and
+          "Digital Forensics" not in _subs,
+          "Digital Forensics stays outside the BPOC (filed separately)")
+    _dupe = [x for x in set(_DCm.ACTIVITIES) if x in _subs]
+    check(not _dupe, f"no topic is both a sub-class and an activity {_dupe}")
+
     # 1a. Long scrollable lists keep their header row in view. The one-page
     #     printables are excluded on purpose - they are forms, not lists.
     _SCROLLERS = ["InputGuide", "Ranking", "WatchList", "Audit", "Addendum",

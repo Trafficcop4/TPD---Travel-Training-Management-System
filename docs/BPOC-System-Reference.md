@@ -283,6 +283,22 @@ not, and it cannot be made up. **Makeup Complete?** must be Yes to
 graduate.
 
 ### 4.5 Chapters, sub-classes, and hours
+
+**Three things on the schedule deliberately do NOT count toward a TCOLE
+chapter**, and the distinction matters at reporting time:
+
+| Scheduled as | Hours (BPOC 7) | Why |
+|---|---|---|
+| `PT`, `PT - Ju Jitsu`, `PT - Final`, … | 90 | PT is not reported to TCOLE. Coordinator's decision; if that changes, add the PT topics to `SUBTOPICS` with chapter 3 as the parent and they roll up automatically. |
+| `Test 1`…`Test 17`, `Final Test`, `State Test`, `Final Re-Test`, `Graduation` | ~45 | Assessment and ceremony, not instruction. |
+| `Digital Forensics` | 2 | A separate class TPD added. It is **filed separately** from the BPOC, per the IRG's 30-day rule for additional topics, so it must not roll into any chapter. |
+
+`Review` used to sit in this group and should not have: it is the Module R
+**End of Course Review** chapter (TCOLE minimum 2 hrs, TPD delivers 3). As a
+loose activity it counted toward nothing and left Module R reading
+*delivered 0* — the only chapter short of its minimum on real data. It is now
+a sub-class with `EOC` as its parent, so the 3 hours land on the chapter and
+the extra hour reports as excess.
 You schedule under **your** class names; TCOLE counts **its** chapters.
 The sub-class block at the bottom of ChapterMaster maps them:
 

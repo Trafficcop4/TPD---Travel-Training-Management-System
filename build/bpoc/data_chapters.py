@@ -92,6 +92,12 @@ SUBTOPICS = [
     ("Criminal Investigations - Interview Techniques", "32", 4),
     ("Criminal Investigations - Case Management", "32", 4),
     ("Criminal Investigations - Media Relations", "32", 4),
+    # TPD schedules the end-of-course review simply as "Review". It is the
+    # Module R chapter (minimum 2 hrs) and TPD delivers 3, so it belongs here
+    # as a sub-class rather than as a loose activity - as an activity it
+    # counted toward no chapter and left Module R reading delivered 0, the
+    # only chapter short of its TCOLE minimum.
+    ("Review", "EOC", 3),
 ]
 
 # Chapters whose excess hours are reported under their OWN course number
@@ -158,7 +164,12 @@ PROGRAM_REQS = [
 # Non-chapter schedule activities that appear on the hourly calendar and the
 # daily sign-in sheets (kept as a dropdown list alongside chapters).
 ACTIVITIES = [f"Test {i}" for i in range(1, 18)] + [
-    "Review",
+    # "Review" moved to SUBTOPICS - it maps to the End of Course Review
+    # chapter now, and the Schedule dropdown concatenates chapters,
+    # sub-classes and activities, so leaving it here would list it twice.
+    # "Digital Forensics" stays an activity on purpose: it is a separate
+    # class TPD added, filed separately from the BPOC, so it must NOT roll
+    # up into any TCOLE chapter.
     "Digital Forensics",
     "Lunch",
     "PT - Base Level Evaluation",
