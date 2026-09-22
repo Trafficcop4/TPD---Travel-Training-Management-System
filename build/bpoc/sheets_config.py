@@ -749,6 +749,84 @@ def build_chaptermaster(wb):
     define(wb, "nrSUBparent", "ChapterMaster", f"$E${sub_first}:$E${sub_last}")
     define(wb, "nrSUBtarget", "ChapterMaster", f"$F${sub_first}:$F${sub_last}")
 
+    # ---- classes taught alongside the BPOC but REPORTED SEPARATELY -------
+    # Not addendum hours. The IRG requires an additional class that is not
+    # part of the BPOC to be reported as its own course WITHIN 30 DAYS of
+    # the training, rather than held until the academy ends. These sit in
+    # ACTIVITIES (never SUBTOPICS) so they roll up to no chapter; this block
+    # is what proves they were delivered and reminds the coordinator to file
+    # them. Editable - more classes get added over time without a rebuild.
+    pr = sub_last + 2
+    section_bar(ws, pr, 2, 12,
+                "Classes filed SEPARATELY (taught with the BPOC, reported as "
+                "their own course within 30 days — NOT addendum hours)")
+    pr += 1
+    header_row(ws, ["Class (as scheduled)", None, None, "Course #",
+                    "Hrs Delivered", "First Taught", "Last Taught", "File By",
+                    "Filed?", "Date Filed", "Status"], row=pr)
+    ws.merge_cells(start_row=pr, start_column=2, end_row=pr, end_column=4)
+    pr += 1
+    sep_first = pr
+    seeded = [n for n, _c in DC.SEPARATE_CLASSES]
+    sep_last = sep_first + max(len(seeded), 1) + 5     # room to add more
+    for rr in range(sep_first, sep_last + 1):
+        i = rr - sep_first
+        ws.merge_cells(start_row=rr, start_column=2, end_row=rr, end_column=4)
+        nm = DC.SEPARATE_CLASSES[i][0] if i < len(DC.SEPARATE_CLASSES) else None
+        cn = DC.SEPARATE_CLASSES[i][1] if i < len(DC.SEPARATE_CLASSES) else None
+        for col, val in ((2, nm), (5, cn or None), (10, None), (11, None)):
+            cc = ws.cell(row=rr, column=col, value=val)
+            cc.fill, cc.font, cc.border = FILL_INPUT, F_INPUT, BOX
+        ws.cell(row=rr, column=11).number_format = DATE
+        # delivered hours / dates come from the Schedule, like every other
+        # hours figure in this workbook - blocks with an impossible time are
+        # excluded exactly as they are for chapter hours
+        for col, f in (
+            (6, f'=IF($B{rr}="","",ROUND(SUMIFS(nrSCH_Hrs,nrSCH_Act,$B{rr},'
+                f'nrSCH_TimeCheck,"OK"),2))'),
+            (7, f'=IF($B{rr}="","",IF(COUNTIFS(nrSCH_Act,$B{rr})=0,"",'
+                f'MINIFS(nrSCH_Date,nrSCH_Act,$B{rr},nrSCH_Date,">0")))'),
+            (8, f'=IF($B{rr}="","",IF(COUNTIFS(nrSCH_Act,$B{rr})=0,"",'
+                f'MAXIFS(nrSCH_Date,nrSCH_Act,$B{rr})))'),
+            (9, f'=IF(OR($B{rr}="",N($H{rr})=0),"",'
+                f'$H{rr}+{DC.SEPARATE_FILE_DAYS})'),
+            # the whole point of the block: say plainly what to do and when
+            # The 30-day clock starts when the class is TAUGHT. A block
+            # still in the future is "scheduled", not "due" - telling the
+            # coordinator to file something that has not happened yet would
+            # train them to ignore the reminder.
+            (12, f'=IF($B{rr}="","",'
+                 f'IF($J{rr}="Yes","Filed "&IF($K{rr}="","(date not recorded)",'
+                 f'TEXT($K{rr},"mm/dd/yyyy")),'
+                 f'IF(N($H{rr})=0,"Not on the schedule",'
+                 f'IF($H{rr}>TODAY(),"Scheduled "&TEXT($H{rr},"mm/dd")'
+                 f'&" - not yet taught",'
+                 f'IF(TODAY()>$I{rr},"OVERDUE - file now (was due "'
+                 f'&TEXT($I{rr},"mm/dd")&")",'
+                 f'"FILE BY "&TEXT($I{rr},"mm/dd")&" ("&($I{rr}-TODAY())'
+                 f'&" days left)")))))'),
+        ):
+            cc = ws.cell(row=rr, column=col, value=f)
+            cc.font, cc.fill, cc.border = F_CALC, FILL_CALC, BOX
+        for col in (7, 8, 9):
+            ws.cell(row=rr, column=col).number_format = DATE
+    dv_list(ws, "=nrScheduleItems", [f"B{sep_first}:B{sep_last}"])
+    dv_list(ws, "=lstYesNo", [f"J{sep_first}:J{sep_last}"])
+    cf_formula(ws, f"L{sep_first}:L{sep_last}",
+               f'LEFT($L{sep_first},7)="OVERDUE"', FILL_WARNBG)
+    cf_formula(ws, f"L{sep_first}:L{sep_last}",
+               f'LEFT($L{sep_first},7)="FILE BY"', FILL_AMBER)
+    cf_formula(ws, f"L{sep_first}:L{sep_last}",
+               f'LEFT($L{sep_first},5)="Filed"', FILL_OKBG)
+    define(wb, "nrSEPname", "ChapterMaster", f"$B${sep_first}:$B${sep_last}")
+    define(wb, "nrSEPcourse", "ChapterMaster", f"$E${sep_first}:$E${sep_last}")
+    define(wb, "nrSEPhrs", "ChapterMaster", f"$F${sep_first}:$F${sep_last}")
+    define(wb, "nrSEPfirst", "ChapterMaster", f"$G${sep_first}:$G${sep_last}")
+    define(wb, "nrSEPlast", "ChapterMaster", f"$H${sep_first}:$H${sep_last}")
+    define(wb, "nrSEPdue", "ChapterMaster", f"$I${sep_first}:$I${sep_last}")
+    define(wb, "nrSEPfiled", "ChapterMaster", f"$J${sep_first}:$J${sep_last}")
+    define(wb, "nrSEPstatus", "ChapterMaster", f"$L${sep_first}:$L${sep_last}")
+
     col_widths(ws, {"A": 3, "B": 8, "C": 6, "D": 44, "E": 10, "F": 10,
                     "G": 11, "H": 10, "I": 12, "J": 12, "K": 20, "L": 14,
                     "M": 13, "N": 13, "O": 12, "P": 12, "Q": 13, "R": 15,

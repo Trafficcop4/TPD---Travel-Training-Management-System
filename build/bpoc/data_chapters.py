@@ -109,6 +109,22 @@ SEPARATE_REPORT = {
 }
 ADDENDUM_COURSE = "#101 (Addendum to BPOC)"
 
+# Classes TPD teaches during the academy that are NOT part of the BPOC and
+# are reported to TCOLE as their own course, not as addendum hours. The IRG:
+# "Training academies that teach additional topics/learning objectives, not
+# covered in the BPOC, shall report the additional class separately... each
+# class must be reported within 30 days of the training and not wait until
+# the learner completes the BPOC."
+#
+# These stay in ACTIVITIES (never SUBTOPICS) so their hours roll up to no
+# TCOLE chapter. The list is seeded here but the block on ChapterMaster is
+# editable - the coordinator adds classes over time without a rebuild.
+# (name, course number - blank until TCOLE's reporting number is confirmed)
+SEPARATE_CLASSES = [
+    ("Digital Forensics", ""),
+]
+SEPARATE_FILE_DAYS = 30      # IRG: report within 30 days of the training
+
 # Program-level mandatory items (Audit sheet manual checklist).
 PROGRAM_REQS = [
     ("Commission Rules distributed to all students (Rule 215.9)",

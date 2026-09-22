@@ -135,6 +135,29 @@ Nothing is deleted by separating a cadet: their scores, attendance and
 records stay exactly where they were, and they drop out of class averages,
 rankings and the agency emails because those already filter on Active.
 
+## Classes filed separately (the TCOLE 30-day rule)
+
+Some classes are taught during the academy but are **not part of the BPOC** —
+Digital Forensics is the first, and more will be added. They are reported to
+TCOLE as their own course, and the IRG requires each one to be filed
+**within 30 days of the training**, not held until the academy ends.
+
+- Keep the list on **ChapterMaster**, in the *Classes filed SEPARATELY*
+  block at the bottom. Add a row, pick the class off the schedule dropdown,
+  and put its TCOLE course number in.
+- Hours, first/last taught date and the **File By** date (last taught + 30)
+  all compute from the Schedule — you enter nothing but the name, the
+  course number, and eventually **Filed? = Yes** with the date.
+- Status reads **Scheduled … not yet taught** before the class happens,
+  then **FILE BY mm/dd (n days left)** once it has, then **OVERDUE — file
+  now** if the deadline passes, then **Filed mm/dd** once you mark it.
+- The **Dashboard** carries a *Separate classes to file* count and a panel
+  listing what is waiting, appearing only after the class date passes. Two
+  Audit lines track it, and the **Addendum** prints the whole list.
+
+These hours are deliberately excluded from the 736 and from the addendum
+excess totals — they are a different course, not extra BPOC hours.
+
 ## Watching the class
 
 - **Dashboard** — KPIs, watch list, class-average trend charts.

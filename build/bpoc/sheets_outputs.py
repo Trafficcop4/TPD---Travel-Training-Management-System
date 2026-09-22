@@ -130,6 +130,15 @@ def build_dashboard(wb):
     _kpi(ws, r, 12, "Cert copies to collect",
          'SUMPRODUCT((nrCadetStatus="Active")*(nrCERTmissing<>""))')
     r += 3
+    # taught and still unfiled, with the overdue ones called out: the 30-day
+    # clock starts the day the class is taught, not at the end of academy
+    _kpi(ws, r, 2, "Separate classes to file",
+         'SUMPRODUCT((nrSEPname<>"")*(nrSEPfiled<>"Yes")*(N(nrSEPlast)>0)*(nrSEPlast<=TODAY()))&'
+         'IF(SUMPRODUCT((nrSEPname<>"")*(nrSEPfiled<>"Yes")*'
+         '(N(nrSEPdue)>0)*(nrSEPdue<TODAY()))>0," ("&'
+         'SUMPRODUCT((nrSEPname<>"")*(nrSEPfiled<>"Yes")*(N(nrSEPdue)>0)*'
+         '(nrSEPdue<TODAY()))&" OVERDUE)","")')
+    r += 3
     section_bar(ws, r, 2, 11, "Watch list — highest flag counts first "
                               "(full list on WatchList)")
     r += 1
@@ -158,6 +167,21 @@ def build_dashboard(wb):
         'FILTER(nrAT_Date,(nrAT_Cleared="OPEN")),-1),9),'
         '"All missed time cleared")'))
     r += 9
+    # IRG: a class taught alongside the BPOC but reported as its own course
+    # must be filed WITHIN 30 DAYS of the training, not held until the
+    # academy ends. This panel appears the moment such a class has been
+    # taught and is still unfiled, so the deadline cannot quietly pass.
+    section_bar(ws, r, 2, 11, "Separately-filed classes — taught, not yet "
+                              "reported (TCOLE 30-day rule)")
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(TAKE(SORTBY(FILTER(HSTACK(nrSEPname,nrSEPcourse,'
+        'TEXT(nrSEPlast,"mm/dd"),nrSEPhrs,TEXT(nrSEPdue,"mm/dd"),'
+        'nrSEPstatus),(nrSEPname<>"")*(nrSEPfiled<>"Yes")*(N(nrSEPlast)>0)*(nrSEPlast<=TODAY())),'
+        'FILTER(nrSEPdue,(nrSEPname<>"")*(nrSEPfiled<>"Yes")*'
+        '(N(nrSEPlast)>0)*(nrSEPlast<=TODAY())),1),6),'
+        '"No separately-filed class is awaiting reporting")'))
+    r += 6
     section_bar(ws, r, 2, 11, "Outstanding memos (pending / overdue)")
     r += 1
     ws.cell(row=r, column=2, value=(
@@ -922,7 +946,40 @@ def build_addendum(wb):
         f'($G{first}:$G{last}<>"{DC.ADDENDUM_COURSE}")*'
         f'($G{first}:$G{last}<>"")*IFERROR($F{first}:$F{last}+0,0))'
     )).font = F_CALC
-    r += 4
+    # ---- classes filed SEPARATELY (not addendum hours) ------------------
+    # These are taught alongside the BPOC but are their own course. They are
+    # on this page because the coordinator reports from it, but they are
+    # deliberately below the totals and outside them: adding them to the
+    # excess figures would overstate what is reported under #101.
+    r += 2
+    section_bar(ws, r, 2, 7, "Classes taught with this academy but FILED "
+                             "SEPARATELY — not addendum hours")
+    r += 1
+    c = ws.cell(row=r, column=2, value=(
+        "Additional classes that are not part of the BPOC are reported as "
+        "their own course and must be filed WITHIN 30 DAYS of the training, "
+        "not held until the academy ends (IRG). Their hours are excluded "
+        "from the 736 and from the excess totals above."))
+    c.font = F_SMALL
+    c.alignment = A_LEFT_WRAP
+    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=7)
+    ws.row_dimensions[r].height = 30
+    r += 1
+    sep_hdr = r
+    header_row(ws, ["Class", "Course #", "Hrs", "Taught", "File By",
+                    "Status"], row=r)
+    r += 1
+    ws.cell(row=r, column=2, value=(
+        '=IFERROR(TAKE(FILTER(HSTACK(nrSEPname,nrSEPcourse,nrSEPhrs,'
+        'TEXT(nrSEPlast,"mm/dd/yyyy"),TEXT(nrSEPdue,"mm/dd/yyyy"),'
+        'nrSEPstatus),(nrSEPname<>"")),6),'
+        '"None — no class outside the BPOC was taught this academy")'))
+    for rr in range(r, r + 6):
+        for ccol in range(2, 8):
+            ws.cell(row=rr, column=ccol).border = BOX
+    r += 6
+
+    r += 2
     ws.cell(row=r, column=2, value="Training Coordinator:").font = F_LABEL
     ws.cell(row=r, column=4, value="_______________________").font = F_BODY
     ws.cell(row=r, column=6, value="Date:").font = F_LABEL

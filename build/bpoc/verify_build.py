@@ -1451,6 +1451,56 @@ def test_workbook():
     _dupe = [x for x in set(_DCm.ACTIVITIES) if x in _subs]
     check(not _dupe, f"no topic is both a sub-class and an activity {_dupe}")
 
+    # Classes taught alongside the BPOC but reported as their own course.
+    # The IRG's 30-day clock starts the day the class is TAUGHT, not at the
+    # end of the academy, so this has to surface while the academy is still
+    # running - not on a final report.
+    _cmx = wb["ChapterMaster"]
+    check("nrSEPname" in wb.defined_names and "nrSEPdue" in wb.defined_names
+          and "nrSEPstatus" in wb.defined_names,
+          "separately-filed class block exists on ChapterMaster")
+    _sepref = wb.defined_names["nrSEPname"].value
+    _r1 = int(re.findall(r"\$B\$(\d+)", _sepref)[0])
+    check(str(_cmx.cell(row=_r1, column=2).value) == "Digital Forensics",
+          "the known separately-filed class is seeded")
+    _due = str(_cmx.cell(row=_r1, column=9).value)
+    check("+30" in _due,
+          f"File By is 30 days after the last class taught ({_due[:40]})")
+    _st = str(_cmx.cell(row=_r1, column=12).value)
+    check("OVERDUE" in _st and "FILE BY" in _st and "not yet taught" in _st
+          and "Not on the schedule" in _st,
+          "status separates scheduled, taught-and-due, overdue and filed")
+    # the flag must appear only AFTER the class date passes - a future class
+    # is scheduled, not due, and counting it would train the coordinator to
+    # ignore the reminder
+    check("$H{}>TODAY()".format(_r1) in _st,
+          "a class still in the future is not reported as due")
+    for _sheet, _label in ((wb["Dashboard"], "Dashboard"),):
+        _has = any("nrSEPlast<=TODAY()" in str(c.value)
+                   for row in _sheet.iter_rows(min_row=5, max_row=60)
+                   for c in row if isinstance(c.value, str))
+        check(_has, f"{_label} counts only classes already taught")
+    # it must NOT roll into a chapter, or it would inflate the 736
+    import data_chapters as _DCsep
+    _sepnames = [n for n, _c in _DCsep.SEPARATE_CLASSES]
+    _subnames = {n for n, _p, _t in _DCsep.SUBTOPICS}
+    _chnames = {c[2] for c in _DCsep.CHAPTERS}
+    _leak = [n for n in _sepnames if n in _subnames or n in _chnames]
+    check(not _leak,
+          f"a separately-filed class never rolls up to a chapter {_leak}")
+    _an2 = [c[0] for c in sheets_engine.AUDIT_CHECKS]
+    for _w in ("Separately-filed classes past the 30-day deadline",
+               "Separately-filed classes taught but not yet filed"):
+        check(_w in _an2, f"sysAudit check present: {_w}")
+    check(any("nrSEPname" in str(c.value)
+              for row in wb["Dashboard"].iter_rows(min_row=5, max_row=60)
+              for c in row if isinstance(c.value, str)),
+          "Dashboard surfaces separately-filed classes awaiting reporting")
+    check(any("nrSEPstatus" in str(c.value)
+              for row in wb["Addendum"].iter_rows()
+              for c in row if isinstance(c.value, str)),
+          "Addendum prints the separately-filed classes")
+
     # 1a. Long scrollable lists keep their header row in view. The one-page
     #     printables are excluded on purpose - they are forms, not lists.
     _SCROLLERS = ["InputGuide", "Ranking", "WatchList", "Audit", "Addendum",

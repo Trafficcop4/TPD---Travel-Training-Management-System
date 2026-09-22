@@ -846,6 +846,19 @@ AUDIT_CHECKS = [
          'SUMPRODUCT((nrCadetStatus="Active")*(nrCKexamsPending="No"))', "0",
          'IF(SUMPRODUCT((nrCadetStatus="Active")*(nrCKexamsPending="No"))=0,"OK","CHECK")',
          '"Excused absence delays the FIRST attempt - the exam is still owed and blocks graduation until it is taken"'),
+        ("Separately-filed classes past the 30-day deadline",
+         'SUMPRODUCT((nrSEPname<>"")*(nrSEPfiled<>"Yes")*(N(nrSEPdue)>0)*'
+         '(nrSEPdue<TODAY()))', "0",
+         'IF(SUMPRODUCT((nrSEPname<>"")*(nrSEPfiled<>"Yes")*(N(nrSEPdue)>0)*'
+         '(nrSEPdue<TODAY()))=0,"OK","ACT NOW")',
+         '"IRG: a class taught alongside the BPOC but reported as its own course '
+         'must be filed within 30 days of the training - see the separately-filed '
+         'block on ChapterMaster"'),
+        ("Separately-filed classes taught but not yet filed",
+         'SUMPRODUCT((nrSEPname<>"")*(nrSEPfiled<>"Yes")*(N(nrSEPlast)>0)*(nrSEPlast<=TODAY()))', "0",
+         'IF(SUMPRODUCT((nrSEPname<>"")*(nrSEPfiled<>"Yes")*(N(nrSEPlast)>0)*(nrSEPlast<=TODAY()))'
+         '=0,"OK","CHECK")',
+         '"Taught already; mark Filed? = Yes with the date once reported to TCOLE"'),
         ("Advisory board met within last 12 months",
          'IF(COUNT(nrAB_Date)=0,"none",TEXT(MAX(nrAB_Date),"mm/dd/yyyy"))', "recent",
          'IF(COUNT(nrAB_Date)=0,"CHECK",IF(MAX(nrAB_Date)>=TODAY()-366,'
